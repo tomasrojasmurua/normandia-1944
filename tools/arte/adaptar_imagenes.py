@@ -115,6 +115,33 @@ def arma(origen, destino):
     out.save(destino)
 
 
+# Piezas sueltas (clip, cargador, vainas): se recortan al objeto y se reducen
+# a un tamaño fijo. PIEZAS_TAM = (ancho, alto) máximos en píxeles del juego.
+PIEZAS_TAM = {"pieza_clip_garand": (34, 30), "pieza_cargador_colt": (22, 60),
+              "pieza_vaina": (14, 8), "pieza_clip_vacio": (30, 14)}
+
+
+def pieza(origen, destino):
+    img = quitar_verde(Image.open(origen))
+    img = img.crop(img.split()[3].getbbox())
+    mw, mh = PIEZAS_TAM.get(origen.stem, (32, 32))
+    esc = min(mw / img.width, mh / img.height)
+    w, h = max(1, round(img.width * esc)), max(1, round(img.height * esc))
+    small = img.resize((w * 4, h * 4), Image.LANCZOS).resize((w, h), Image.BOX)
+    a = small.split()[3].point(lambda v: 255 if v > 100 else 0)
+    rgb_ = ImageEnhance.Contrast(small.convert("RGB")).enhance(1.15)
+    rgb_ = ImageEnhance.Sharpness(rgb_).enhance(1.6)
+    rgb_ = rgb_.quantize(colors=20, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.NONE).convert("RGB")
+    out = rgb_.convert("RGBA")
+    out.putalpha(a)
+    # contorno oscuro de 1 px para que se lea sobre la arena
+    borde = a.filter(ImageFilter.MaxFilter(3))
+    fondo_ = Image.new("RGBA", out.size, (0, 0, 0, 0))
+    fondo_.paste(Image.new("RGBA", out.size, (11, 13, 8, 255)), (0, 0), borde)
+    fondo_.alpha_composite(out)
+    fondo_.save(destino)
+
+
 def fondo(origen, destino):
     img = Image.open(origen)
     W, H = img.size
@@ -135,6 +162,9 @@ if __name__ == "__main__":
     for f in sorted((FUENTE / "armas").glob("*.png")):
         arma(f, ARMAS_SPRITES / (f.stem + ".png"))
         print("arma", f.stem)
+    for f in sorted((FUENTE / "piezas").glob("*.png")):
+        pieza(f, ARMAS_SPRITES / (f.stem + ".png"))
+        print("pieza", f.stem)
     m = FUENTE / "fondos" / "fondo_menu.jpg"
     if m.exists():
         fondo(m, UI / "fondo_menu.png")

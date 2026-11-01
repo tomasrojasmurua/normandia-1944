@@ -120,8 +120,8 @@ const MIRA_POSTE := [Vector2(323, 146), Vector2(323, 147)]
 # Recarga dibujada: dónde entra el clip del Garand (cajón abierto) y dónde
 # entra el cargador del Colt (base de la empuñadura), en píxeles de la imagen.
 const RECARGA_PUNTO := [Vector2(338, 170), Vector2(409, 350)]
-const _CLIP := preload("res://assets/armas/clip_garand.png")
-const _CARGADOR := preload("res://assets/armas/cargador_colt.png")
+const _CLIP := preload("res://assets/armas/pieza_clip_garand.png")      # foto de ChatGPT pixelada
+const _CARGADOR := preload("res://assets/armas/pieza_cargador_colt.png")
 var _cargador_pantalla := Vector2.ZERO
 const GRANADA_POS := Vector2(120, 40)
 
@@ -167,7 +167,7 @@ func _draw_viewmodel(w: Weapons) -> void:
 			if rp > 0.2 and rp < 0.64:
 				var desde := punto + Vector2(70, -110)
 				var p2 := desde.lerp(punto, k) + Vector2(0, 8.0 * smoothstep(0.58, 0.64, rp))
-				pieza = Vector4(p2.x - 13, p2.y - 20, 1, 0)
+				pieza = Vector4(p2.x - 17, p2.y - 24, 1, 0)
 		else:                # Colt: baja e inclina; el cargador nuevo sube desde abajo
 			var hondo := smoothstep(0.0, 0.25, rp) * (1.0 - smoothstep(0.72, 0.95, rp))
 			off += Vector2(30, 55 * hondo + golpe)
@@ -181,7 +181,7 @@ func _draw_viewmodel(w: Weapons) -> void:
 	if pieza.z > 0.0 and pieza.w == 0.0:
 		draw_texture(_CLIP, Vector2(pieza.x, pieza.y).round())
 	if pieza.z > 0.0 and pieza.w > 0.0:   # cargador del Colt subiendo hacia la empuñadura, al doble
-		draw_set_transform(_cargador_pantalla, deg_to_rad(12.0), Vector2(2, 2))
+		draw_set_transform(_cargador_pantalla, deg_to_rad(12.0), Vector2.ONE)
 		draw_texture(_CARGADOR, Vector2.ZERO)
 	if w.flash_2d > 0.0:
 		_draw_flash_2d(o + VM_BOCA[w.current], 1.0)

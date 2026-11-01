@@ -32,7 +32,8 @@ var _muslo := [null, null]
 var _rodilla := [null, null]
 var _fogonazo: Node3D
 
-# Marcas del arma (en el espacio del arma): culata, mano izquierda
+# Marcas del arma (en el espacio del arma): mano derecha, culata, mano izquierda
+var _agarre := Vector3.ZERO
 var _culata := Vector3(0, 0, 0.32)
 var _guardamanos := Vector3(0, -0.02, -0.38)
 var _es_pistola := false
@@ -122,7 +123,7 @@ func _process(delta: float) -> void:
 	nodo_arma.rotation = nodo_arma.rotation.lerp(objetivo_rot + Vector3(_retroceso * 0.25, 0, 0), minf(delta * 8.0, 1.0))
 
 	# Manos al arma
-	var grip := nodo_arma.global_transform * Vector3(0, -0.06, 0.04)
+	var grip := nodo_arma.global_transform * _agarre
 	var guard := nodo_arma.global_transform * _guardamanos
 	_brazo(0, grip, 1.0)
 	_brazo(1, guard, -1.0)
@@ -317,47 +318,16 @@ func _construir() -> void:
 
 func _modelo_arma() -> void:
 	var d := Armas.datos(arma)
-	var tipo: String = d["tipo"]
-	var madera := Game.material(Color(0.42, 0.25, 0.13))
-	var metal := Game.material(Color(0.17, 0.17, 0.18))
-	var oliva := Game.material(Color(0.32, 0.34, 0.22))
-	var con_madera: bool = arma in ["garand", "carbine", "thompson", "bar", "springfield", "kar98k", "stg44"]
+	_es_pistola = d["tipo"] == "pistola"
 	var n := nodo_arma
-	var punta := -0.9
-	_es_pistola = tipo == "pistola"
-	match tipo:
-		"pistola":
-			_caja(n, Vector3(0.03, 0.035, 0.2), Vector3(0, 0, -0.06), metal)
-			_caja(n, Vector3(0.03, 0.1, 0.04), Vector3(0, -0.06, 0.02), madera, Vector3(20, 0, 0))
-			_culata = Vector3(0, 0, 0.05)
-			_guardamanos = Vector3(-0.02, -0.06, 0.03)
-			punta = -0.17
-		"bazuca":
-			_cilindro(n, 0.045, 1.4, Vector3(0, 0.05, -0.35), oliva).rotation_degrees = Vector3(90, 0, 0)
-			_caja(n, Vector3(0.04, 0.1, 0.05), Vector3(0, -0.04, -0.15), madera)
-			_culata = Vector3(0, 0.05, 0.1)
-			_guardamanos = Vector3(0, -0.02, -0.45)
-			punta = -1.05
-		_:
-			var largo := 1.0 if tipo == "fusil" else (0.7 if tipo == "subfusil" else 1.15)
-			if arma == "carbine":
-				largo = 0.85
-			var cuerpo := madera if con_madera else metal
-			_caja(n, Vector3(0.045, 0.11, 0.3), Vector3(0, -0.03, 0.18), cuerpo if arma != "mp40" else metal, Vector3(-6, 0, 0))   # culata
-			_caja(n, Vector3(0.05, 0.06, largo * 0.4), Vector3(0, 0.0, -largo * 0.18), metal)                                      # cajón
-			_caja(n, Vector3(0.045, 0.05, largo * 0.35), Vector3(0, -0.01, -largo * 0.5), cuerpo)                                  # guardamanos
-			_caja(n, Vector3(0.022, 0.022, largo * 0.3), Vector3(0, 0.01, -largo * 0.75), metal)                                  # cañón
-			if tipo != "fusil" or arma == "carbine":
-				var alto := 0.22 if arma in ["thompson", "mp40", "stg44"] else 0.15
-				_caja(n, Vector3(0.03, alto, 0.05), Vector3(0, -alto / 2.0 - 0.02, -largo * 0.22), metal, Vector3(-15 if arma == "stg44" else 0, 0, 0))
-			if arma == "springfield":
-				_cilindro(n, 0.02, 0.3, Vector3(0, 0.06, -0.15), metal).rotation_degrees = Vector3(90, 0, 0)
-			if arma == "mg42":
-				_caja(n, Vector3(0.06, 0.06, 0.4), Vector3(0, 0.0, -0.75), metal)
-			_culata = Vector3(0, -0.02, 0.32)
-			_guardamanos = Vector3(0, -0.04, -largo * 0.45)
-			punta = -largo * 0.92
-	boca = _nodo(n, Vector3(0, 0.01, punta))
+	var mi := Armas.modelo_3d(arma)
+	n.add_child(mi)
+	var malla := mi.mesh
+	_agarre = Vector3.ZERO
+	_culata = malla.get_meta("culata")
+	_guardamanos = malla.get_meta("guardamanos")
+	var punta: Vector3 = malla.get_meta("boca")
+	boca = _nodo(n, punta)
 	var fmat := StandardMaterial3D.new()
 	fmat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	fmat.albedo_color = Color(1.0, 0.85, 0.4)
@@ -599,7 +569,7 @@ func _colocar_arma() -> void:
 	if _es_pistola or dir.length() < 0.15:
 		dir = -global_basis.z
 	var b := Basis.looking_at(dir.normalized(), arriba)
-	var agarre := Vector3(0, -0.06, 0.04)
+	var agarre := _agarre
 	if not _es_pistola:
 		# corrige la pequeña diferencia entre la línea agarre→guardamanos y el cañón
 		var d_arma := (_guardamanos - agarre).normalized()

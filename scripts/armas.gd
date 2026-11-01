@@ -165,6 +165,33 @@ static func imagen(nombre: String) -> Texture2D:
 	return _texturas[nombre]
 
 
+## Arma 3D con volumen (la que llevan los soldados y la que queda en el
+## suelo), hecha de su perfil de ChatGPT con tools/modelos/armas3d.py/.gd.
+## El agarre está en el origen; marcas en los meta de la malla.
+static var _mat_3d: StandardMaterial3D
+
+
+static func malla_3d(id: String) -> Mesh:
+	var path := "res://assets/armas/3d/%s.res" % id
+	return load(path) if ResourceLoader.exists(path) else null
+
+
+static func modelo_3d(id: String) -> MeshInstance3D:
+	if _mat_3d == null:
+		_mat_3d = StandardMaterial3D.new()
+		_mat_3d.albedo_texture = load("res://assets/armas/3d/atlas.png")
+		_mat_3d.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
+		_mat_3d.alpha_scissor_threshold = 0.5
+		_mat_3d.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+		_mat_3d.cull_mode = BaseMaterial3D.CULL_DISABLED
+		_mat_3d.specular_mode = BaseMaterial3D.SPECULAR_DISABLED
+		_mat_3d.roughness = 1.0
+	var mi := MeshInstance3D.new()
+	mi.mesh = malla_3d(id)
+	mi.material_override = _mat_3d
+	return mi
+
+
 static func botin_aleman(rng: RandomNumberGenerator) -> String:
 	var total := 0
 	for v in BOTIN_ALEMAN.values():

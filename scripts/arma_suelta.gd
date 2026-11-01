@@ -81,25 +81,10 @@ func tomar(p: Player) -> void:
 	queue_free()
 
 
-## Modelo simple tirado en el suelo, según el tipo de arma.
-func _build(d: Dictionary) -> void:
-	var madera := Game.material(Color(0.42, 0.26, 0.14))
-	var metal := Game.material(Color(0.2, 0.2, 0.21))
-	var oliva := Game.material(Color(0.33, 0.36, 0.25))
-	var tipo: String = d["tipo"]
-	var con_madera: bool = arma in ["garand", "carbine", "thompson", "bar", "springfield", "kar98k", "stg44"]
-	var y := 0.04
-	match tipo:
-		"pistola":
-			Game.box(self, Vector3(0.2, 0.03, 0.03), Vector3(0, y, 0), metal)
-			Game.box(self, Vector3(0.04, 0.03, 0.11), Vector3(-0.07, y, 0.05), madera, Vector3(0, -15, 0))
-		"bazuca":
-			Game.box(self, Vector3(1.4, 0.09, 0.09), Vector3(0, 0.05, 0), oliva)
-			Game.box(self, Vector3(0.05, 0.1, 0.04), Vector3(-0.1, 0.05, 0.08), madera)
-		_:
-			var largo := 1.1 if tipo == "fusil" else (0.8 if tipo == "subfusil" else 1.2)
-			Game.box(self, Vector3(largo * 0.6, 0.05, 0.05), Vector3(largo * 0.1, y, 0), madera if con_madera else metal)
-			Game.box(self, Vector3(largo * 0.3, 0.025, 0.025), Vector3(largo * 0.55, y, 0), metal)
-			Game.box(self, Vector3(largo * 0.3, 0.08, 0.05), Vector3(-largo * 0.32, y + 0.01, 0), madera if con_madera else metal)
-			if tipo != "fusil":
-				Game.box(self, Vector3(0.04, 0.03, 0.16), Vector3(0.0, y, 0.09), metal)
+## Modelo 3D del arma, acostado de lado en el suelo.
+func _build(_d: Dictionary) -> void:
+	var mi := Armas.modelo_3d(arma)
+	add_child(mi)
+	var aabb := mi.mesh.get_aabb()
+	mi.rotation.z = PI / 2.0                 # de lado: el grosor queda hacia arriba
+	mi.position = Vector3(0, aabb.size.x / 2.0 + 0.01, 0) - Vector3(0, 0, aabb.get_center().z)

@@ -47,6 +47,8 @@ func _process(delta: float) -> void:
 	for m in _messages:
 		m[2] += delta
 	_messages = _messages.filter(func(m: Array) -> bool: return m[2] < 7.0)
+	if _player and _player.weapons:
+		_expulsar(_player.weapons, delta)
 	queue_redraw()
 
 
@@ -64,6 +66,7 @@ func _draw() -> void:
 	var s := size
 	var w := _player.weapons
 	_draw_viewmodel(w)
+	_draw_volando()
 	var top := s.y - BAR_H
 	# El centro de la cámara es el centro de TODA la pantalla (la barra se dibuja
 	# encima de la vista 3D), y por ahí salen las balas.
@@ -123,6 +126,46 @@ const RECARGA_PUNTO := [Vector2(338, 170), Vector2(409, 350)]
 const _CLIP := preload("res://assets/armas/pieza_clip_garand.png")      # foto de ChatGPT pixelada
 const _CARGADOR := preload("res://assets/armas/pieza_cargador_colt.png")
 var _cargador_pantalla := Vector2.ZERO
+const _VAINA := preload("res://assets/armas/pieza_vaina.png")
+const _CLIP_VACIO := preload("res://assets/armas/pieza_clip_vacio.png")
+# Dónde salen las vainas (en la imagen de cada arma): la ventana del cajón / corredera
+const EXPULSION := [Vector2(338, 168), Vector2(371, 165)]
+var _volando: Array = []    # piezas en el aire: [textura, pos, vel, ángulo, giro, vida, escala]
+var _shots_vistos := -1
+var _clips_vistos := -1
+
+
+## Vainas y clips vacíos que saltan del arma (en 2D, sobre la vista).
+func _expulsar(w: Weapons, delta: float) -> void:
+	if _shots_vistos < 0:
+		_shots_vistos = w.shots_fired
+		_clips_vistos = w.clips_ejected
+	var origen: Vector2 = VM_POS[w.current] + EXPULSION[w.current] + w.view_offset
+	if w.ads_amount > 0.5:
+		origen = Vector2(size.x / 2.0 + 40, size.y / 2.0 + 30)
+	while _shots_vistos < w.shots_fired:
+		_shots_vistos += 1
+		var esc := 1.0 if w.current == 0 else 0.65
+		_volando.append([_VAINA, origen, Vector2(randf_range(70, 120), randf_range(-190, -140)),
+			randf_range(-0.3, 0.3), randf_range(-14, -8), 0.9, esc])
+	while _clips_vistos < w.clips_ejected:
+		_clips_vistos += 1
+		_volando.append([_CLIP_VACIO, origen + Vector2(-6, -6), Vector2(randf_range(10, 40), -300),
+			0.0, randf_range(5, 9), 1.2, 1.0])
+	for v in _volando:
+		v[2].y += 650.0 * delta
+		v[1] += v[2] * delta
+		v[3] += v[4] * delta
+		v[5] -= delta
+	_volando = _volando.filter(func(v: Array) -> bool: return v[5] > 0.0 and v[1].y < size.y)
+
+
+func _draw_volando() -> void:
+	for v in _volando:
+		var tex: Texture2D = v[0]
+		draw_set_transform(v[1].round(), v[3], Vector2.ONE * v[6])
+		draw_texture(tex, (-tex.get_size() / 2.0).round())
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 const GRANADA_POS := Vector2(120, 40)
 
 

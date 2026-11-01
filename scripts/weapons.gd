@@ -44,6 +44,8 @@ var sprite_granada: Texture2D = null
 var view_offset := Vector2.ZERO   # desplazamiento en píxeles de pantalla
 var view_angle := 0.0             # giro en grados
 var flash_2d := 0.0               # >0 mientras se ve el fogonazo 2D
+var shots_fired := 0              # cuenta disparos (el HUD expulsa una vaina por cada uno)
+var clips_ejected := 0            # cuenta clips vacíos del Garand expulsados
 
 var _player: Node
 var _camera: Camera3D
@@ -254,7 +256,9 @@ func _fire() -> void:
 	_cooldown = w["interval"]
 	_kick = 1.0
 	Game.play(w["sound"], 0.0, randf_range(0.94, 1.06))
+	shots_fired += 1
 	if current == 0 and ammo[current] == 0:
+		clips_ejected += 1
 		get_tree().create_timer(0.12).timeout.connect(func() -> void: Game.play("ping", -3.0))
 
 	var flash := _flashes[current]

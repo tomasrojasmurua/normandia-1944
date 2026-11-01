@@ -8,7 +8,11 @@ extends Control
 const BAR_H := 52
 const SOLDIER_NAME := "MURPHY"
 
-var retrato: Texture2D = Estilo.RETRATO_PROVISIONAL   # se cambia por el de cada jugador
+## Retratos de 38x33 en assets/ui/retratos/ (hechos con tools/arte/adaptar_imagenes.py).
+## Si existe retrato_<nombre>_herido.png se muestra con poca vida; si no, se tiñe de rojo.
+var soldado := "murphy"
+var _retrato: Texture2D
+var _retrato_herido: Texture2D
 
 var _player: Player
 var _messages: Array = []   # [texto, color, tiempo]
@@ -19,6 +23,15 @@ func _ready() -> void:
 	add_to_group("hud")
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	Game.message.connect(_on_message)
+	_cargar_retratos()
+
+
+func _cargar_retratos() -> void:
+	var base := "res://assets/ui/retratos/retrato_%s" % soldado
+	_retrato = load(base + ".png") if ResourceLoader.exists(base + ".png") else null
+	_retrato_herido = load(base + "_herido.png") if ResourceLoader.exists(base + "_herido.png") else null
+	if _retrato == null:
+		_retrato = _retrato_herido if _retrato_herido else Estilo.RETRATO_PROVISIONAL
 
 
 func _on_message(text: String, color: Color) -> void:
@@ -112,19 +125,24 @@ func _draw_messages(r: Rect2) -> void:
 
 func _draw_portrait(r: Rect2) -> void:
 	Estilo.marco(self, r, "chapa")
-	Estilo.texto_c(self, SOLDIER_NAME, r.position.x + r.size.x / 2, r.position.y + 10, Estilo.CREMA)
+	Estilo.texto_c(self, SOLDIER_NAME, r.position.x + r.size.x / 2, r.position.y + 9, Estilo.CREMA)
 	var hp := clampf(_player.health / _player.max_health, 0.0, 1.0)
 	# Retrato: se tiñe de rojo con el daño y queda gris al morir
-	var face := Rect2(r.position + Vector2(4, 12), Vector2(40, 32))
+	var face := Rect2(r.position + Vector2(4, 11), Vector2(40, 35))
 	Estilo.marco(self, face, "hundido")
-	var tinte := Color.WHITE.lerp(Color(1.0, 0.35, 0.3), (1.0 - hp) * 0.9)
+	var tex := _retrato
+	var herido := hp < 0.5 and _retrato_herido != null
+	if herido:
+		tex = _retrato_herido
+	# Con retrato herido el tinte es leve; sin él, la cara se pone roja
+	var tinte := Color.WHITE.lerp(Color(1.0, 0.35, 0.3), (1.0 - hp) * (0.35 if herido else 0.9))
 	if _player.dead:
 		tinte = Color(0.45, 0.45, 0.45)
-	draw_texture_rect(retrato, Rect2(face.position + Vector2(1, 1), face.size - Vector2(2, 2)), false, tinte)
+	draw_texture(tex, face.position + Vector2(1, 1), tinte)
 	if _player.crouching:
 		Estilo.icono(self, Estilo.ICONO_AGACHADO, face.position + Vector2(7, face.size.y - 6))
 	# Vida: barra vertical de LEDs al lado del retrato
-	var bar := Rect2(r.position + Vector2(46, 12), Vector2(9, 32))
+	var bar := Rect2(r.position + Vector2(46, 11), Vector2(9, 35))
 	Estilo.marco(self, bar, "hundido")
 	var segs := 10
 	var col_on := Estilo.VERDE_LED if hp > 0.35 else Estilo.ROJO

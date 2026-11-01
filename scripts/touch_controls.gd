@@ -7,11 +7,18 @@ extends Control
 ##   seguir apuntando), MIRA (activa/desactiva), RECARGA, GRANADA,
 ##   SALTAR y AGACHAR.
 ## - Tocar las armas 1 / 2 de la barra inferior cambia de arma.
+## - Botón de arriba al centro: cambia entre modo "2 DEDOS" y modo "GARRA".
+##   GARRA agrega un segundo FUEGO arriba a la izquierda para el índice
+##   izquierdo, así el pulgar derecho queda libre para apuntar.
+##   La elección queda guardada en el celular.
 
 @export var player_path: NodePath
 @export var stick_radius := 40.0
 
 const HUD_H := 52
+const SETTINGS_PATH := "user://ajustes.cfg"
+
+var claw := false           # modo GARRA activado
 
 var _player: Player
 var _hud: Node
@@ -27,6 +34,18 @@ func _ready() -> void:
 	visible = DisplayServer.is_touchscreen_available()
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_font = ThemeDB.fallback_font
+	var cfg := ConfigFile.new()
+	if cfg.load(SETTINGS_PATH) == OK:
+		claw = cfg.get_value("controles", "garra", false)
+
+
+func _toggle_layout() -> void:
+	claw = not claw
+	var cfg := ConfigFile.new()
+	cfg.load(SETTINGS_PATH)
+	cfg.set_value("controles", "garra", claw)
+	cfg.save(SETTINGS_PATH)
+	Game.say("[CONTROLES: %s]" % ("GARRA" if claw else "2 DEDOS"))
 
 
 func _process(_delta: float) -> void:
@@ -38,21 +57,33 @@ func _process(_delta: float) -> void:
 func _buttons() -> Array:
 	var w := size.x
 	var b := size.y - HUD_H
-	return [
+	var list := [
 		["fire", "FUEGO", Vector2(w - 62, b - 58), 28.0],
 		["aim", "MIRA", Vector2(w - 128, b - 26), 17.0],
 		["reload", "RECARGA", Vector2(w - 26, b - 112), 16.0],
 		["grenade", "GRANADA", Vector2(w - 82, b - 118), 16.0],
 		["jump", "SALTAR", Vector2(w - 24, b - 22), 15.0],
 		["crouch", "AGACHAR", Vector2(w - 180, b - 20), 15.0],
+		["layout", "MODO: " + ("GARRA" if claw else "2 DEDOS"), Vector2(w / 2.0, 14), 12.0],
 	]
+	if claw:
+		list.append(["fire_left", "FUEGO", Vector2(58, 64), 30.0])
+	return list
 
 
 func _button_at(pos: Vector2) -> String:
 	for btn in _buttons():
-		if pos.distance_to(btn[2]) <= btn[3] + 4.0:
+		if btn[0] == "layout":
+			if _pill(btn).grow(4).has_point(pos):
+				return btn[0]
+		elif pos.distance_to(btn[2]) <= btn[3] + 4.0:
 			return btn[0]
 	return ""
+
+
+func _pill(btn: Array) -> Rect2:
+	var c: Vector2 = btn[2]
+	return Rect2(c - Vector2(40, 9), Vector2(80, 18))
 
 
 func _input(event: InputEvent) -> void:
@@ -86,7 +117,8 @@ func _touch_down(index: int, pos: Vector2) -> void:
 		_pressed[btn] = true
 		_fingers[index] = {"role": "fire" if btn == "fire" else "button", "last": pos, "btn": btn}
 		match btn:
-			"fire": _player.weapons.pull_trigger()
+			"fire", "fire_left": _player.weapons.pull_trigger()
+			"layout": _toggle_layout()
 			"aim": _player.touch_aim = not _player.touch_aim
 			"reload": _player.weapons.reload()
 			"grenade": _player.throw_grenade()
@@ -142,10 +174,17 @@ func _draw() -> void:
 		var r: float = btn[3]
 		var active: bool = _pressed.has(name) or (name == "aim" and _player.touch_aim) \
 			or (name == "crouch" and _player.crouching)
-		draw_circle(c, r, Color(0.98, 0.66, 0.16, 0.45) if active else Color(0.1, 0.13, 0.08, 0.45))
-		draw_arc(c, r, 0, TAU, 20, Color(0.84, 0.9, 0.74, 0.6), 1.0)
-		var label: String = btn[1]
+		var fill := Color(0.98, 0.66, 0.16, 0.45) if active else Color(0.1, 0.13, 0.08, 0.45)
 		var fs := 10 if r > 20 else 8
+		if name == "layout":
+			var pr := _pill(btn)
+			draw_rect(pr, fill)
+			draw_rect(pr, Color(0.84, 0.9, 0.74, 0.6), false, 1.0)
+			fs = 8
+		else:
+			draw_circle(c, r, fill)
+			draw_arc(c, r, 0, TAU, 20, Color(0.84, 0.9, 0.74, 0.6), 1.0)
+		var label: String = btn[1]
 		var tw := _font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
 		var tp := c + Vector2(-tw / 2.0, fs * 0.35)
 		draw_string_outline(_font, tp, label, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, 1, Color.BLACK)

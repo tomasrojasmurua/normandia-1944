@@ -12,6 +12,7 @@ class_name Player
 @export var jump_velocity := 4.2
 @export var mouse_sensitivity := 0.0025
 @export var touch_look_sensitivity := 0.006
+@export var aim_friction := 0.55      # 1 = sin asistencia al apuntar en el celular
 @export var max_health := 100.0
 @export var regen_delay := 6.0        # segundos sin recibir daño antes de recuperarse
 @export var regen_per_second := 4.0   # 0 = sin recuperación
@@ -76,7 +77,9 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel"):
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	elif event is InputEventMouseMotion and captured:
-		look(event.relative * mouse_sensitivity * (0.55 if aiming else 1.0))
+		var d: Vector2 = event.relative * mouse_sensitivity * (0.55 if aiming else 1.0)
+		weapons.player_looked(d.y)
+		look(d)
 	elif event.is_action_pressed("fire") and captured:
 		weapons.pull_trigger()
 	elif event.is_action_pressed("reload"):
@@ -103,7 +106,12 @@ func look(delta: Vector2) -> void:
 
 
 func look_touch(pixels: Vector2) -> void:
-	look(pixels * touch_look_sensitivity * (0.5 if aiming else 1.0))
+	var d := pixels * touch_look_sensitivity * (0.5 if aiming else 1.0)
+	# Asistencia leve: la mira se frena al pasar sobre un enemigo (no apunta sola)
+	if weapons.enemy_under_crosshair():
+		d *= aim_friction
+	weapons.player_looked(d.y)
+	look(d)
 
 
 func toggle_crouch() -> void:

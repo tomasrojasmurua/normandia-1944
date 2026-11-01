@@ -43,6 +43,11 @@ var _switch_t := -1.0
 var _switch_to := 0
 var _throw_t := -1.0
 var _kick := 0.0
+var _recoil_left := 0.0    # radianes de retroceso que la vista aún debe "devolver"
+var _recoil_wait := 0.0
+
+## Fracción del retroceso vertical que la vista recupera sola (0 = nada, 1 = todo).
+const RECOIL_RECOVERY := 0.8
 var _empty_wait := -1.0
 
 
@@ -113,6 +118,7 @@ func _process(delta: float) -> void:
 	_cooldown -= delta
 	hit_marker = maxf(hit_marker - delta * 4.0, 0.0)
 	_kick = maxf(_kick - delta * 7.0, 0.0)
+	_recover_recoil(delta)
 	var w := def()
 
 	if _reload_t >= 0.0:
@@ -209,9 +215,13 @@ func _fire() -> void:
 	flash.rotation.z = randf() * TAU
 	get_tree().create_timer(0.05).timeout.connect(func() -> void: flash.visible = false)
 
-	# Retroceso: la vista sube un poco
+	# Retroceso: la vista sube y luego vuelve casi sola a su lugar
 	var r := deg_to_rad(w["recoil"]) * (1.0 - 0.4 * ads_amount)
-	_player.look(Vector2(randf_range(-0.35, 0.35) * r, -r))
+	if DisplayServer.is_touchscreen_available():
+		r *= 0.75   # en el celular se corrige con el dedo: un poco menos de salto
+	_player.look(Vector2(randf_range(-0.25, 0.25) * r, -r))
+	_recoil_left += r * RECOIL_RECOVERY
+	_recoil_wait = 0.06
 
 	# Disparo instantáneo (rayo) desde el centro de la pantalla
 	var b := _camera.global_basis
@@ -232,6 +242,40 @@ func _fire() -> void:
 		Game.play("hit", -4.0)
 	else:
 		Game.dust(hit["position"], hit["normal"])
+
+
+func _recover_recoil(delta: float) -> void:
+	if _recoil_left <= 0.0:
+		return
+	if _recoil_wait > 0.0:
+		_recoil_wait -= delta
+		return
+	var step := minf(_recoil_left, maxf(_recoil_left * 10.0, 0.02) * delta)
+	_recoil_left -= step
+	_player.look(Vector2(0, step))
+
+
+## Si el jugador mueve la vista hacia abajo por su cuenta, eso ya cuenta
+## como recuperación (así no "baja de más").
+func player_looked(delta_y: float) -> void:
+	if delta_y > 0.0 and _recoil_left > 0.0:
+		_recoil_left = maxf(_recoil_left - delta_y, 0.0)
+
+
+## ¿Hay un enemigo vivo cerca del centro de la mira? (para la asistencia táctil)
+func enemy_under_crosshair() -> bool:
+	var from := _camera.global_position
+	var fwd := -_camera.global_basis.z
+	for e in get_tree().get_nodes_in_group("enemies"):
+		var to: Vector3 = e.global_position + Vector3(0, 1.1, 0) - from
+		var dist := to.length()
+		if dist > 80.0 or dist < 0.5:
+			continue
+		# ángulo que ocupa ~1 metro a esa distancia
+		var allowed := atan(0.9 / dist)
+		if fwd.angle_to(to) < allowed:
+			return true
+	return false
 
 
 func _show(index: int) -> void:

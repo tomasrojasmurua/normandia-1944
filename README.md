@@ -11,13 +11,14 @@ FPS cooperativo retro de la Segunda Guerra Mundial, hecho en **Godot 4.7** y jug
 | Caminar | Dedo en la mitad izquierda (joystick) | W A S D |
 | Correr | Joystick empujado a fondo hacia adelante | Shift |
 | Mirar | Deslizar en la mitad derecha | Mouse (clic para capturarlo, Esc para soltarlo) |
-| Disparar | Botón FUEGO (arrastra desde él para seguir mirando) | Clic izquierdo |
+| Disparar | Botón FUEGO (arrastra desde él para seguir mirando). En modo GARRA hay otro FUEGO arriba a la izquierda para el índice | Clic izquierdo |
 | Apuntar por la mira | Botón MIRA (activa / desactiva) | Mantener clic derecho |
 | Recargar | Botón RECARGA (también recarga solo al vaciarse) | R |
 | Cambiar arma | Tocar el arma 1 o 2 en la barra inferior | 1 / 2, Q o rueda del mouse |
 | Granada | Botón GRANADA | G |
 | Agacharse | Botón AGACHAR | C o Ctrl |
 | Saltar | Botón SALTAR | Barra espaciadora |
+| Modo de controles | Botón MODO arriba al centro: 2 DEDOS o GARRA (queda guardado) | — |
 
 Para jugar a pantalla completa en el celular: abre el link y usa **Compartir → Agregar a pantalla de inicio** (iPhone) o **⋮ → Instalar app** (Android).
 

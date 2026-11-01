@@ -721,6 +721,48 @@ def tex_manga():
     img.save(ARMAS / "manga.png")
 
 
+def clip_garand():
+    """Clip en bloque de latón con 8 cartuchos, visto de lado (entra desde arriba)."""
+    img = Image.new("RGBA", (26, 22), (0, 0, 0, 0))
+    px = img.load()
+    lat, lat_c, lat_o = rgb("laton"), mezcla(rgb("laton"), rgb("crema"), 0.45), mezcla(rgb("laton"), rgb("madera_osc"), 0.45)
+    cob = mezcla(rgb("oxido"), rgb("laton"), 0.35)
+    # 8 cartuchos escalonados en dos filas: puntas de cobre arriba, vainas abajo
+    for i in range(8):
+        x = 2 + i * 3
+        y = 2 if i % 2 == 0 else 4
+        rect(px, x, y, x + 2, y + 1, cob)
+        px[x + 1, y - 1] = cob
+        rect(px, x, y + 2, x + 2, y + 10, lat)
+        rect(px, x, y + 2, x, y + 10, lat_c)
+        rect(px, x + 2, y + 2, x + 2, y + 10, lat_o)
+    # el clip (chapa) abraza la base
+    rect(px, 1, 14, 25, 18, lat_o)
+    rect(px, 1, 14, 25, 14, lat_c)
+    rect(px, 3, 16, 23, 16, lat)
+    img = contorno(img)
+    img.save(ARMAS / "clip_garand.png")
+    return img
+
+
+def cargador_colt():
+    """Cargador del Colt (pavonado) con la bala de arriba asomando."""
+    img = Image.new("RGBA", (12, 34), (0, 0, 0, 0))
+    px = img.load()
+    m, mc, mo = mezcla(rgb("acero"), rgb("negro"), 0.3), rgb("acero"), mezcla(rgb("acero"), rgb("negro"), 0.65)
+    rect(px, 2, 4, 9, 30, m)
+    rect(px, 2, 4, 3, 30, mc)
+    rect(px, 9, 4, 9, 30, mo)
+    for y in (12, 18, 24):         # agujeros de inspección
+        px[6, y] = rgb("negro")[:3] + (255,)
+    rect(px, 1, 30, 10, 32, mo)    # base
+    rect(px, 4, 1, 7, 3, rgb("laton"))   # bala
+    rect(px, 5, 0, 6, 0, mezcla(rgb("oxido"), rgb("laton"), 0.35))
+    img = contorno(img)
+    img.save(ARMAS / "cargador_colt.png")
+    return img
+
+
 # ---------------------------------------------------------------------------
 # LÁMINA DE LA GUÍA DE ESTILO
 # ---------------------------------------------------------------------------
@@ -798,6 +840,7 @@ if __name__ == "__main__":
     retrato_provisional()
     ARMAS.mkdir(parents=True, exist_ok=True)
     tex_madera_arma(); tex_metal_arma(); tex_piel(); tex_manga()
+    clip_garand(); cargador_colt()
     paleta_png()
     lamina(iconos, cg, cm)
     print("listo:", cg, cm)

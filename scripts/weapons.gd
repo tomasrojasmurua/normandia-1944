@@ -201,7 +201,8 @@ func _animate(_delta: float, w: Dictionary) -> void:
 	if _player.sprinting:
 		pos += Vector3(-0.04, -0.07, 0.04)
 		rot += Vector3(-12, 35, 8)
-	if _reload_t >= 0.0:
+	# (con imagen 2D, la recarga la anima hud.gd con su propio clip/cargador)
+	if _reload_t >= 0.0 and uses_3d_view():
 		var r := sin(PI * clampf(_reload_t / w["reload"], 0.0, 1.0))
 		pos += Vector3(0, -0.1, 0.05) * r
 		rot += Vector3(20, 0, 35) * r
@@ -231,6 +232,11 @@ func _animate(_delta: float, w: Dictionary) -> void:
 ## true si ahora se ve el modelo 3D; false si se dibuja la imagen 2D.
 func uses_3d_view() -> bool:
 	return sprite_cadera[current] == null
+
+
+## 0..1 mientras se recarga; -1 si no.
+func reload_progress() -> float:
+	return _reload_t / def()["reload"] if _reload_t >= 0.0 else -1.0
 
 
 ## 0..1 mientras se lanza una granada; -1 si no.

@@ -115,8 +115,14 @@ const VM_POS := [Vector2(96, 18), Vector2(70, 30)]
 const VM_PIVOT := Vector2(420, 330)
 const VM_BOCA := [Vector2(251, 135), Vector2(326, 142)]
 const VM_MIRA := [Vector2(259, 119), Vector2(334, 136)]
-const MIRA_POS := [Vector2(-3, 34), Vector2.ZERO]
-const MIRA_POSTE := [Vector2(323, 146), Vector2.ZERO]
+const MIRA_POS := [Vector2(-3, 34), Vector2(-3, 33)]
+const MIRA_POSTE := [Vector2(323, 146), Vector2(323, 147)]
+# Recarga dibujada: dónde entra el clip del Garand (cajón abierto) y dónde
+# entra el cargador del Colt (base de la empuñadura), en píxeles de la imagen.
+const RECARGA_PUNTO := [Vector2(338, 170), Vector2(409, 350)]
+const _CLIP := preload("res://assets/armas/clip_garand.png")
+const _CARGADOR := preload("res://assets/armas/cargador_colt.png")
+var _cargador_pantalla := Vector2.ZERO
 const GRANADA_POS := Vector2(120, 40)
 
 
@@ -146,9 +152,37 @@ func _draw_viewmodel(w: Weapons) -> void:
 	var hacia: Vector2 = centro - (VM_POS[w.current] + VM_MIRA[w.current])
 	var desliz := hacia * (t * 0.6 if mira else t)
 	var giro := deg_to_rad(w.view_angle) * (1.0 - t)
-	draw_set_transform((VM_PIVOT + off + desliz).round(), giro, Vector2.ONE)
 	var o: Vector2 = VM_POS[w.current] - VM_PIVOT
+	# Recarga: el arma se mueve y aparece el clip o el cargador
+	var rp := w.reload_progress()
+	var pieza := Vector4.ZERO   # x, y = posición de la pieza (imagen); z = 1 si se ve; w = 1 si va detrás
+	if rp >= 0.0:
+		var baja := smoothstep(0.0, 0.18, rp) * (1.0 - smoothstep(0.8, 1.0, rp))
+		var k := smoothstep(0.25, 0.6, rp)      # la pieza llega a su lugar
+		var golpe := 3.0 if rp > 0.6 and rp < 0.66 else 0.0
+		var punto: Vector2 = o + RECARGA_PUNTO[w.current]
+		if w.current == 0:   # Garand: baja e inclina a la izquierda; el clip entra desde arriba
+			off += Vector2(-30, 60 + golpe) * baja
+			giro -= deg_to_rad(14.0) * baja
+			if rp > 0.2 and rp < 0.64:
+				var desde := punto + Vector2(70, -110)
+				var p2 := desde.lerp(punto, k) + Vector2(0, 8.0 * smoothstep(0.58, 0.64, rp))
+				pieza = Vector4(p2.x - 13, p2.y - 20, 1, 0)
+		else:                # Colt: baja e inclina; el cargador nuevo sube desde abajo
+			var hondo := smoothstep(0.0, 0.25, rp) * (1.0 - smoothstep(0.72, 0.95, rp))
+			off += Vector2(30, 55 * hondo + golpe)
+			giro += deg_to_rad(12.0) * hondo
+			if rp > 0.3 and rp < 0.62:
+				var sube := smoothstep(0.3, 0.6, rp)
+				pieza = Vector4(0, 0, 1, 1)
+				_cargador_pantalla = Vector2(446, 345 - 95.0 * sube).round()
+	draw_set_transform((VM_PIVOT + off + desliz).round(), giro, Vector2.ONE)
 	draw_texture(w.sprite_cadera[w.current], o.round())
+	if pieza.z > 0.0 and pieza.w == 0.0:
+		draw_texture(_CLIP, Vector2(pieza.x, pieza.y).round())
+	if pieza.z > 0.0 and pieza.w > 0.0:   # cargador del Colt subiendo hacia la empuñadura, al doble
+		draw_set_transform(_cargador_pantalla, deg_to_rad(12.0), Vector2(2, 2))
+		draw_texture(_CARGADOR, Vector2.ZERO)
 	if w.flash_2d > 0.0:
 		_draw_flash_2d(o + VM_BOCA[w.current], 1.0)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)

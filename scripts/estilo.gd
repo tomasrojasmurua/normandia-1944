@@ -30,9 +30,9 @@ const _DIG_G_OFF := preload("res://assets/ui/digitos_g_off.png")
 const _DIG_M_ON := preload("res://assets/ui/digitos_m_on.png")
 const _DIG_M_OFF := preload("res://assets/ui/digitos_m_off.png")
 
-const ICONO_GARAND := preload("res://assets/ui/icono_garand.png")
-const ICONO_COLT := preload("res://assets/ui/icono_colt.png")
-const ICONO_GRANADA := preload("res://assets/ui/icono_granada.png")
+const ICONO_GARAND := preload("res://assets/armas/perfil_garand.png")    # fotos de ChatGPT pixeladas
+const ICONO_COLT := preload("res://assets/armas/perfil_colt.png")
+const ICONO_GRANADA := preload("res://assets/armas/perfil_granada.png")
 const ICONO_NIEBLA := preload("res://assets/ui/icono_niebla.png")
 const ICONO_BALA := preload("res://assets/ui/icono_bala.png")
 const ICONO_AGACHADO := preload("res://assets/ui/icono_agachado.png")

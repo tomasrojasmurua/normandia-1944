@@ -118,12 +118,17 @@ def arma(origen, destino):
 # Piezas sueltas (clip, cargador, vainas): se recortan al objeto y se reducen
 # a un tamaño fijo. PIEZAS_TAM = (ancho, alto) máximos en píxeles del juego.
 PIEZAS_TAM = {"pieza_clip_garand": (34, 30), "pieza_cargador_colt": (22, 60),
-              "pieza_vaina": (14, 8), "pieza_clip_vacio": (30, 14)}
+              "pieza_vaina": (14, 8), "pieza_clip_vacio": (30, 14),
+              # íconos del HUD (perfiles de catálogo)
+              "perfil_garand": (68, 22), "perfil_colt": (40, 27), "perfil_granada": (20, 28)}
+GIRAR = {"perfil_granada": 90}   # la granada llegó acostada: se para con la espoleta arriba
 
 
 def pieza(origen, destino):
     img = quitar_verde(Image.open(origen))
     img = img.crop(img.split()[3].getbbox())
+    if origen.stem in GIRAR:
+        img = img.rotate(GIRAR[origen.stem], expand=True)
     mw, mh = PIEZAS_TAM.get(origen.stem, (32, 32))
     esc = min(mw / img.width, mh / img.height)
     w, h = max(1, round(img.width * esc)), max(1, round(img.height * esc))

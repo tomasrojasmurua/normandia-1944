@@ -63,6 +63,7 @@ func _draw() -> void:
 		return
 	var s := size
 	var w := _player.weapons
+	_draw_viewmodel(w)
 	var top := s.y - BAR_H
 	# El centro de la cámara es el centro de TODA la pantalla (la barra se dibuja
 	# encima de la vista 3D), y por ahí salen las balas.
@@ -101,6 +102,37 @@ func _draw() -> void:
 	_draw_grenades(Rect2(x + 140, top + 2, 67, BAR_H - 4))
 	_draw_ammo(Rect2(x + 209, top + 2, 105, BAR_H - 4))
 	_draw_slots(Rect2(x + 316, top + 2, right_w - 318, BAR_H - 4))
+
+
+# Arma en la mano dibujada como imagen (estilo Doom / Hamburger Hill).
+# VM_POS = esquina superior izquierda de la imagen en reposo; VM_PIVOT = punto
+# de giro (las manos); VM_BOCA = punta del cañón dentro de la imagen.
+const VM_POS := [Vector2(96, 18), Vector2(96, 18)]
+const VM_PIVOT := Vector2(420, 330)
+const VM_BOCA := [Vector2(251, 135), Vector2(0, 0)]
+
+
+func _draw_viewmodel(w: Weapons) -> void:
+	if w.uses_3d_view() or _player.dead:
+		return
+	var tex: Texture2D = w.sprite_cadera[w.current]
+	draw_set_transform(VM_PIVOT + w.view_offset.round(), deg_to_rad(w.view_angle), Vector2.ONE)
+	var o: Vector2 = VM_POS[w.current] - VM_PIVOT
+	draw_texture(tex, o.round())
+	if w.flash_2d > 0.0:
+		_draw_flash_2d(o + VM_BOCA[w.current])
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+
+## Fogonazo de píxeles: estrella amarilla con centro blanco, al azar cada vez.
+func _draw_flash_2d(c: Vector2) -> void:
+	var largo := randf_range(14.0, 22.0)
+	for i in 5:
+		var a := -PI * 0.85 + i * 0.35 + randf_range(-0.1, 0.1)
+		var d := Vector2(cos(a), sin(a))
+		draw_line(c, c + d * largo * (1.0 if i % 2 == 0 else 0.6), Color(1.0, 0.75, 0.25), 3.0)
+	draw_circle(c, 5.0, Color(1.0, 0.85, 0.4))
+	draw_circle(c, 2.5, Color(1.0, 1.0, 0.85))
 
 
 func _draw_crosshair(c: Vector2, spread_deg: float) -> void:

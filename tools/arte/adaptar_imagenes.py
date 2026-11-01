@@ -74,6 +74,45 @@ def textura(origen, destino):
     out.save(destino)
 
 
+# Armas en primera persona: imagen de 1536x1024 con fondo verde puro.
+# ESCALA_ARMA = cuánto se achica para el juego (la pantalla mide 640x360).
+ESCALA_ARMA = 0.36
+ARMAS_SPRITES = RAIZ / "assets" / "armas"
+
+
+def quitar_verde(img):
+    """Fondo verde -> transparente, y quita el reflejo verde de los bordes."""
+    img = img.convert("RGBA")
+    px = img.load()
+    for y in range(img.height):
+        for x in range(img.width):
+            r, g, b, a = px[x, y]
+            exceso = g - max(r, b)
+            if exceso > 60 and g > 120:
+                px[x, y] = (0, 0, 0, 0)
+            elif exceso > 0:
+                # borde: bajar el verde al nivel de los otros canales
+                px[x, y] = (r, max(r, b) + exceso // 4, b, 255 if exceso < 30 else 160)
+    return img
+
+
+def arma(origen, destino):
+    img = quitar_verde(Image.open(origen))
+    w, h = int(img.width * ESCALA_ARMA), int(img.height * ESCALA_ARMA)
+    # Reducir color y alfa por separado; el alfa queda todo o nada (bordes de píxel nítidos)
+    big = img.resize((w * 4, h * 4), Image.LANCZOS)
+    small = big.resize((w, h), Image.BOX)
+    a = small.split()[3].point(lambda v: 255 if v > 110 else 0)
+    rgb_ = small.convert("RGB")
+    rgb_ = ImageEnhance.Contrast(rgb_).enhance(1.12)
+    rgb_ = ImageEnhance.Color(rgb_).enhance(0.9)
+    rgb_ = ImageEnhance.Sharpness(rgb_).enhance(1.5)
+    rgb_ = rgb_.quantize(colors=48, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.NONE).convert("RGB")
+    out = rgb_.convert("RGBA")
+    out.putalpha(a)
+    out.save(destino)
+
+
 def fondo(origen, destino):
     img = Image.open(origen)
     W, H = img.size
@@ -91,6 +130,9 @@ if __name__ == "__main__":
     for f in sorted((FUENTE / "texturas").glob("*.jpg")):
         textura(f, TEXTURAS / (f.stem + ".png"))
         print("textura", f.stem)
+    for f in sorted((FUENTE / "armas").glob("*.png")):
+        arma(f, ARMAS_SPRITES / (f.stem + ".png"))
+        print("arma", f.stem)
     m = FUENTE / "fondos" / "fondo_menu.jpg"
     if m.exists():
         fondo(m, UI / "fondo_menu.png")

@@ -34,6 +34,15 @@ var hit_marker := 0.0      # >0 cuando acabas de acertar (el HUD dibuja una X)
 var ads_amount := 0.0      # 0 = cadera, 1 = apuntando por la mira
 var last_shot := {}        # datos del último disparo (para pruebas)
 
+# --- Arma dibujada en 2D (imagen de ChatGPT pixelada), como en los FPS de los 90.
+# Si existe assets/armas/arma_<id>_cadera.png se muestra esa imagen en vez del
+# modelo 3D mientras NO se apunta; al apuntar se ve el modelo 3D con la mira.
+const SPRITES := ["garand", "colt"]
+var sprite_cadera: Array[Texture2D] = []
+var view_offset := Vector2.ZERO   # desplazamiento en píxeles de pantalla
+var view_angle := 0.0             # giro en grados
+var flash_2d := 0.0               # >0 mientras se ve el fogonazo 2D
+
 var _player: Node
 var _camera: Camera3D
 var _models: Array[Node3D] = []
@@ -60,6 +69,9 @@ func _ready() -> void:
 		reserve.append(w["reserve"])
 	_models.append(_build_garand())
 	_models.append(_build_colt())
+	for id in SPRITES:
+		var path := "res://assets/armas/arma_%s_cadera.png" % id
+		sprite_cadera.append(load(path) if ResourceLoader.exists(path) else null)
 	_show(current)
 
 
@@ -201,6 +213,20 @@ func _animate(_delta: float, w: Dictionary) -> void:
 	position = pos
 	rotation_degrees = rot
 
+	# Lo mismo traducido a la imagen 2D (píxeles de pantalla y grados)
+	var d := pos - hip
+	view_offset = Vector2(d.x * 900.0 - (rot.y - 3.0) * 2.0, -d.y * 900.0) + Vector2(d.z, d.z) * 400.0
+	view_angle = rot.z - rot.x * 0.5
+	flash_2d = maxf(flash_2d - _delta, 0.0)
+	# Modelo 3D solo al apuntar (o si no hay imagen para esta arma)
+	if current < _models.size():
+		_models[current].visible = uses_3d_view()
+
+
+## true si ahora se ve el modelo 3D; false si se dibuja la imagen 2D.
+func uses_3d_view() -> bool:
+	return sprite_cadera[current] == null or ads_amount >= 0.5
+
 
 func _fire() -> void:
 	var w := def()
@@ -212,7 +238,8 @@ func _fire() -> void:
 		get_tree().create_timer(0.12).timeout.connect(func() -> void: Game.play("ping", -3.0))
 
 	var flash := _flashes[current]
-	flash.visible = true
+	flash.visible = uses_3d_view()
+	flash_2d = 0.06
 	flash.rotation.z = randf() * TAU
 	get_tree().create_timer(0.05).timeout.connect(func() -> void: flash.visible = false)
 

@@ -122,7 +122,16 @@ PIEZAS_TAM = {"pieza_clip_garand": (34, 30), "pieza_cargador_colt": (22, 60),
               # íconos del HUD (perfiles de catálogo)
               "perfil_garand": (68, 22), "perfil_colt": (40, 27), "perfil_granada": (20, 28),
               # armas nuevas: perfiles a lo ancho de la ranura; cargadores a escala de la imagen de cadera
-              "perfil_carbine": (64, 22), "pieza_cargador_carbine": (34, 72)}
+              "perfil_carbine": (64, 22), "pieza_cargador_carbine": (34, 72),
+              "perfil_thompson": (60, 24), "pieza_cargador_thompson": (36, 150),
+              "perfil_bar": (68, 22), "pieza_cargador_bar": (56, 150),
+              "perfil_springfield": (68, 22), "pieza_cargador_springfield": (50, 60),
+              "perfil_kar98k": (68, 20), "pieza_cargador_kar98k": (60, 45),
+              "perfil_mp40": (60, 26), "pieza_cargador_mp40": (30, 140),
+              "perfil_stg44": (64, 24), "pieza_cargador_stg44": (60, 150),
+              "perfil_mg42": (68, 22), "pieza_cargador_mg42": (70, 70),
+              "perfil_luger": (40, 27), "pieza_cargador_luger": (30, 110),
+              "perfil_bazooka": (68, 16)}
 GIRAR = {"perfil_granada": 90}   # la granada llegó acostada: se para con la espoleta arriba
 
 

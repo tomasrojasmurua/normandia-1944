@@ -62,6 +62,9 @@ const DATOS := {
 		"reload": 2.2, "spread_hip": 2.0, "spread_ads": 0.8, "recoil": 0.9,
 		"sound": "pistol", "pitch": 0.9, "ads_fov": 55.0,
 		"hip": Vector3(0.15, -0.13, -0.25), "ads": Vector3(0, 0, -0.12),
+		"vm_pos": Vector2(96, 18), "vm_boca": Vector2(188, 134), "vm_mira": Vector2(410, 160),
+		"mira_pos": Vector2(-2, 60), "mira_poste": Vector2(322, 120),
+		"recarga": "cargador", "recarga_punto": Vector2(284, 196), "expulsion": Vector2(324, 169),
 	},
 	"bar": {
 		"name": "BAR M1918A2", "ranura": 0, "bando": "aliado", "tipo": "ametralladora",
@@ -69,6 +72,9 @@ const DATOS := {
 		"reload": 2.6, "spread_hip": 2.4, "spread_ads": 0.5, "recoil": 1.8,
 		"sound": "rifle", "pitch": 0.95, "ads_fov": 45.0,
 		"hip": Vector3(0.16, -0.15, -0.27), "ads": Vector3(0, 0, -0.1),
+		"vm_pos": Vector2(96, 18), "vm_boca": Vector2(105, 137), "vm_mira": Vector2(360, 135),
+		"mira_pos": Vector2(-2, 111), "mira_poste": Vector2(322, 69),
+		"recarga": "cargador", "recarga_punto": Vector2(282, 216), "expulsion": Vector2(306, 169),
 	},
 	"springfield": {
 		"name": "SPRINGFIELD M1903", "ranura": 0, "bando": "aliado", "tipo": "fusil",
@@ -76,6 +82,8 @@ const DATOS := {
 		"reload": 2.8, "spread_hip": 1.6, "spread_ads": 0.0, "recoil": 3.5,
 		"sound": "rifle", "pitch": 0.9, "ads_fov": 14.0, "scope": true,
 		"hip": Vector3(0.16, -0.15, -0.27), "ads": Vector3(0, 0, -0.1),
+		"vm_pos": Vector2(96, 18), "vm_boca": Vector2(114, 148), "vm_mira": Vector2(410, 158),
+		"recarga": "cargador", "recarga_punto": Vector2(324, 259), "expulsion": Vector2(324, 202),
 	},
 	"bazooka": {
 		"name": "BAZUCA M1", "ranura": 0, "bando": "aliado", "tipo": "bazuca",
@@ -83,6 +91,8 @@ const DATOS := {
 		"reload": 3.0, "spread_hip": 1.2, "spread_ads": 0.3, "recoil": 4.0,
 		"sound": "throw", "pitch": 0.6, "ads_fov": 50.0, "rocket": true,
 		"hip": Vector3(0.2, -0.12, -0.3), "ads": Vector3(0.0, -0.02, -0.2),
+		"vm_pos": Vector2(96, 18), "vm_boca": Vector2(104, 165), "vm_mira": Vector2(405, 168),
+		"recarga": "cohete",
 	},
 	# ------------------------------------------------------------- alemanas
 	"kar98k": {
@@ -91,6 +101,9 @@ const DATOS := {
 		"reload": 2.6, "spread_hip": 1.3, "spread_ads": 0.1, "recoil": 3.0,
 		"sound": "rifle", "pitch": 0.92, "ads_fov": 40.0,
 		"hip": Vector3(0.16, -0.15, -0.27), "ads": Vector3(0, 0, -0.1),
+		"vm_pos": Vector2(96, 18), "vm_boca": Vector2(107, 147), "vm_mira": Vector2(380, 185),
+		"mira_pos": Vector2(-2, 77), "mira_poste": Vector2(322, 103),
+		"recarga": "cargador", "recarga_punto": Vector2(317, 274), "expulsion": Vector2(306, 198),
 	},
 	"mp40": {
 		"name": "MP 40", "ranura": 0, "bando": "aleman", "tipo": "subfusil",
@@ -98,6 +111,9 @@ const DATOS := {
 		"reload": 2.4, "spread_hip": 2.0, "spread_ads": 0.9, "recoil": 0.8,
 		"sound": "pistol", "pitch": 0.95, "ads_fov": 55.0,
 		"hip": Vector3(0.15, -0.13, -0.25), "ads": Vector3(0, 0, -0.12),
+		"vm_pos": Vector2(96, 18), "vm_boca": Vector2(198, 143), "vm_mira": Vector2(325, 145),
+		"mira_pos": Vector2(-2, 52), "mira_poste": Vector2(322, 128),
+		"recarga": "cargador", "recarga_punto": Vector2(263, 216), "expulsion": Vector2(281, 158),
 	},
 	"stg44": {
 		"name": "STG 44", "ranura": 0, "bando": "aleman", "tipo": "subfusil",
@@ -105,6 +121,9 @@ const DATOS := {
 		"reload": 2.4, "spread_hip": 1.8, "spread_ads": 0.5, "recoil": 1.2,
 		"sound": "rifle", "pitch": 1.15, "ads_fov": 48.0,
 		"hip": Vector3(0.15, -0.14, -0.26), "ads": Vector3(0, 0, -0.1),
+		"vm_pos": Vector2(96, 18), "vm_boca": Vector2(180, 155), "vm_mira": Vector2(305, 130),
+		"mira_pos": Vector2(-3, 58), "mira_poste": Vector2(323, 122),
+		"recarga": "cargador", "recarga_punto": Vector2(268, 230), "expulsion": Vector2(342, 173),
 	},
 	"mg42": {
 		"name": "MG 42", "ranura": 0, "bando": "aleman", "tipo": "ametralladora",
@@ -112,6 +131,9 @@ const DATOS := {
 		"reload": 4.0, "spread_hip": 3.5, "spread_ads": 1.5, "recoil": 1.1,
 		"sound": "rifle", "pitch": 1.2, "ads_fov": 50.0,
 		"hip": Vector3(0.17, -0.16, -0.28), "ads": Vector3(0, 0, -0.12),
+		"vm_pos": Vector2(96, 18), "vm_boca": Vector2(104, 136), "vm_mira": Vector2(230, 120),
+		"mira_pos": Vector2(-2, 55), "mira_poste": Vector2(322, 125),
+		"recarga": "cargador", "recarga_punto": Vector2(230, 194), "expulsion": Vector2(288, 155),
 	},
 	"luger": {
 		"name": "LUGER P08", "ranura": 1, "bando": "aleman", "tipo": "pistola",
@@ -119,6 +141,9 @@ const DATOS := {
 		"reload": 1.5, "spread_hip": 1.4, "spread_ads": 0.5, "recoil": 1.8,
 		"sound": "pistol", "pitch": 1.1, "ads_fov": 55.0,
 		"hip": Vector3(0.1, -0.06, -0.22), "ads": Vector3(0, 0, -0.26),
+		"vm_pos": Vector2(70, 30), "vm_boca": Vector2(225, 144), "vm_mira": Vector2(330, 150),
+		"mira_pos": Vector2(-4, 50), "mira_poste": Vector2(324, 130),
+		"recarga": "cargador", "recarga_punto": Vector2(340, 300), "expulsion": Vector2(353, 169),
 	},
 }
 

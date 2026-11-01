@@ -174,7 +174,7 @@ func _v(w: Weapons, campo: String) -> Vector2:
 
 
 func _draw_viewmodel(w: Weapons) -> void:
-	if w.uses_3d_view() or _player.dead:
+	if w.uses_3d_view() or _player.dead or w.scoped():   # con mira telescópica solo se ve el círculo
 		return
 	var centro := (size / 2.0).floor()
 	var off := w.view_offset.round()
@@ -215,6 +215,9 @@ func _draw_viewmodel(w: Weapons) -> void:
 				var desde := punto + Vector2(70, -110)
 				var p2 := desde.lerp(punto, k) + Vector2(0, 8.0 * smoothstep(0.58, 0.64, rp))
 				pieza = Vector4(p2.x - 17, p2.y - 24, 1, 0)
+		elif w.def().get("recarga", "") == "cohete":   # bazuca: baja para meter el cohete por atrás
+			off += Vector2(40, 110 + golpe) * baja
+			giro += deg_to_rad(10.0) * baja
 		elif w.id() != "colt":   # cargador a la vista (Carbine, Thompson...): entra por abajo hasta su lugar
 			off += Vector2(-20, -55 + golpe) * baja      # sube el arma para que se vea el cargador
 			giro += deg_to_rad(8.0) * baja

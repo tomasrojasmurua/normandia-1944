@@ -9,6 +9,7 @@ extends Node3D
 
 var _steel := StandardMaterial3D.new()
 var _concrete := StandardMaterial3D.new()
+var _sand_bags := StandardMaterial3D.new()
 
 
 func _ready() -> void:
@@ -16,6 +17,8 @@ func _ready() -> void:
 	_steel.shading_mode = BaseMaterial3D.SHADING_MODE_PER_VERTEX
 	_concrete.albedo_color = Color(0.5, 0.49, 0.45)
 	_concrete.shading_mode = BaseMaterial3D.SHADING_MODE_PER_VERTEX
+	_sand_bags.albedo_color = Color(0.56, 0.5, 0.36)
+	_sand_bags.shading_mode = BaseMaterial3D.SHADING_MODE_PER_VERTEX
 
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed_value
@@ -25,6 +28,13 @@ func _ready() -> void:
 
 	_add_box(Vector3(0, 1.5, -42), Vector3(14, 3, 5), _concrete)  # búnker
 	_add_box(Vector3(0, 3.2, -42), Vector3(15, 0.5, 6), _concrete)  # techo
+
+	# Sacos de arena donde se cubren los enemigos
+	_add_box(Vector3(-4.5, 0.45, -36), Vector3(6, 0.9, 0.6), _sand_bags)
+	_add_box(Vector3(5, 0.45, -36), Vector3(6, 0.9, 0.6), _sand_bags)
+	_add_box(Vector3(-14, 0.45, -24), Vector3(3, 0.9, 0.6), _sand_bags)
+	_add_box(Vector3(13, 0.45, -20), Vector3(3, 0.9, 0.6), _sand_bags)
+	_add_box(Vector3(2, 3.9, -39.6), Vector3(3, 0.5, 0.4), _sand_bags)  # parapeto en el techo
 
 
 func _add_hedgehog(pos: Vector3, yaw: float) -> void:

@@ -6,11 +6,18 @@ FPS cooperativo retro de la Segunda Guerra Mundial, hecho en **Godot 4.7** y jug
 
 ## Controles
 
-| En el celular | En el computador |
-|---|---|
-| Dedo en la mitad izquierda: caminar | W A S D |
-| Deslizar en la mitad derecha: mirar | Mouse (clic para capturarlo, Esc para soltarlo) |
-| Botón SALTAR | Barra espaciadora |
+| Acción | En el celular | En el computador |
+|---|---|---|
+| Caminar | Dedo en la mitad izquierda (joystick) | W A S D |
+| Correr | Joystick empujado a fondo hacia adelante | Shift |
+| Mirar | Deslizar en la mitad derecha | Mouse (clic para capturarlo, Esc para soltarlo) |
+| Disparar | Botón FUEGO (arrastra desde él para seguir mirando) | Clic izquierdo |
+| Apuntar por la mira | Botón MIRA (activa / desactiva) | Mantener clic derecho |
+| Recargar | Botón RECARGA (también recarga solo al vaciarse) | R |
+| Cambiar arma | Tocar el arma 1 o 2 en la barra inferior | 1 / 2, Q o rueda del mouse |
+| Granada | Botón GRANADA | G |
+| Agacharse | Botón AGACHAR | C o Ctrl |
+| Saltar | Botón SALTAR | Barra espaciadora |
 
 Para jugar a pantalla completa en el celular: abre el link y usa **Compartir → Agregar a pantalla de inicio** (iPhone) o **⋮ → Instalar app** (Android).
 
@@ -26,7 +33,15 @@ punto amarillo = trabajando, ✔ verde = publicado (tarda unos 2–4 minutos), �
 project.godot          configuración del proyecto
 export_presets.cfg     configuración de exportación web (PWA, un solo hilo)
 scenes/                escenas (main = escena de prueba, player = soldado)
-scripts/               código del jugador, controles táctiles y escenario de prueba
+scripts/
+  game.gd              servicios globales: sonidos (generados por código), efectos, mensajes, reloj
+  player.gd            soldado: movimiento, correr, agacharse, vida, granadas
+  weapons.gd           M1 Garand y Colt M1911: disparo, mira, recarga, munición (números ajustables arriba)
+  enemy.gd             soldado alemán simple: recibe daño y dispara si te ve
+  grenade.gd           granada Mk 2
+  hud.gd               barra inferior estilo Hamburger Hill, cruz, indicadores de daño
+  touch_controls.gd    controles táctiles
+  beach_decor.gd       escenario de prueba (erizos, búnker, sacos de arena)
 assets/icons/          íconos de la app en el celular
 .github/workflows/     publicación automática
 ```

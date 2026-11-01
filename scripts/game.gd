@@ -1,0 +1,287 @@
+extends Node
+## "Game": servicios globales del juego (se carga solo, como Autoload).
+## - Sonidos: se generan por código al arrancar (no hay archivos de audio todavía).
+## - Efectos: sangre, polvo, trazadoras y explosiones.
+## - Mensajes para el registro del HUD ("[ENEMIGO ABATIDO]", etc.).
+## - Reloj de la misión (empieza a las 06:30, hora H del Día D).
+
+signal message(text: String, color: Color)
+
+const RATE := 22050
+const COLOR_INFO := Color(0.95, 0.85, 0.4)
+const COLOR_BAD := Color(1.0, 0.35, 0.3)
+const COLOR_GOOD := Color(0.55, 0.95, 0.45)
+
+var start_minutes := 6 * 60 + 30
+var elapsed := 0.0
+
+var _sounds := {}
+var _players: Array[AudioStreamPlayer] = []
+var _next_player := 0
+var _rng := RandomNumberGenerator.new()
+var _mat_cache := {}
+
+
+func _ready() -> void:
+	process_mode = Node.PROCESS_MODE_ALWAYS
+	_rng.seed = 1944
+	_build_sounds()
+	for i in 10:
+		var p := AudioStreamPlayer.new()
+		add_child(p)
+		_players.append(p)
+
+
+func _process(delta: float) -> void:
+	elapsed += delta
+
+
+## Se llama al empezar una misión (y al reiniciar tras morir).
+func reset_mission() -> void:
+	elapsed = 0.0
+
+
+func clock_text() -> String:
+	var total := start_minutes + int(elapsed / 60.0)
+	return "%02d:%02d" % [(total / 60) % 24, total % 60]
+
+
+func say(text: String, color: Color = COLOR_INFO) -> void:
+	message.emit(text, color)
+
+
+# ---------------------------------------------------------------- sonido
+
+func play(sound: String, volume_db := 0.0, pitch := 1.0) -> void:
+	if not _sounds.has(sound):
+		return
+	var p := _players[_next_player]
+	_next_player = (_next_player + 1) % _players.size()
+	p.stream = _sounds[sound]
+	p.volume_db = volume_db
+	p.pitch_scale = pitch
+	p.play()
+
+
+func play_at(sound: String, pos: Vector3, volume_db := 0.0) -> void:
+	if not _sounds.has(sound):
+		return
+	var p := AudioStreamPlayer3D.new()
+	p.stream = _sounds[sound]
+	p.volume_db = volume_db
+	p.unit_size = 12.0
+	p.max_distance = 200.0
+	p.pitch_scale = _rng.randf_range(0.92, 1.06)
+	_scene().add_child(p)
+	p.global_position = pos
+	p.play()
+	p.finished.connect(p.queue_free)
+
+
+func _build_sounds() -> void:
+	# nombre: [duración en segundos, brillo del ruido 0..1]
+	var specs := {
+		"rifle": [0.55, 0.35], "pistol": [0.32, 0.5], "rifle_far": [0.9, 0.08],
+		"ping": [0.7, 1.0], "click": [0.06, 1.0], "reload": [0.9, 0.9],
+		"explosion": [1.8, 0.06], "hurt": [0.3, 0.2], "hit": [0.07, 1.0],
+		"throw": [0.35, 0.25], "bounce": [0.08, 0.5],
+	}
+	for sound in specs:
+		_sounds[sound] = _make(sound, specs[sound][0], specs[sound][1])
+
+
+## Forma de onda de cada sonido en el instante `t` (segundos); `n` es ruido.
+func _sample(sound: String, t: float, n: float) -> float:
+	match sound:
+		"rifle":
+			return n * exp(-t * 13.0) * 0.9 + sin(TAU * 55.0 * t) * exp(-t * 18.0) * 0.8
+		"pistol":
+			return n * exp(-t * 22.0) * 0.85 + sin(TAU * 90.0 * t) * exp(-t * 30.0) * 0.5
+		"rifle_far":
+			return n * exp(-t * 7.0) * 0.7 + sin(TAU * 45.0 * t) * exp(-t * 10.0) * 0.4
+		"ping":  # el clip del Garand saltando al vaciarse
+			return (sin(TAU * 2950.0 * t) * 0.35 + sin(TAU * 4180.0 * t) * 0.18) * exp(-t * 6.5) \
+				+ n * exp(-t * 300.0) * 0.4
+		"click":
+			return n * exp(-t * 180.0) * 0.6 + sin(TAU * 1400.0 * t) * exp(-t * 120.0) * 0.3
+		"reload":
+			var a := n * exp(-t * 150.0) * 0.5
+			var t2 := t - 0.45
+			if t2 > 0.0:
+				a += n * exp(-t2 * 120.0) * 0.6 + sin(TAU * 900.0 * t2) * exp(-t2 * 80.0) * 0.3
+			return a
+		"explosion":
+			return n * exp(-t * 2.6) + sin(TAU * 38.0 * t) * exp(-t * 4.0) * 0.9
+		"hurt":
+			return sin(TAU * (140.0 - t * 200.0) * t) * exp(-t * 12.0) * 0.8 + n * exp(-t * 25.0) * 0.3
+		"hit":
+			return sin(TAU * 1900.0 * t) * exp(-t * 60.0) * 0.35
+		"throw":
+			return n * sin(PI * t / 0.35) * 0.35
+		"bounce":
+			return n * exp(-t * 90.0) * 0.5 + sin(TAU * 600.0 * t) * exp(-t * 70.0) * 0.3
+	return 0.0
+
+
+## Genera un sonido. `brightness` (0..1) filtra el ruido: bajo = grave y apagado.
+func _make(sound: String, seconds: float, brightness: float) -> AudioStreamWAV:
+	var count := int(seconds * RATE)
+	var data := PackedByteArray()
+	data.resize(count * 2)
+	var lp := 0.0
+	for i in count:
+		var t := float(i) / RATE
+		var noise := _rng.randf_range(-1.0, 1.0)
+		lp += (noise - lp) * brightness
+		var v := _sample(sound, t, lp)
+		var fade := clampf((seconds - t) / 0.02, 0.0, 1.0)
+		data.encode_s16(i * 2, int(clampf(v * fade, -1.0, 1.0) * 32000.0))
+	var wav := AudioStreamWAV.new()
+	wav.format = AudioStreamWAV.FORMAT_16_BITS
+	wav.mix_rate = RATE
+	wav.stereo = false
+	wav.data = data
+	return wav
+
+
+# ---------------------------------------------------------------- efectos
+
+func blood(pos: Vector3) -> void:
+	_burst(pos, Color(0.55, 0.04, 0.03), 14, 2.5, 0.6, 0.06, Vector3.UP, 1.0)
+
+
+func dust(pos: Vector3, normal := Vector3.UP) -> void:
+	_burst(pos, Color(0.7, 0.64, 0.5), 8, 2.0, 0.5, 0.05, normal, 0.6)
+
+
+func tracer(from: Vector3, to: Vector3, color := Color(1.0, 0.75, 0.3)) -> void:
+	var length := from.distance_to(to)
+	if length < 0.5:
+		return
+	var m := MeshInstance3D.new()
+	var box := BoxMesh.new()
+	box.size = Vector3(0.025, 0.025, minf(length, 6.0))
+	m.mesh = box
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.albedo_color = color
+	m.material_override = mat
+	_scene().add_child(m)
+	var dir := (to - from).normalized()
+	m.global_position = from
+	m.look_at(from + dir, Vector3.RIGHT if absf(dir.y) > 0.98 else Vector3.UP)
+	var tw := m.create_tween()
+	var travel := minf(length / 250.0, 0.25)  # la trazadora "viaja" hasta el blanco
+	tw.tween_property(m, "global_position", to - dir * box.size.z * 0.5, travel)
+	tw.parallel().tween_property(mat, "albedo_color:a", 0.0, travel + 0.05)
+	tw.tween_callback(m.queue_free)
+
+
+## Explosión de granada: efecto visual, sonido y daño en un radio.
+func explode(pos: Vector3, radius: float, damage: float) -> void:
+	play_at("explosion", pos, 6.0)
+	# Bola de fuego
+	var fire := MeshInstance3D.new()
+	var sphere := SphereMesh.new()
+	sphere.radius = 1.0
+	sphere.height = 2.0
+	sphere.radial_segments = 8
+	sphere.rings = 4
+	fire.mesh = sphere
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.albedo_color = Color(1.0, 0.7, 0.25, 0.95)
+	fire.material_override = mat
+	_scene().add_child(fire)
+	fire.global_position = pos
+	fire.scale = Vector3.ONE * 0.2
+	var tw := fire.create_tween()
+	tw.tween_property(fire, "scale", Vector3.ONE * 2.2, 0.12)
+	tw.tween_property(mat, "albedo_color", Color(0.3, 0.28, 0.25, 0.0), 0.3)
+	tw.tween_callback(fire.queue_free)
+	# Humo y tierra
+	_burst(pos, Color(0.32, 0.31, 0.29), 18, 2.5, 1.6, 0.45, Vector3.UP, -0.15)
+	_burst(pos, Color(0.42, 0.36, 0.26), 26, 7.0, 1.0, 0.12, Vector3.UP, 1.5)
+
+	for e in get_tree().get_nodes_in_group("enemies"):
+		var chest: Vector3 = e.global_position + Vector3(0, 1.0, 0)
+		var d := pos.distance_to(chest)
+		if d < radius and _clear_path(pos, chest):
+			e.hit(damage * (1.0 - d / radius), false, chest, (chest - pos).normalized())
+	var player := get_tree().get_first_node_in_group("player")
+	if player:
+		var center: Vector3 = player.global_position + Vector3(0, 1.0, 0)
+		var d := pos.distance_to(center)
+		if d < radius and _clear_path(pos, center):
+			player.take_damage(damage * 0.8 * (1.0 - d / radius), pos)
+		if d < 30.0:
+			player.shake(1.2 * (1.0 - d / 30.0))
+
+
+func _clear_path(from: Vector3, to: Vector3) -> bool:
+	var space := get_tree().root.get_world_3d().direct_space_state
+	var q := PhysicsRayQueryParameters3D.create(from + Vector3(0, 0.3, 0), to, 1)  # solo escenario
+	return space.intersect_ray(q).is_empty()
+
+
+func _burst(pos: Vector3, color: Color, amount: int, speed: float, life: float,
+		size: float, dir: Vector3, gravity_scale: float) -> void:
+	var p := CPUParticles3D.new()
+	p.one_shot = true
+	p.emitting = false
+	p.amount = amount
+	p.lifetime = life
+	p.explosiveness = 1.0
+	p.local_coords = false
+	var box := BoxMesh.new()
+	box.size = Vector3.ONE * size
+	box.material = _unshaded(color)
+	p.mesh = box
+	p.direction = dir
+	p.spread = 55.0
+	p.initial_velocity_min = speed * 0.4
+	p.initial_velocity_max = speed
+	p.gravity = Vector3(0, -9.8 * gravity_scale, 0)
+	p.scale_amount_min = 0.5
+	p.scale_amount_max = 1.2
+	_scene().add_child(p)
+	p.global_position = pos
+	p.emitting = true
+	get_tree().create_timer(life + 0.3).timeout.connect(p.queue_free)
+
+
+func _unshaded(color: Color) -> StandardMaterial3D:
+	if not _mat_cache.has(color):
+		var mat := StandardMaterial3D.new()
+		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		mat.albedo_color = color
+		_mat_cache[color] = mat
+	return _mat_cache[color]
+
+
+func _scene() -> Node:
+	var s := get_tree().current_scene
+	return s if s else get_tree().root
+
+
+## Ayudante para construir modelos con cajas (armas, soldados, granadas).
+static func box(parent: Node3D, size: Vector3, pos: Vector3, mat: Material,
+		rot_deg := Vector3.ZERO) -> MeshInstance3D:
+	var m := MeshInstance3D.new()
+	var mesh := BoxMesh.new()
+	mesh.size = size
+	m.mesh = mesh
+	m.material_override = mat
+	m.position = pos
+	m.rotation_degrees = rot_deg
+	parent.add_child(m)
+	return m
+
+
+static func material(color: Color) -> StandardMaterial3D:
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = color
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_PER_VERTEX
+	return mat

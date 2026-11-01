@@ -45,17 +45,20 @@ func _add_hedgehog(pos: Vector3, yaw: float) -> void:
 	var beam := BoxMesh.new()
 	beam.size = Vector3(0.18, 0.18, 2.0)
 	var rotations := [Vector3(45, 0, 0), Vector3(-45, 90, 0), Vector3(0, 45, 90)]
+	# La colisión son las mismas tres vigas que se ven (antes era una caja
+	# invisible que bloqueaba las balas que pasaban por los huecos).
+	var beam_shape := BoxShape3D.new()
+	beam_shape.size = beam.size
 	for r in rotations:
 		var m := MeshInstance3D.new()
 		m.mesh = beam
 		m.material_override = _steel
 		m.rotation_degrees = r
 		root.add_child(m)
-	var col := CollisionShape3D.new()
-	var shape := BoxShape3D.new()
-	shape.size = Vector3(1.2, 1.4, 1.2)
-	col.shape = shape
-	root.add_child(col)
+		var col := CollisionShape3D.new()
+		col.shape = beam_shape
+		col.rotation_degrees = r
+		root.add_child(col)
 
 
 func _add_box(pos: Vector3, box_size: Vector3, mat: Material) -> void:

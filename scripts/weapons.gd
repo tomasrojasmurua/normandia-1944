@@ -11,7 +11,7 @@ const WEAPONS := [
 		"damage": 100.0,          # 100 = derriba al enemigo de un tiro en el cuerpo
 		"interval": 0.17,         # segundos mínimos entre disparos
 		"reload": 2.3,            # segundos de recarga
-		"spread_hip": 2.6,        # dispersión en grados sin apuntar
+		"spread_hip": 1.2,        # dispersión en grados sin apuntar
 		"spread_ads": 0.15,       # dispersión apuntando por la mira
 		"recoil": 2.6,            # grados que sube la vista al disparar
 		"sound": "rifle", "ads_fov": 42.0,
@@ -20,7 +20,7 @@ const WEAPONS := [
 	{
 		"name": "COLT M1911", "mag": 7, "reserve": 28,
 		"damage": 45.0, "interval": 0.14, "reload": 1.6,
-		"spread_hip": 2.0, "spread_ads": 0.5, "recoil": 2.0,
+		"spread_hip": 1.5, "spread_ads": 0.5, "recoil": 2.0,
 		"sound": "pistol", "ads_fov": 55.0,
 		"hip": Vector3(0.1, -0.06, -0.22), "ads": Vector3(0, 0, -0.26),
 	},
@@ -32,6 +32,7 @@ var current := 0
 var spread_now := 2.0      # grados; el HUD lo usa para abrir la cruz
 var hit_marker := 0.0      # >0 cuando acabas de acertar (el HUD dibuja una X)
 var ads_amount := 0.0      # 0 = cadera, 1 = apuntando por la mira
+var last_shot := {}        # datos del último disparo (para pruebas)
 
 var _player: Node
 var _camera: Camera3D
@@ -215,14 +216,6 @@ func _fire() -> void:
 	flash.rotation.z = randf() * TAU
 	get_tree().create_timer(0.05).timeout.connect(func() -> void: flash.visible = false)
 
-	# Retroceso: la vista sube y luego vuelve casi sola a su lugar
-	var r := deg_to_rad(w["recoil"]) * (1.0 - 0.4 * ads_amount)
-	if DisplayServer.is_touchscreen_available():
-		r *= 0.75   # en el celular se corrige con el dedo: un poco menos de salto
-	_player.look(Vector2(randf_range(-0.25, 0.25) * r, -r))
-	_recoil_left += r * RECOIL_RECOVERY
-	_recoil_wait = 0.06
-
 	# Disparo instantáneo (rayo) desde el centro de la pantalla
 	var b := _camera.global_basis
 	var spread := tan(deg_to_rad(spread_now))
@@ -233,6 +226,17 @@ func _fire() -> void:
 	var q := PhysicsRayQueryParameters3D.create(from, from + dir * 250.0, 1 | 4)
 	q.exclude = [_player.get_rid()]
 	var hit := get_world_3d().direct_space_state.intersect_ray(q)
+
+	# Retroceso DESPUÉS de calcular el tiro: la bala sale hacia donde apuntabas,
+	# luego la vista sube y vuelve casi sola a su lugar
+	var r := deg_to_rad(w["recoil"]) * (1.0 - 0.4 * ads_amount)
+	if DisplayServer.is_touchscreen_available():
+		r *= 0.75   # en el celular se corrige con el dedo: un poco menos de salto
+	_player.look(Vector2(randf_range(-0.25, 0.25) * r, -r))
+	_recoil_left += r * RECOIL_RECOVERY
+	_recoil_wait = 0.06
+
+	last_shot = {"from": from, "dir": dir, "hit": hit}
 	if hit.is_empty():
 		return
 	var target: Object = hit["collider"]

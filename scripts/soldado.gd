@@ -65,12 +65,18 @@ static func _mat(nombre: String, metros: float, tinte := Color.WHITE) -> Standar
 
 
 func _ready() -> void:
-	_construir()
+	if bando == "aleman" and ResourceLoader.exists(MX_DIR + "rifle_idle.fbx"):
+		_construir_mixamo()
+	else:
+		_construir()
 
 
 # ================================================================ animación
 
 func _process(delta: float) -> void:
+	if _mx:
+		_process_mixamo(delta)
+		return
 	if muerto:
 		return
 	_t += delta
@@ -179,6 +185,9 @@ func impacto(dir: Vector3) -> void:
 
 ## Muere: suelta el arma y cae. Si fue en la cabeza, el casco sale volando.
 func morir(dir: Vector3, cabeza_tiro: bool) -> void:
+	if _mx:
+		_morir_mixamo(dir)
+		return
 	muerto = true
 	nodo_arma.visible = false
 	_fogonazo.visible = false
@@ -223,6 +232,8 @@ func _soltar_casco(dir: Vector3) -> void:
 
 ## Posición de la cabeza (para el disparo a la cabeza y la línea de vista).
 func pos_cabeza() -> Vector3:
+	if _mx:
+		return _hueso_global(_b_cabeza) + Vector3(0, 0.08, 0)
 	return cabeza.global_position + cabeza.global_basis.y * 0.1
 
 
@@ -437,3 +448,190 @@ func _esfera(padre: Node3D, radio: float, alto: float, pos: Vector3, mat: Materi
 	m.position = pos
 	padre.add_child(m)
 	return m
+
+
+# ================================================================ modelo 3D (Meshy + Mixamo)
+# El alemán usa un modelo esculpido con IA (Meshy), con esqueleto y
+# animaciones de Mixamo (assets/soldados/aleman). El arma se coloca sola
+# entre las dos manos de la animación.
+
+const MX_DIR := "res://assets/soldados/aleman/"
+const MX_ESCALA := 100.0          # Mixamo exporta en centímetros
+const MX_ANIMS := {
+	"reposo": ["rifle_idle", true],
+	"apunta": ["rifle_aiming_idle", true],
+	"dispara": ["firing_rifle", false],
+	"rodilla": ["rifle_kneel_idle", true],
+	"camina": ["rifle_walk", true],
+	"corre": ["rifle_run", true],
+	"muere_atras": ["rifle_death_1", false],
+	"muere_golpe": ["rifle_hit_to_back", false],
+	"muere_rodilla": ["rifle_kneel_hit_to_back", false],
+	"muere_corriendo": ["rifle_run_to_dying", false],
+}
+static var _mx_lib: AnimationLibrary
+static var _mx_mat: StandardMaterial3D
+
+var _mx := false
+var _sk: Skeleton3D
+var _ap: AnimationPlayer
+var _modelo: Node3D
+var _b_cabeza := -1
+var _b_spine := [-1, -1, -1]
+var _b_mano := [-1, -1]
+var _b_indice := [-1, -1]
+var _anim := ""
+var _encorvado := 0.0
+var _pitch := 0.0
+var _acumulado := 0.0
+var _cuadro := randi() % 3
+
+
+static func _libreria() -> AnimationLibrary:
+	if _mx_lib == null:
+		_mx_lib = AnimationLibrary.new()
+		for nombre in MX_ANIMS:
+			var fuente: Node = load(MX_DIR + MX_ANIMS[nombre][0] + ".fbx").instantiate()
+			var ap: AnimationPlayer = fuente.find_children("*", "AnimationPlayer", true, false)[0]
+			var an: Animation = ap.get_animation("mixamo_com").duplicate()
+			an.loop_mode = Animation.LOOP_LINEAR if MX_ANIMS[nombre][1] else Animation.LOOP_NONE
+			_mx_lib.add_animation(nombre, an)
+			fuente.free()
+		_mx_mat = StandardMaterial3D.new()
+		_mx_mat.albedo_texture = load(MX_DIR + "textura.png")
+		_mx_mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST_WITH_MIPMAPS
+		_mx_mat.specular_mode = BaseMaterial3D.SPECULAR_DISABLED
+		_mx_mat.roughness = 1.0
+	return _mx_lib
+
+
+func _construir_mixamo() -> void:
+	_mx = true
+	var lib := _libreria()
+	_modelo = load(MX_DIR + "rifle_idle.fbx").instantiate()
+	_modelo.scale = Vector3.ONE * MX_ESCALA
+	_modelo.rotation.y = PI            # Mixamo mira a +Z; el juego, a -Z
+	add_child(_modelo)
+	_sk = _modelo.find_children("*", "Skeleton3D", true, false)[0]
+	for mi: MeshInstance3D in _modelo.find_children("*", "MeshInstance3D", true, false):
+		mi.material_override = _mx_mat
+		mi.extra_cull_margin = 0.02
+	_ap = _modelo.find_children("*", "AnimationPlayer", true, false)[0]
+	_ap.add_animation_library("s", lib)
+	_ap.callback_mode_process = AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_MANUAL
+	_b_cabeza = _sk.find_bone("mixamorig_Head")
+	_b_spine = [_sk.find_bone("mixamorig_Spine"), _sk.find_bone("mixamorig_Spine1"), _sk.find_bone("mixamorig_Spine2")]
+	_b_mano = [_sk.find_bone("mixamorig_RightHand"), _sk.find_bone("mixamorig_LeftHand")]
+	_b_indice = [_sk.find_bone("mixamorig_RightHandIndex1"), _sk.find_bone("mixamorig_LeftHandIndex1")]
+	# Partes que otros scripts conocen
+	cadera = self
+	torso = self
+	cabeza = self
+	casco = self
+	nodo_arma = Node3D.new()
+	add_child(nodo_arma)
+	_modelo_arma()
+	_poner_anim("reposo", 0.0)
+	_ap.seek(randf() * _ap.current_animation_length, true)
+
+
+func _poner_anim(nombre: String, mezcla := 0.25) -> void:
+	if _anim == nombre:
+		return
+	_anim = nombre
+	_ap.play("s/" + nombre, mezcla)
+
+
+func _hueso_global(b: int) -> Vector3:
+	return _sk.global_transform * _sk.get_bone_global_pose(b).origin
+
+
+## Gira un hueso alrededor de un eje dado en el espacio del esqueleto.
+## q_padre: rotación global del padre (se lee antes de tocar ningún hueso,
+## para que el esqueleto se recalcule una sola vez por cuadro).
+func _girar_hueso(b: int, q_padre: Quaternion, eje: Vector3, angulo: float) -> void:
+	if absf(angulo) < 0.0001:
+		return
+	var eje_local := (q_padre.inverse() * eje).normalized()
+	_sk.set_bone_pose_rotation(b, Quaternion(eje_local, angulo) * _sk.get_bone_pose_rotation(b))
+
+
+func _process_mixamo(delta: float) -> void:
+	_t += delta
+	# Los lejanos se animan menos seguido (no se nota y ahorra mucho)
+	_acumulado += delta
+	_cuadro += 1
+	var cam := get_viewport().get_camera_3d()
+	var paso := 1
+	if cam:
+		var dist := cam.global_position.distance_to(global_position)
+		paso = 1 if dist < 12.0 else (2 if dist < 25.0 else 3)
+	if _cuadro % paso != 0 and _anim != "":
+		return
+	delta = _acumulado
+	_acumulado = 0.0
+	if muerto:
+		_ap.advance(delta)
+		return
+	_retroceso = move_toward(_retroceso, 0.0, delta * 6.0)
+	_sacudon = _sacudon.move_toward(Vector3.ZERO, delta * 3.0)
+	match pose:
+		"pie":
+			_poner_anim("apunta")
+		"rodilla", "agachado":
+			_poner_anim("rodilla")
+		_:
+			_poner_anim("reposo")
+	_ap.advance(delta)
+
+	# Inclinación: hacia el blanco al apuntar; encorvado tras la cobertura
+	var pitch := 0.0
+	if apuntar_a != Vector3.ZERO and (pose == "pie" or pose == "rodilla"):
+		var d := apuntar_a - _hueso_global(_b_spine[2])
+		pitch = clampf(atan2(d.y, Vector2(d.x, d.z).length()), -0.5, 0.5)
+	_pitch = lerpf(_pitch, pitch, minf(delta * 6.0, 1.0))
+	_encorvado = move_toward(_encorvado, 0.5 if pose == "agachado" else 0.0, delta * 1.8)
+	# Eje X del esqueleto: ángulo positivo = hacia adelante (el modelo mira a +Z)
+	var adelante := _encorvado - _pitch / 3.0 + _retroceso * -0.04 + _sacudon.x * 0.5
+	var padres := []
+	for b in _b_spine + [_b_cabeza]:
+		padres.append(_sk.get_bone_global_pose(_sk.get_bone_parent(b)).basis.get_rotation_quaternion())
+	for i in 3:
+		var q := Quaternion(Vector3.RIGHT, adelante) * Quaternion(Vector3.FORWARD, _sacudon.z * 0.4)
+		_girar_hueso(_b_spine[i], padres[i], q.get_axis(), q.get_angle())
+	_girar_hueso(_b_cabeza, padres[3], Vector3.RIGHT, _encorvado * 0.6)
+
+	_colocar_arma()
+
+
+## Pone el arma entre las manos de la animación.
+func _colocar_arma() -> void:
+	var mano_d := (_hueso_global(_b_mano[0]) + _hueso_global(_b_indice[0])) * 0.5
+	var mano_i := (_hueso_global(_b_mano[1]) + _hueso_global(_b_indice[1])) * 0.5
+	var arriba := (_sk.global_transform.basis * _sk.get_bone_global_pose(_b_spine[2]).basis).y.normalized()
+	var dir := (mano_i - mano_d)
+	if _es_pistola or dir.length() < 0.15:
+		dir = -global_basis.z
+	var b := Basis.looking_at(dir.normalized(), arriba)
+	var agarre := Vector3(0, -0.06, 0.04)
+	if not _es_pistola:
+		# corrige la pequeña diferencia entre la línea agarre→guardamanos y el cañón
+		var d_arma := (_guardamanos - agarre).normalized()
+		b = b * Basis(Quaternion(d_arma, Vector3.FORWARD))
+	b = b.rotated(b.x, _retroceso * 0.15)
+	nodo_arma.global_transform = Transform3D(b, mano_d - b * agarre)
+
+
+func _morir_mixamo(dir: Vector3) -> void:
+	muerto = true
+	nodo_arma.visible = false
+	_fogonazo.visible = false
+	var local := global_basis.inverse() * dir
+	var nombre: String
+	if pose == "rodilla" or pose == "agachado":
+		nombre = "muere_rodilla"
+	elif local.z < 0.0:     # la bala venía de frente
+		nombre = ["muere_atras", "muere_golpe"][randi() % 2]
+	else:
+		nombre = "muere_corriendo"
+	_poner_anim(nombre, 0.1)

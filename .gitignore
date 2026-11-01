@@ -5,3 +5,4 @@
 
 # Originales de Meshy (muy pesados; se guardan fuera del repo)
 arte_fuente/modelos/*.glb
+__pycache__/

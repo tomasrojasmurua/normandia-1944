@@ -120,7 +120,9 @@ def arma(origen, destino):
 PIEZAS_TAM = {"pieza_clip_garand": (34, 30), "pieza_cargador_colt": (22, 60),
               "pieza_vaina": (14, 8), "pieza_clip_vacio": (30, 14),
               # íconos del HUD (perfiles de catálogo)
-              "perfil_garand": (68, 22), "perfil_colt": (40, 27), "perfil_granada": (20, 28)}
+              "perfil_garand": (68, 22), "perfil_colt": (40, 27), "perfil_granada": (20, 28),
+              # armas nuevas: perfiles a lo ancho de la ranura; cargadores a escala de la imagen de cadera
+              "perfil_carbine": (64, 22), "pieza_cargador_carbine": (34, 72)}
 GIRAR = {"perfil_granada": 90}   # la granada llegó acostada: se para con la espoleta arriba
 
 

@@ -215,6 +215,13 @@ func _draw_viewmodel(w: Weapons) -> void:
 				var desde := punto + Vector2(70, -110)
 				var p2 := desde.lerp(punto, k) + Vector2(0, 8.0 * smoothstep(0.58, 0.64, rp))
 				pieza = Vector4(p2.x - 17, p2.y - 24, 1, 0)
+		elif w.id() != "colt":   # cargador a la vista (Carbine, Thompson...): entra por abajo hasta su lugar
+			off += Vector2(-20, -55 + golpe) * baja      # sube el arma para que se vea el cargador
+			giro += deg_to_rad(8.0) * baja
+			if rp > 0.25 and rp < 0.62:
+				var cg := Armas.imagen("pieza_cargador_" + w.id())
+				var ancho := cg.get_width() if cg else 20
+				pieza = Vector4(punto.x - ancho / 2.0, punto.y + 100.0 * (1.0 - k), 1, 2)
 		else:                # Colt: baja e inclina; el cargador nuevo sube desde abajo
 			var hondo := smoothstep(0.0, 0.25, rp) * (1.0 - smoothstep(0.72, 0.95, rp))
 			off += Vector2(30, 55 * hondo + golpe)
@@ -227,7 +234,10 @@ func _draw_viewmodel(w: Weapons) -> void:
 	draw_texture(w.sprite_cadera[w.current], o.round())
 	if pieza.z > 0.0 and pieza.w == 0.0:
 		draw_texture(_CLIP, Vector2(pieza.x, pieza.y).round())
-	if pieza.z > 0.0 and pieza.w > 0.0:   # cargador del Colt subiendo hacia la empuñadura, al doble
+	if pieza.z > 0.0 and pieza.w == 2.0:
+		var cg2 := Armas.imagen("pieza_cargador_" + w.id())
+		draw_texture(cg2 if cg2 else _CARGADOR, Vector2(pieza.x, pieza.y).round())
+	if pieza.z > 0.0 and pieza.w == 1.0:   # cargador del Colt subiendo hacia la empuñadura, al doble
 		draw_set_transform(_cargador_pantalla, deg_to_rad(12.0), Vector2.ONE)
 		var cargador := Armas.imagen("pieza_cargador_" + w.id())
 		draw_texture(cargador if cargador else _CARGADOR, Vector2.ZERO)

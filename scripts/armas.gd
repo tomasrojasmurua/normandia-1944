@@ -52,6 +52,9 @@ const DATOS := {
 		"reload": 1.8, "spread_hip": 1.0, "spread_ads": 0.25, "recoil": 1.5,
 		"sound": "rifle", "pitch": 1.25, "ads_fov": 48.0,
 		"hip": Vector3(0.15, -0.14, -0.26), "ads": Vector3(0, 0, -0.1),
+		"vm_pos": Vector2(96, 18), "vm_boca": Vector2(195, 136), "vm_mira": Vector2(378, 187),
+		"mira_pos": Vector2(-2, 27), "mira_poste": Vector2(322, 153),
+		"recarga": "cargador", "recarga_punto": Vector2(311, 241), "expulsion": Vector2(324, 187),
 	},
 	"thompson": {
 		"name": "THOMPSON M1A1", "ranura": 0, "bando": "aliado", "tipo": "subfusil",

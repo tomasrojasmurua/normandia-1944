@@ -69,7 +69,7 @@ def textura(origen, destino):
             px[x, y] = tuple(max(0, min(255, c[i] - b[i] + media[i])) for i in range(3))
     out = big.resize((t, t), Image.BOX)
     out = ImageEnhance.Color(out).enhance(0.85)
-    out = ImageEnhance.Contrast(out).enhance(1.1)
+    out = ImageEnhance.Contrast(out).enhance(1.35)
     out = out.quantize(colors=24, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.NONE).convert("RGB")
     out.save(destino)
 

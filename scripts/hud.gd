@@ -49,7 +49,30 @@ func _process(delta: float) -> void:
 	_messages = _messages.filter(func(m: Array) -> bool: return m[2] < 7.0)
 	if _player and _player.weapons:
 		_expulsar(_player.weapons, delta)
+	_medir(delta)
 	queue_redraw()
+
+
+# --- Medidor de fluidez (para comparar celulares): cuadros por segundo del
+# último segundo y el cuadro más lento (los tirones se notan ahí).
+var _med_cuadros := 0
+var _med_t := 0.0
+var _med_peor := 0.0
+var _med_texto := ""
+var _med_color := Color.WHITE
+
+
+func _medir(delta: float) -> void:
+	_med_cuadros += 1
+	_med_t += delta
+	_med_peor = maxf(_med_peor, delta)
+	if _med_t >= 1.0:
+		var fps := roundi(_med_cuadros / _med_t)
+		_med_texto = "%d FPS  PEOR %d MS" % [fps, roundi(_med_peor * 1000.0)]
+		_med_color = Estilo.VERDE_LED if fps >= 50 else (Estilo.AMBAR if fps >= 30 else Estilo.ROJO)
+		_med_cuadros = 0
+		_med_t = 0.0
+		_med_peor = 0.0
 
 
 ## Para los controles táctiles: ¿qué ranura de arma hay en este punto? (-1 = ninguna)
@@ -96,6 +119,7 @@ func _draw() -> void:
 		return
 	Estilo.texto(self, "NORMANDY 1944  V%s" % ProjectSettings.get_setting("application/config/version"),
 		Vector2(4, 10), Color(Estilo.CREMA, 0.35))
+	Estilo.texto(self, _med_texto, Vector2(4, 21), Color(_med_color, 0.7))
 
 	# Arma en el suelo para recoger
 	var suelta := _player.pickup_near as ArmaSuelta

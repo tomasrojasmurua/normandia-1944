@@ -64,7 +64,9 @@ func _draw() -> void:
 	var s := size
 	var w := _player.weapons
 	var top := s.y - BAR_H
-	var center := Vector2(s.x / 2.0, top / 2.0).floor()
+	# El centro de la cámara es el centro de TODA la pantalla (la barra se dibuja
+	# encima de la vista 3D), y por ahí salen las balas.
+	var center := (s / 2.0).floor()
 
 	# --- Efectos sobre la vista
 	if _player.damage_flash > 0.0:

@@ -646,6 +646,82 @@ def cuantizar(img):
 
 
 # ---------------------------------------------------------------------------
+# TEXTURAS DE LAS ARMAS EN LA MANO (32x32, se repiten). Se proyectan sobre
+# las cajas del modelo; el eje horizontal de la textura va a lo largo del arma.
+# ---------------------------------------------------------------------------
+ARMAS = RAIZ / "assets" / "armas"
+
+
+def _ruido_img(tam, semilla, base, claro, oscuro, p_claro, p_oscuro):
+    rnd = random.Random(semilla)
+    img = Image.new("RGB", (tam, tam))
+    px = img.load()
+    for y in range(tam):
+        for x in range(tam):
+            n = rnd.random()
+            c = base
+            if n < p_oscuro:
+                c = oscuro
+            elif n > 1 - p_claro:
+                c = claro
+            px[x, y] = c[:3]
+    return img, px, rnd
+
+
+def tex_madera_arma():
+    """Nogal aceitado: vetas horizontales onduladas."""
+    import math
+    t = 32
+    base = mezcla(rgb("madera"), rgb("madera_osc"), 0.35)
+    img, px, rnd = _ruido_img(t, 11, base, rgb("madera"), mezcla(base, rgb("madera_osc"), 0.5), 0.08, 0.08)
+    for k in range(7):
+        y0 = rnd.uniform(0, t)
+        fase = rnd.uniform(0, 6.28)
+        col = rgb("madera_osc") if k % 2 == 0 else mezcla(rgb("madera"), rgb("madera_clara"), 0.5)
+        for x in range(t):
+            # la onda completa un número entero de ciclos para que se repita sin costura
+            y = int(y0 + 1.6 * math.sin(2 * math.pi * x / t * 2 + fase)) % t
+            px[x, y] = col[:3]
+    img.save(ARMAS / "madera.png")
+
+
+def tex_metal_arma():
+    """Acero fosfatado (gris verdoso mate) con desgaste en claro."""
+    base = mezcla(rgb("acero"), rgb("oliva_1"), 0.35)
+    img, px, rnd = _ruido_img(32, 12, base, mezcla(rgb("acero_claro"), base, 0.7),
+                              mezcla(base, rgb("negro"), 0.3), 0.06, 0.12)
+    img.save(ARMAS / "metal.png")
+
+
+def tex_piel():
+    base = rgb("piel")
+    img, px, rnd = _ruido_img(32, 13, base, mezcla(base, rgb("crema"), 0.15),
+                              mezcla(base, rgb("piel_osc"), 0.3), 0.08, 0.14)
+    # suciedad y arena
+    for _ in range(12):
+        x, y = rnd.randrange(32), rnd.randrange(32)
+        px[x, y] = mezcla(rgb("piel"), rgb("arena_moj"), 0.5)[:3]
+    img.save(ARMAS / "piel.png")
+
+
+def tex_manga():
+    """Sarga verde oliva de la chaqueta M1941, con pliegues."""
+    base = mezcla(rgb("oliva_3"), rgb("arena_moj"), 0.35)
+    img, px, rnd = _ruido_img(32, 14, base, mezcla(base, rgb("oliva_4"), 0.6),
+                              mezcla(base, rgb("oliva_1"), 0.5), 0.06, 0.06)
+    for y in range(32):
+        for x in range(32):
+            if (x + y) % 4 == 0:   # tejido diagonal
+                px[x, y] = mezcla(tuple(list(px[x, y]) + [255]), rgb("oliva_1"), 0.25)[:3]
+    for k in range(3):             # pliegues
+        x0 = rnd.randrange(32)
+        for y in range(32):
+            x = (x0 + y // 3) % 32
+            px[x, y] = mezcla(tuple(list(px[x, y]) + [255]), rgb("oliva_0"), 0.35)[:3]
+    img.save(ARMAS / "manga.png")
+
+
+# ---------------------------------------------------------------------------
 # LÁMINA DE LA GUÍA DE ESTILO
 # ---------------------------------------------------------------------------
 def lamina(iconos, celda_g, celda_m):
@@ -720,6 +796,8 @@ if __name__ == "__main__":
     iconos = [icono_garand(), icono_colt(), icono_granada(), icono_niebla(), icono_bala()]
     icono_agachado()
     retrato_provisional()
+    ARMAS.mkdir(parents=True, exist_ok=True)
+    tex_madera_arma(); tex_metal_arma(); tex_piel(); tex_manga()
     paleta_png()
     lamina(iconos, cg, cm)
     print("listo:", cg, cm)

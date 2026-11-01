@@ -15,7 +15,7 @@ const WEAPONS := [
 		"spread_ads": 0.15,       # dispersión apuntando por la mira
 		"recoil": 2.6,            # grados que sube la vista al disparar
 		"sound": "rifle", "ads_fov": 42.0,
-		"hip": Vector3(0.16, -0.15, -0.26), "ads": Vector3(0, 0, -0.15),
+		"hip": Vector3(0.16, -0.15, -0.26), "ads": Vector3(0, 0, -0.06),
 	},
 	{
 		"name": "COLT M1911", "mag": 7, "reserve": 28,
@@ -291,33 +291,78 @@ func _show(index: int) -> void:
 # La línea de mira de cada arma está en y = 0, x = 0 del modelo: así, al
 # apuntar, el alza y el punto de mira quedan justo en el centro de la pantalla.
 
-var _wood := Game.material(Color(0.45, 0.27, 0.14))
-var _metal := Game.material(Color(0.15, 0.15, 0.16))
-var _metal_light := Game.material(Color(0.3, 0.3, 0.32))
-var _skin := Game.material(Color(0.8, 0.57, 0.42))
-var _sleeve := Game.material(Color(0.36, 0.35, 0.22))
+# Texturas pixeladas de 32 px (tools/arte/generar_arte.py) proyectadas sobre
+# cada caja. "metros" = cuánto mide una repetición de la textura.
+static func _tex(nombre: String, metros: float, tinte := Color.WHITE) -> StandardMaterial3D:
+	var mat := StandardMaterial3D.new()
+	mat.albedo_texture = load("res://assets/armas/%s.png" % nombre)
+	mat.albedo_color = tinte
+	mat.uv1_triplanar = true
+	mat.uv1_scale = Vector3.ONE / metros
+	mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_PER_VERTEX
+	mat.specular_mode = BaseMaterial3D.SPECULAR_DISABLED
+	return mat
+
+var _wood := _tex("madera", 0.14)
+var _wood_dark := _tex("madera", 0.08, Color(0.6, 0.5, 0.45))
+var _metal := _tex("metal", 0.08)
+var _metal_dark := _tex("metal", 0.08, Color(0.45, 0.45, 0.45))
+var _metal_light := _tex("metal", 0.08, Color(1.35, 1.35, 1.35))
+var _brass := Game.material(Color("#c99a3e"))
+var _skin := _tex("piel", 0.1)
+var _sleeve := _tex("manga", 0.16)
+var _cuff := _tex("manga", 0.16, Color(0.7, 0.7, 0.65))
 
 
 func _build_garand() -> Node3D:
 	var g := Node3D.new()
 	add_child(g)
-	Game.box(g, Vector3(0.045, 0.05, 0.22), Vector3(0, -0.035, -0.13), _metal)          # cajón de mecanismos
-	Game.box(g, Vector3(0.04, 0.012, 0.03), Vector3(0, -0.016, -0.04), _metal)          # base del alza
-	Game.box(g, Vector3(0.008, 0.028, 0.012), Vector3(0.013, -0.004, -0.04), _metal_light)   # alza
-	Game.box(g, Vector3(0.008, 0.028, 0.012), Vector3(-0.013, -0.004, -0.04), _metal_light)
-	Game.box(g, Vector3(0.04, 0.03, 0.38), Vector3(0, -0.04, -0.45), _wood)             # guardamanos
-	Game.box(g, Vector3(0.05, 0.05, 0.62), Vector3(0, -0.075, -0.4), _wood)             # caja de madera
-	Game.box(g, Vector3(0.05, 0.09, 0.36), Vector3(0, -0.095, 0.08), _wood, Vector3(-6, 0, 0))  # culata
-	Game.box(g, Vector3(0.022, 0.022, 0.22), Vector3(0, -0.035, -0.75), _metal)         # cañón
-	Game.box(g, Vector3(0.03, 0.03, 0.06), Vector3(0, -0.047, -0.82), _metal)           # cilindro de gases
-	Game.box(g, Vector3(0.005, 0.024, 0.006), Vector3(0, -0.012, -0.85), _metal_light)  # punto de mira
-	Game.box(g, Vector3(0.005, 0.03, 0.012), Vector3(0.012, -0.014, -0.85), _metal)     # orejas del punto
-	Game.box(g, Vector3(0.005, 0.03, 0.012), Vector3(-0.012, -0.014, -0.85), _metal)
-	Game.box(g, Vector3(0.02, 0.03, 0.06), Vector3(0, -0.11, -0.08), _metal)            # guardamonte
-	Game.box(g, Vector3(0.07, 0.06, 0.09), Vector3(0.01, -0.12, 0.02), _skin)           # mano derecha
-	Game.box(g, Vector3(0.09, 0.09, 0.25), Vector3(0.04, -0.16, 0.18), _sleeve)
-	Game.box(g, Vector3(0.07, 0.06, 0.1), Vector3(-0.005, -0.095, -0.42), _skin)        # mano izquierda
-	Game.box(g, Vector3(0.09, 0.09, 0.3), Vector3(-0.07, -0.15, -0.26), _sleeve, Vector3(0, -25, 0))
+	# Cajón de mecanismos, clip de latón y palanca del cerrojo
+	Game.box(g, Vector3(0.042, 0.044, 0.22), Vector3(0, -0.034, -0.13), _metal)
+	Game.box(g, Vector3(0.02, 0.008, 0.05), Vector3(0, -0.02, -0.15), _brass)
+	Game.box(g, Vector3(0.008, 0.012, 0.4), Vector3(0.024, -0.045, -0.42), _metal)
+	Game.box(g, Vector3(0.016, 0.014, 0.02), Vector3(0.034, -0.03, -0.19), _metal_light)
+	# Alza de agujero (el punto de mira se ve por el centro, en y = 0)
+	Game.box(g, Vector3(0.034, 0.012, 0.03), Vector3(0, -0.018, -0.035), _metal)
+	# (agujero de 12 mm centrado en y = 0, aro fino de 3-4 mm)
+	Game.box(g, Vector3(0.004, 0.022, 0.005), Vector3(0.008, -0.001, -0.045), _metal_dark)
+	Game.box(g, Vector3(0.004, 0.022, 0.005), Vector3(-0.008, -0.001, -0.045), _metal_dark)
+	Game.box(g, Vector3(0.012, 0.004, 0.005), Vector3(0, 0.008, -0.045), _metal_dark)
+	Game.box(g, Vector3(0.012, 0.006, 0.005), Vector3(0, -0.009, -0.045), _metal_dark)
+	Game.box(g, Vector3(0.008, 0.01, 0.01), Vector3(0.028, -0.016, -0.04), _metal_light)   # perillas
+	Game.box(g, Vector3(0.008, 0.01, 0.01), Vector3(-0.028, -0.016, -0.04), _metal_light)
+	# Madera: guardamanos superior, caja, empuñadura y culata
+	Game.box(g, Vector3(0.038, 0.026, 0.14), Vector3(0, -0.036, -0.32), _wood)
+	Game.box(g, Vector3(0.038, 0.026, 0.2), Vector3(0, -0.04, -0.58), _wood)
+	Game.box(g, Vector3(0.048, 0.05, 0.48), Vector3(0, -0.075, -0.48), _wood)
+	Game.box(g, Vector3(0.05, 0.06, 0.16), Vector3(0, -0.08, -0.12), _wood)
+	Game.box(g, Vector3(0.046, 0.07, 0.1), Vector3(0, -0.1, 0.0), _wood, Vector3(-20, 0, 0))
+	Game.box(g, Vector3(0.05, 0.1, 0.26), Vector3(0, -0.11, 0.14), _wood, Vector3(-6, 0, 0))
+	Game.box(g, Vector3(0.052, 0.105, 0.012), Vector3(0, -0.122, 0.27), _metal, Vector3(-6, 0, 0))
+	Game.box(g, Vector3(0.018, 0.03, 0.06), Vector3(0, -0.12, -0.08), _metal)          # guardamonte
+	# Cañón, abrazaderas y punto de mira con orejas
+	Game.box(g, Vector3(0.02, 0.02, 0.24), Vector3(0, -0.034, -0.74), _metal)
+	Game.box(g, Vector3(0.028, 0.03, 0.06), Vector3(0, -0.045, -0.83), _metal)
+	Game.box(g, Vector3(0.05, 0.054, 0.015), Vector3(0, -0.06, -0.56), _metal)
+	Game.box(g, Vector3(0.046, 0.05, 0.015), Vector3(0, -0.058, -0.72), _metal)
+	Game.box(g, Vector3(0.004, 0.022, 0.006), Vector3(0, -0.011, -0.86), _metal_light)
+	Game.box(g, Vector3(0.004, 0.026, 0.012), Vector3(0.011, -0.013, -0.86), _metal)
+	Game.box(g, Vector3(0.004, 0.026, 0.012), Vector3(-0.011, -0.013, -0.86), _metal)
+	# Mano derecha en la empuñadura
+	Game.box(g, Vector3(0.06, 0.06, 0.08), Vector3(0.01, -0.115, 0.0), _skin, Vector3(-20, 0, 0))
+	for k in 3:
+		Game.box(g, Vector3(0.052, 0.016, 0.018), Vector3(0.004, -0.148, -0.03 + k * 0.021), _skin)
+	Game.box(g, Vector3(0.016, 0.016, 0.05), Vector3(-0.028, -0.085, -0.03), _skin)
+	Game.box(g, Vector3(0.09, 0.09, 0.03), Vector3(0.035, -0.15, 0.06), _cuff)
+	Game.box(g, Vector3(0.085, 0.085, 0.25), Vector3(0.04, -0.16, 0.19), _sleeve)
+	# Mano izquierda bajo el guardamanos
+	Game.box(g, Vector3(0.06, 0.02, 0.09), Vector3(0, -0.108, -0.44), _skin)
+	Game.box(g, Vector3(0.018, 0.06, 0.09), Vector3(-0.032, -0.08, -0.44), _skin)
+	for k in 4:
+		Game.box(g, Vector3(0.014, 0.04, 0.016), Vector3(0.031, -0.075, -0.41 - k * 0.02), _skin)
+	Game.box(g, Vector3(0.095, 0.095, 0.03), Vector3(-0.045, -0.13, -0.37), _cuff, Vector3(0, -25, 0))
+	Game.box(g, Vector3(0.09, 0.09, 0.3), Vector3(-0.08, -0.15, -0.24), _sleeve, Vector3(0, -25, 0))
 	_flashes.append(_build_flash(g, Vector3(0, -0.035, -0.9)))
 	return g
 
@@ -325,16 +370,29 @@ func _build_garand() -> Node3D:
 func _build_colt() -> Node3D:
 	var c := Node3D.new()
 	add_child(c)
-	Game.box(c, Vector3(0.028, 0.03, 0.19), Vector3(0, -0.02, -0.095), _metal)          # corredera
-	Game.box(c, Vector3(0.026, 0.02, 0.15), Vector3(0, -0.044, -0.085), _metal_light)   # armazón
-	Game.box(c, Vector3(0.03, 0.085, 0.045), Vector3(0, -0.09, 0.0), _wood, Vector3(15, 0, 0))  # empuñadura
-	Game.box(c, Vector3(0.008, 0.01, 0.008), Vector3(0.008, -0.001, -0.005), _metal)    # alza
-	Game.box(c, Vector3(0.008, 0.01, 0.008), Vector3(-0.008, -0.001, -0.005), _metal)
-	Game.box(c, Vector3(0.004, 0.01, 0.006), Vector3(0, -0.002, -0.18), _metal_light)   # punto de mira
-	Game.box(c, Vector3(0.06, 0.08, 0.07), Vector3(0.012, -0.095, 0.005), _skin)        # manos
-	Game.box(c, Vector3(0.05, 0.07, 0.07), Vector3(-0.03, -0.1, 0.0), _skin)
-	Game.box(c, Vector3(0.08, 0.08, 0.25), Vector3(0.04, -0.13, 0.16), _sleeve, Vector3(0, 10, 0))
-	Game.box(c, Vector3(0.08, 0.08, 0.25), Vector3(-0.06, -0.13, 0.15), _sleeve, Vector3(0, -15, 0))
+	# Corredera con estrías, alza y punto de mira (línea de mira en y = 0)
+	Game.box(c, Vector3(0.028, 0.03, 0.2), Vector3(0, -0.018, -0.095), _metal)
+	for k in 5:
+		Game.box(c, Vector3(0.03, 0.022, 0.003), Vector3(0, -0.018, -0.004 - k * 0.008), _metal_dark)
+	Game.box(c, Vector3(0.008, 0.008, 0.008), Vector3(0.007, -0.002, -0.006), _metal_dark)
+	Game.box(c, Vector3(0.008, 0.008, 0.008), Vector3(-0.007, -0.002, -0.006), _metal_dark)
+	Game.box(c, Vector3(0.004, 0.008, 0.006), Vector3(0, -0.004, -0.19), _metal_light)
+	Game.box(c, Vector3(0.02, 0.02, 0.01), Vector3(0, -0.02, -0.199), _metal_light)    # boca
+	Game.box(c, Vector3(0.01, 0.014, 0.01), Vector3(0, -0.004, 0.009), _metal_dark, Vector3(-30, 0, 0))  # martillo
+	# Armazón, guardamonte, empuñadura y base del cargador
+	Game.box(c, Vector3(0.026, 0.022, 0.15), Vector3(0, -0.044, -0.085), _metal_light)
+	Game.box(c, Vector3(0.012, 0.004, 0.04), Vector3(0, -0.072, -0.05), _metal)
+	Game.box(c, Vector3(0.012, 0.025, 0.004), Vector3(0, -0.06, -0.07), _metal)
+	Game.box(c, Vector3(0.03, 0.09, 0.045), Vector3(0, -0.09, 0.0), _wood_dark, Vector3(15, 0, 0))
+	Game.box(c, Vector3(0.026, 0.006, 0.04), Vector3(0, -0.135, 0.012), _metal, Vector3(15, 0, 0))
+	# Dos manos en la empuñadura
+	Game.box(c, Vector3(0.045, 0.07, 0.06), Vector3(0.012, -0.097, 0.008), _skin, Vector3(15, 0, 0))
+	Game.box(c, Vector3(0.04, 0.06, 0.065), Vector3(-0.03, -0.102, 0.0), _skin)
+	Game.box(c, Vector3(0.014, 0.014, 0.05), Vector3(-0.02, -0.058, -0.04), _skin)
+	Game.box(c, Vector3(0.085, 0.085, 0.03), Vector3(0.035, -0.125, 0.06), _cuff, Vector3(0, 10, 0))
+	Game.box(c, Vector3(0.085, 0.085, 0.03), Vector3(-0.045, -0.125, 0.05), _cuff, Vector3(0, -15, 0))
+	Game.box(c, Vector3(0.08, 0.08, 0.25), Vector3(0.04, -0.13, 0.19), _sleeve, Vector3(0, 10, 0))
+	Game.box(c, Vector3(0.08, 0.08, 0.25), Vector3(-0.065, -0.13, 0.18), _sleeve, Vector3(0, -15, 0))
 	_flashes.append(_build_flash(c, Vector3(0, -0.02, -0.21)))
 	return c
 

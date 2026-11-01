@@ -17,13 +17,19 @@ var _sand_bags: StandardMaterial3D
 var _grass: StandardMaterial3D
 var _wood: StandardMaterial3D
 var _dark := Game.material(Color(0.04, 0.04, 0.035))
+var _burlap: StandardMaterial3D
+var _bags: Array[Transform3D] = []   # todos los sacos, se dibujan juntos (MultiMesh)
 
 
 ## Material con la textura proyectada desde el mundo (no hace falta UV):
 ## "metros" = cuántos metros cubre una repetición de la textura de 64 px.
 static func textured(nombre: String, metros: float, tinte := Color.WHITE) -> StandardMaterial3D:
+	return _material_tex(TEX % nombre, metros, tinte)
+
+
+static func _material_tex(path: String, metros: float, tinte := Color.WHITE) -> StandardMaterial3D:
 	var mat := StandardMaterial3D.new()
-	mat.albedo_texture = load(TEX % nombre)
+	mat.albedo_texture = load(path)
 	mat.albedo_color = tinte
 	mat.uv1_triplanar = true
 	mat.uv1_world_triplanar = true
@@ -38,6 +44,7 @@ func _ready() -> void:
 	_steel = textured("acero_oxidado", 1.2)
 	_concrete = textured("concreto", 3.0)
 	_sand_bags = textured("sacos_arena", 2.4)
+	_burlap = _material_tex("res://assets/texturas/arpillera.png", 0.45)
 	_grass = textured("pasto_duna", 2.5, Color(0.85, 0.85, 0.8))
 	_wood = textured("madera", 2.0)
 	_dress_ground_and_sea()
@@ -54,12 +61,13 @@ func _ready() -> void:
 	_add_box(Vector3(0, 3.2, -42), Vector3(15, 0.5, 6), _concrete)  # techo
 	Game.box(self, Vector3(8, 0.45, 0.1), Vector3(0, 2.0, -39.47), _dark)
 
-	# Sacos de arena donde se cubren los enemigos
-	_add_box(Vector3(-4.5, 0.45, -36), Vector3(6, 0.9, 0.6), _sand_bags)
-	_add_box(Vector3(5, 0.45, -36), Vector3(6, 0.9, 0.6), _sand_bags)
-	_add_box(Vector3(-14, 0.45, -24), Vector3(3, 0.9, 0.6), _sand_bags)
-	_add_box(Vector3(13, 0.45, -20), Vector3(3, 0.9, 0.6), _sand_bags)
-	_add_box(Vector3(2, 3.9, -39.6), Vector3(3, 0.5, 0.4), _sand_bags)  # parapeto en el techo
+	# Parapetos de sacos de arena donde se cubren los enemigos (saco por saco)
+	_sandbag_wall(Vector3(-4.5, 0, -36), 6.0, 6, 2, 0.0, rng)
+	_sandbag_wall(Vector3(5, 0, -36), 6.0, 6, 2, 0.0, rng)
+	_sandbag_wall(Vector3(-14, 0, -24), 3.0, 6, 2, 8.0, rng)
+	_sandbag_wall(Vector3(13, 0, -20), 3.0, 6, 2, -10.0, rng)
+	_sandbag_wall(Vector3(2, 3.45, -39.6), 3.0, 3, 1, 0.0, rng)   # parapeto en el techo
+	_build_bags()
 
 	# Postes de madera clavados en la arena (obstáculos de playa)
 	for i in 10:
@@ -98,28 +106,103 @@ func _add_bluffs() -> void:
 		_grass, Vector3(slope, 0, 0))
 	_add_box(Vector3(0, h - 0.5, -56 - depth - 30), Vector3(500, 1.0, 60), _grass)
 
+## Erizo checo: tres vigas de acero en ángulo (perfil L) cruzadas en el centro,
+## perpendiculares entre sí, unidas con cartelas. Se apoya sobre tres puntas y
+## las otras tres apuntan hacia arriba (por eso la diagonal (1,1,1) va vertical).
 func _add_hedgehog(pos: Vector3, yaw: float) -> void:
+	var largo := 2.3
+	var ala := 0.13       # ancho de cada ala del perfil L
+	var espesor := 0.022
 	var root := StaticBody3D.new()
-	root.position = pos + Vector3(0, 0.7, 0)
-	root.rotation.y = yaw
+	var parado := Basis(Quaternion(Vector3.ONE.normalized(), Vector3.UP))
+	root.transform = Transform3D(Basis(Vector3.UP, yaw) * parado,
+		pos + Vector3(0, largo / (2.0 * sqrt(3.0)) - 0.06, 0))   # un poco hundido en la arena
 	add_child(root)
-	var beam := BoxMesh.new()
-	beam.size = Vector3(0.18, 0.18, 2.0)
-	var rotations := [Vector3(45, 0, 0), Vector3(-45, 90, 0), Vector3(0, 45, 90)]
-	# La colisión son las mismas tres vigas que se ven (antes era una caja
-	# invisible que bloqueaba las balas que pasaban por los huecos).
+	var ejes := [Vector3.RIGHT, Vector3.UP, Vector3.BACK]
 	var beam_shape := BoxShape3D.new()
-	beam_shape.size = beam.size
-	for r in rotations:
-		var m := MeshInstance3D.new()
-		m.mesh = beam
-		m.material_override = _steel
-		m.rotation_degrees = r
-		root.add_child(m)
+	beam_shape.size = Vector3(ala, ala, largo)
+	for k in 3:
+		var eje: Vector3 = ejes[k]
+		var u: Vector3 = ejes[(k + 1) % 3]
+		var v: Vector3 = ejes[(k + 2) % 3]
+		var b := Basis(u, v, eje)   # la viga corre a lo largo de "eje" (z local)
+		# Ala 1 (plancha en el plano eje-u) y ala 2 (plano eje-v): forman la L
+		_plate(root, b, Vector3(ala, espesor, largo), u * (ala / 2.0 - 0.03) - v * 0.03)
+		_plate(root, b, Vector3(espesor, ala, largo), v * (ala / 2.0 - 0.03) - u * 0.03)
 		var col := CollisionShape3D.new()
 		col.shape = beam_shape
-		col.rotation_degrees = r
+		col.basis = b
 		root.add_child(col)
+	# Cartelas (planchas que unen las vigas en el centro) y algo de óxido extra
+	for k in 3:
+		var e: Vector3 = ejes[k]
+		var g := Game.box(root, Vector3(0.34, 0.34, 0.015), Vector3.ZERO, _steel)
+		g.basis = Basis(ejes[(k + 1) % 3], ejes[(k + 2) % 3], e).rotated(e, PI / 4.0)
+
+
+func _plate(parent: Node3D, b: Basis, size: Vector3, offset: Vector3) -> void:
+	var m := MeshInstance3D.new()
+	var mesh := BoxMesh.new()
+	mesh.size = size
+	m.mesh = mesh
+	m.material_override = _steel
+	m.transform = Transform3D(b, offset)
+	parent.add_child(m)
+
+
+## Muro de sacos de arena: hileras trabadas (cada hilera corrida medio saco),
+## "filas" sacos de fondo, con pequeñas diferencias de giro y tamaño para que
+## no se vea perfecto. La colisión es una sola caja del tamaño del muro.
+func _sandbag_wall(center: Vector3, length: float, courses: int, rows: int, yaw_deg: float,
+		rng: RandomNumberGenerator) -> void:
+	var bag_len := 0.62
+	var bag_h := 0.15
+	var bag_d := 0.36
+	var yaw := deg_to_rad(yaw_deg)
+	var wall := Basis(Vector3.UP, yaw)
+	for c in courses:
+		var corrido := 0.5 * bag_len if c % 2 == 1 else 0.0
+		var n := int(length / bag_len)
+		var ancho_hilera := (n - (1 if c % 2 == 1 else 0)) * bag_len
+		for r in rows:
+			for i in n - (1 if c % 2 == 1 else 0):
+				var x := -ancho_hilera / 2.0 + (i + 0.5) * bag_len
+				var z := (r - (rows - 1) / 2.0) * bag_d
+				var local := Vector3(x + rng.randf_range(-0.03, 0.03), (c + 0.5) * bag_h * 0.92,
+					z + rng.randf_range(-0.03, 0.03))
+				var s := Vector3(rng.randf_range(0.92, 1.05), rng.randf_range(0.9, 1.15), rng.randf_range(0.95, 1.05))
+				var giro := Basis(Vector3.UP, rng.randf_range(-0.08, 0.08)) \
+					* Basis(Vector3.RIGHT, rng.randf_range(-0.05, 0.05))
+				# cápsula acostada: su eje (y) pasa a ser el largo del saco (x)
+				var forma := Basis(Vector3.BACK, PI / 2.0) * Basis.from_scale(
+					Vector3(bag_h * s.y, bag_len * 0.5 * s.x, bag_d * s.z))
+				_bags.append(Transform3D(wall * giro * forma, center + wall * local))
+	var body := StaticBody3D.new()
+	body.transform = Transform3D(wall, center + Vector3(0, courses * bag_h * 0.92 / 2.0, 0))
+	add_child(body)
+	var col := CollisionShape3D.new()
+	var shape := BoxShape3D.new()
+	shape.size = Vector3(length, courses * bag_h * 0.92, rows * bag_d)
+	col.shape = shape
+	body.add_child(col)
+
+
+func _build_bags() -> void:
+	var mesh := CapsuleMesh.new()   # radio 0,5 y alto 2: se escala por saco
+	mesh.radius = 0.5
+	mesh.height = 2.0
+	mesh.radial_segments = 8
+	mesh.rings = 2
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.mesh = mesh
+	mm.instance_count = _bags.size()
+	for i in _bags.size():
+		mm.set_instance_transform(i, _bags[i])
+	var inst := MultiMeshInstance3D.new()
+	inst.multimesh = mm
+	inst.material_override = _burlap
+	add_child(inst)
 
 
 func _add_box(pos: Vector3, box_size: Vector3, mat: Material, rot_deg := Vector3.ZERO) -> void:

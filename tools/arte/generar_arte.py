@@ -763,6 +763,41 @@ def cargador_colt():
     return img
 
 
+def arpillera():
+    """Tela de saco (arpillera) repetible, con el color de la foto de los sacos."""
+    t = 32
+    foto = Image.open(RAIZ / "assets" / "texturas" / "textura_sacos_arena.png").convert("RGB")
+    media = foto.resize((1, 1), Image.BOX).getpixel((0, 0))
+    base = tuple(int(v * 1.05) for v in media) + (255,)
+    rnd = random.Random(21)
+    img = Image.new("RGB", (t, t))
+    px = img.load()
+    for y in range(t):
+        for x in range(t):
+            c = base
+            if x % 2 == 0:
+                c = mezcla(c, rgb("crema"), 0.12)          # hilos verticales
+            if y % 2 == 0:
+                c = mezcla(c, rgb("madera_osc"), 0.18)     # hilos horizontales
+            if (x + y) % 4 == 0:
+                c = mezcla(c, rgb("negro"), 0.08)
+            n = rnd.random()
+            if n < 0.06:
+                c = mezcla(c, rgb("madera_osc"), 0.35)
+            elif n > 0.95:
+                c = mezcla(c, rgb("crema"), 0.25)
+            px[x, y] = c[:3]
+    # manchas de barro y arena mojada
+    for _ in range(5):
+        cx, cy, r = rnd.randrange(t), rnd.randrange(t), rnd.randint(2, 4)
+        for y in range(-r, r + 1):
+            for x in range(-r, r + 1):
+                if x * x + y * y <= r * r and rnd.random() < 0.7:
+                    xx, yy = (cx + x) % t, (cy + y) % t
+                    px[xx, yy] = mezcla(tuple(list(px[xx, yy]) + [255]), rgb("arena_moj"), 0.4)[:3]
+    img.save(RAIZ / "assets" / "texturas" / "arpillera.png")
+
+
 # ---------------------------------------------------------------------------
 # LÁMINA DE LA GUÍA DE ESTILO
 # ---------------------------------------------------------------------------
@@ -841,6 +876,7 @@ if __name__ == "__main__":
     ARMAS.mkdir(parents=True, exist_ok=True)
     tex_madera_arma(); tex_metal_arma(); tex_piel(); tex_manga()
     clip_garand(); cargador_colt()
+    arpillera()
     paleta_png()
     lamina(iconos, cg, cm)
     print("listo:", cg, cm)

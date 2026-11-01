@@ -38,6 +38,21 @@ func _init() -> void:
 	body_entered.connect(_on_bounce)
 
 
+## Cambia el aspecto a granada de palo alemana (Stielhandgranate 24):
+## mango de madera con la cabeza de lata. Mecha un poco más larga.
+func modelo_aleman() -> void:
+	for c in get_children():
+		if c is MeshInstance3D:
+			c.queue_free()
+	fuse = 4.5
+	var lata := Game.material(Color(0.3, 0.33, 0.29))
+	var madera := Game.material(Color(0.55, 0.38, 0.2))
+	Game.box(self, Vector3(0.07, 0.1, 0.07), Vector3(0, 0.09, 0), lata)
+	Game.box(self, Vector3(0.075, 0.08, 0.075), Vector3(0, 0.09, 0), lata, Vector3(0, 45, 0))
+	Game.box(self, Vector3(0.028, 0.28, 0.028), Vector3(0, -0.09, 0), madera)
+	Game.box(self, Vector3(0.034, 0.02, 0.034), Vector3(0, -0.23, 0), lata)
+
+
 func _physics_process(delta: float) -> void:
 	fuse -= delta
 	if fuse <= 0.0:

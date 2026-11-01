@@ -1,43 +1,92 @@
 extends CharacterBody3D
 class_name Enemy
-## Soldado alemán simple (provisional, sin IA de movimiento todavía).
-## Se queda en su posición; si ve al jugador, se gira y le dispara.
-## Un tiro de Garand en el cuerpo lo derriba; en la cabeza vale doble.
-## Para colocarlos: duplica un nodo "Enemy" en main.tscn y muévelo en el editor.
+## Soldado alemán (todavía sin moverse de su puesto).
+## - Si ve al jugador, se gira y le dispara según su arma: el Kar98k tiro a
+##   tiro, la MP40 y el StG44 en ráfagas cortas, la MG42 en ráfagas largas.
+## - Si tiene sacos de arena o un muro bajo delante, se esconde detrás y se
+##   asoma de rodillas para disparar.
+## - Algunos lanzan granadas de palo cuando el jugador está a media distancia.
+## - Un tiro de Garand en el cuerpo lo derriba; en la cabeza vale doble (y el
+##   casco sale volando).
+## El cuerpo y sus animaciones están en soldado.gd.
 
 @export var health := 100.0
 @export var sight_range := 55.0
-@export var damage := 12.0
+@export var damage := 12.0                  # daño de un tiro que acierta (fusil)
 @export var reaction_time := 1.4            # segundos que tarda en disparar tras verte
 @export var fire_interval := Vector2(3.0, 5.0)
 @export var accuracy := 1.0                 # multiplicador de puntería (1 = normal)
 ## Arma que lleva (y que bota al morir). Vacío = al azar (Armas.BOTIN_ALEMAN).
 @export var arma := ""
+@export var granadas := -1                  # -1 = al azar (0 o 1)
 
 var dead := false
+var cuerpo: Soldado
 
-var _model: Node3D
-var _rifle: Array[Node3D] = []
-var _muzzle: Node3D
-var _flash: Node3D
 var _player: Player
 var _sees := false
 var _alert := 0.0
 var _los_timer := 0.0
 var _fire_timer := 0.0
+var _rafaga := 0                # balas que quedan en la ráfaga en curso
+var _rafaga_t := 0.0
+var _cobertura := false         # hay algo bajo delante para esconderse
+var _asomado := 0.0             # >0: tiempo que le queda asomado
+var _capsula: CapsuleShape3D
+var _col_cuerpo: CollisionShape3D
+var _col_cabeza: CollisionShape3D
+
+static var _ultima_granada := -100.0   # segundos (Game.elapsed) de la última granada alemana
 
 
 func _ready() -> void:
 	add_to_group("enemies")
 	collision_layer = 4          # capa 3: enemigos
 	collision_mask = 1 | 2
-	_fire_timer = randf_range(fire_interval.x, fire_interval.y)
+	_fire_timer = randf_range(fire_interval.x, fire_interval.y) * 0.5
 	if arma == "":
 		var rng := RandomNumberGenerator.new()
 		rng.randomize()
 		arma = Armas.botin_aleman(rng)
+	if granadas < 0:
+		granadas = 1 if randf() < 0.5 else 0
 	_los_timer = randf() * 0.3
-	_build()
+	cuerpo = Soldado.new()
+	cuerpo.bando = "aleman"
+	cuerpo.arma = arma
+	cuerpo.cara = randi_range(1, 3)
+	add_child(cuerpo)
+	_crear_colisiones()
+	_buscar_cobertura.call_deferred()
+
+
+func _crear_colisiones() -> void:
+	# Forma 0 = cuerpo, forma 1 = cabeza (tiro a la cabeza). Siguen a la pose.
+	_col_cuerpo = CollisionShape3D.new()
+	_capsula = CapsuleShape3D.new()
+	_capsula.radius = 0.3
+	_capsula.height = 1.48
+	_col_cuerpo.shape = _capsula
+	_col_cuerpo.position.y = 0.74
+	add_child(_col_cuerpo)
+	_col_cabeza = CollisionShape3D.new()
+	var esfera := SphereShape3D.new()
+	esfera.radius = 0.17
+	_col_cabeza.shape = esfera
+	_col_cabeza.position.y = 1.64
+	add_child(_col_cabeza)
+
+
+## ¿Hay un obstáculo bajo (sacos, muro) justo delante, hacia la playa?
+func _buscar_cobertura() -> void:
+	var space := get_world_3d().direct_space_state
+	var frente := -global_basis.z
+	var bajo := PhysicsRayQueryParameters3D.create(global_position + Vector3(0, 0.5, 0),
+		global_position + Vector3(0, 0.5, 0) + frente * 2.0, 1)
+	var alto := PhysicsRayQueryParameters3D.create(global_position + Vector3(0, 1.15, 0),
+		global_position + Vector3(0, 1.15, 0) + frente * 2.0, 1)
+	_cobertura = not space.intersect_ray(bajo).is_empty() and space.intersect_ray(alto).is_empty()
+	cuerpo.pose = "agachado" if _cobertura else "reposo"
 
 
 func _physics_process(delta: float) -> void:
@@ -46,7 +95,9 @@ func _physics_process(delta: float) -> void:
 	if _player == null:
 		_player = get_tree().get_first_node_in_group("player") as Player
 		return
+	_seguir_pose()
 	if _player.dead:
+		cuerpo.pose = "agachado" if _cobertura else "reposo"
 		return
 
 	_los_timer -= delta
@@ -54,21 +105,67 @@ func _physics_process(delta: float) -> void:
 		_los_timer = 0.3
 		_sees = _can_see_player()
 
+	if _rafaga > 0:   # ráfaga en curso
+		_rafaga_t -= delta
+		if _rafaga_t <= 0.0:
+			_rafaga -= 1
+			_rafaga_t = Armas.datos(arma)["interval"] * randf_range(1.0, 1.4)
+			_shoot()
+
 	if _sees:
 		_alert += delta
 		var to := _player.global_position - global_position
 		rotation.y = lerp_angle(rotation.y, atan2(-to.x, -to.z), delta * 4.0)
+		cuerpo.apuntar_a = _player.head.global_position - Vector3(0, 0.3, 0)
+		if not _cobertura:
+			cuerpo.pose = "pie" if _alert > 0.3 else "reposo"
 		if _alert >= reaction_time:
 			_fire_timer -= delta
-			if _fire_timer <= 0.0:
+			# Desde la cobertura se asoma un poco antes de disparar
+			if _cobertura and _fire_timer < 0.7 and _asomado <= 0.0:
+				_asomado = 0.7 + _duracion_rafaga() + randf_range(0.4, 1.0)
+			if _fire_timer <= 0.0 and _rafaga == 0:
 				_fire_timer = randf_range(fire_interval.x, fire_interval.y)
-				_shoot()
+				if not _intentar_granada(to.length()):
+					_empezar_rafaga()
 	else:
 		_alert = maxf(_alert - delta * 0.5, 0.0)
+		if not _cobertura and _alert < 0.2:
+			cuerpo.pose = "reposo"
+
+	if _cobertura:
+		_asomado -= delta
+		cuerpo.pose = "rodilla" if _asomado > 0.0 or _rafaga > 0 else "agachado"
+
+
+## Las formas de choque siguen al cuerpo (agachado no se le puede pegar igual).
+func _seguir_pose() -> void:
+	var alto: float = {"reposo": 1.48, "pie": 1.48, "rodilla": 1.12, "agachado": 0.8}[cuerpo.pose]
+	_capsula.height = lerpf(_capsula.height, alto, 0.15)
+	_col_cuerpo.position.y = _capsula.height / 2.0
+	_col_cabeza.global_position = cuerpo.pos_cabeza()
+
+
+func _duracion_rafaga() -> float:
+	var d := Armas.datos(arma)
+	return d["interval"] * _balas_por_rafaga() * 1.2 if d["auto"] else 0.0
+
+
+func _balas_por_rafaga() -> int:
+	match arma:
+		"mg42": return randi_range(8, 14)
+		"mp40", "stg44": return randi_range(3, 6)
+		_: return 1
+
+
+func _empezar_rafaga() -> void:
+	_rafaga = _balas_por_rafaga()
+	_rafaga_t = 0.0 if not _cobertura else 0.35   # si se está asomando, espera a apuntar
 
 
 func _can_see_player() -> bool:
-	var eye := global_position + Vector3(0, 1.6, 0)
+	# Desde la cobertura mira por encima de los sacos (altura de rodillas)
+	var eye := global_position + Vector3(0, 1.15 if _cobertura else 1.6, 0)
 	var target := _player.head.global_position
 	if eye.distance_to(target) > sight_range:
 		return false
@@ -79,10 +176,14 @@ func _can_see_player() -> bool:
 
 
 func _shoot() -> void:
-	var from := _muzzle.global_position
+	var d := Armas.datos(arma)
+	var auto: bool = d["auto"]
+	var from := cuerpo.boca.global_position
 	var target := _player.head.global_position - Vector3(0, 0.35, 0)
 	var dist := from.distance_to(target)
 	var chance := lerpf(0.35, 0.05, clampf(dist / sight_range, 0.0, 1.0)) * accuracy
+	if auto:
+		chance *= 0.4      # las ráfagas son menos precisas, pero son muchas balas
 	if _player.crouching:
 		chance *= 0.6
 	if _player.sprinting:
@@ -104,12 +205,37 @@ func _shoot() -> void:
 			end = w["position"]
 			Game.dust(end, w["normal"])
 
-	Game.play_at("rifle_far", from, 2.0)
+	Game.play_at("pistol" if arma in ["mp40", "luger"] else "rifle_far", from, 2.0 if not auto else 0.0)
 	Game.tracer(from, end)
-	_flash.visible = true
-	get_tree().create_timer(0.06).timeout.connect(func() -> void: _flash.visible = false)
+	cuerpo.disparo()
 	if hits:
-		_player.take_damage(damage, global_position)
+		_player.take_damage(damage * (0.55 if auto else 1.0), global_position)
+
+
+## Granada de palo: si el jugador está entre 9 y 26 m, y nadie lanzó una hace poco.
+func _intentar_granada(dist: float) -> bool:
+	if granadas <= 0 or dist < 9.0 or dist > 26.0 or Game.elapsed - _ultima_granada < 9.0:
+		return false
+	if randf() > 0.35:
+		return false
+	granadas -= 1
+	_ultima_granada = Game.elapsed
+	_asomado = 1.2
+	var g := Grenade.new()
+	g.modelo_aleman()
+	get_parent().add_child(g)
+	var desde := cuerpo.pos_cabeza() + Vector3(0, 0.3, 0) - global_basis.z * 0.5
+	g.global_position = desde
+	g.add_collision_exception_with(self)
+	# Tiro parabólico al jugador (con error de hasta 3 m)
+	var blanco := _player.global_position + Vector3(randf_range(-3, 3), 0.1, randf_range(-3, 3))
+	var t := clampf(dist / 13.0, 0.9, 2.2)
+	var v := (blanco - desde - 0.5 * Vector3(0, -9.8, 0) * t * t) / t
+	g.linear_velocity = v
+	g.angular_velocity = Vector3(randf_range(-8, 8), randf_range(-3, 3), randf_range(-8, 8))
+	Game.play_at("throw", desde, 0.0)
+	Game.say("[¡GRANADA!]", Game.COLOR_BAD)
+	return true
 
 
 ## Recibe un impacto (bala o explosión).
@@ -118,6 +244,7 @@ func hit(amount: float, headshot: bool, pos: Vector3, dir: Vector3) -> void:
 		return
 	health -= amount * (2.0 if headshot else 1.0)
 	Game.blood(pos)
+	cuerpo.impacto(dir)
 	_alert = maxf(_alert, reaction_time * 0.5)  # se pone alerta al recibir fuego
 	if health <= 0.0:
 		_die(dir, headshot)
@@ -125,73 +252,16 @@ func hit(amount: float, headshot: bool, pos: Vector3, dir: Vector3) -> void:
 
 func _die(dir: Vector3, headshot: bool) -> void:
 	dead = true
+	_rafaga = 0
 	remove_from_group("enemies")
 	collision_layer = 0
 	collision_mask = 0
-	_flash.visible = false
 	Game.say("[ENEMIGO ABATIDO]" if not headshot else "[ABATIDO - TIRO A LA CABEZA]")
 	if get_tree().get_nodes_in_group("enemies").is_empty():
 		Game.say("[ZONA DESPEJADA]", Game.COLOR_GOOD)
-	# Cae en la dirección del impacto
-	var local := global_transform.basis.inverse() * dir
-	var tw := create_tween().set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
-	tw.tween_property(_model, "rotation", Vector3(signf(local.z if absf(local.z) > 0.1 else 1.0) * PI / 2, 0, randf_range(-0.3, 0.3)), 0.45)
-	tw.parallel().tween_property(_model, "position:y", 0.1, 0.45)
+	cuerpo.morir(dir, headshot)
 	# Suelta su arma al lado (con algo de munición)
-	for n in _rifle:
-		n.visible = false
 	var d := Armas.datos(arma)
 	var lado := global_basis.x * randf_range(-0.6, 0.6) + dir.normalized() * 0.5
 	ArmaSuelta.soltar(get_parent(), global_position + Vector3(lado.x, 0.05, lado.z), arma,
 		randi_range(int(d["mag"]) / 2, int(d["mag"])), int(d["mag"]))
-
-
-func _build() -> void:
-	_model = Node3D.new()
-	add_child(_model)
-	var coat := Game.material(Color(0.37, 0.39, 0.33))      # feldgrau
-	var trousers := Game.material(Color(0.32, 0.33, 0.29))
-	var helmet := Game.material(Color(0.27, 0.3, 0.26))
-	var skin := Game.material(Color(0.78, 0.58, 0.46))
-	var black := Game.material(Color(0.09, 0.08, 0.07))
-	var wood := Game.material(Color(0.4, 0.25, 0.13))
-	var metal := Game.material(Color(0.15, 0.15, 0.16))
-	var m := _model
-	Game.box(m, Vector3(0.14, 0.12, 0.24), Vector3(0.1, 0.06, -0.03), black)    # botas
-	Game.box(m, Vector3(0.14, 0.12, 0.24), Vector3(-0.1, 0.06, -0.03), black)
-	Game.box(m, Vector3(0.14, 0.75, 0.16), Vector3(0.1, 0.5, 0), trousers)      # piernas
-	Game.box(m, Vector3(0.14, 0.75, 0.16), Vector3(-0.1, 0.5, 0), trousers)
-	Game.box(m, Vector3(0.42, 0.58, 0.24), Vector3(0, 1.16, 0), coat)           # torso
-	Game.box(m, Vector3(0.44, 0.06, 0.26), Vector3(0, 0.9, 0), black)           # cinturón
-	Game.box(m, Vector3(0.1, 0.08, 0.05), Vector3(0.12, 0.95, -0.14), black)    # cartucheras
-	Game.box(m, Vector3(0.1, 0.08, 0.05), Vector3(-0.12, 0.95, -0.14), black)
-	Game.box(m, Vector3(0.11, 0.11, 0.44), Vector3(0.19, 1.32, -0.2), coat)     # brazos (apuntando)
-	Game.box(m, Vector3(0.11, 0.11, 0.5), Vector3(-0.1, 1.3, -0.3), coat, Vector3(0, -20, 0))
-	Game.box(m, Vector3(0.2, 0.22, 0.22), Vector3(0, 1.58, 0), skin)            # cabeza
-	Game.box(m, Vector3(0.27, 0.12, 0.29), Vector3(0, 1.73, 0), helmet)         # casco Stahlhelm
-	Game.box(m, Vector3(0.32, 0.08, 0.34), Vector3(0, 1.66, 0.02), helmet)
-	_rifle.append(Game.box(m, Vector3(0.05, 0.07, 0.95), Vector3(0.08, 1.4, -0.45), wood))     # fusil Kar98k
-	_rifle.append(Game.box(m, Vector3(0.025, 0.025, 0.25), Vector3(0.08, 1.42, -1.0), metal))
-	_muzzle = Node3D.new()
-	_muzzle.position = Vector3(0.08, 1.42, -1.14)
-	m.add_child(_muzzle)
-	var fmat := StandardMaterial3D.new()
-	fmat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	fmat.albedo_color = Color(1.0, 0.85, 0.4)
-	_flash = Game.box(_muzzle, Vector3(0.14, 0.14, 0.2), Vector3(0, 0, -0.08), fmat, Vector3(0, 0, 45))
-	_flash.visible = false
-
-	# Colisiones: forma 0 = cuerpo, forma 1 = cabeza (tiro a la cabeza)
-	var body := CollisionShape3D.new()
-	var capsule := CapsuleShape3D.new()
-	capsule.radius = 0.3
-	capsule.height = 1.48
-	body.shape = capsule
-	body.position.y = 0.74
-	add_child(body)
-	var head_col := CollisionShape3D.new()
-	var sphere := SphereShape3D.new()
-	sphere.radius = 0.17
-	head_col.shape = sphere
-	head_col.position.y = 1.64
-	add_child(head_col)

@@ -84,6 +84,14 @@ func _ready() -> void:
 		_add_crate(cajas[arma_id], arma_id, rng)
 	ArmaSuelta.soltar(self, Vector3(8.4, 0.05, -39.0), "luger", -1, -1)
 
+	# Compañeros americanos cubriéndose en la playa
+	for c in [[Vector3(-9, 0, -3), "thompson"], [Vector3(11, 0, -6), "garand"], [Vector3(-20, 0, -9), "bar"]]:
+		var a := Aliado.new()
+		a.arma = c[1]
+		a.objetivo = Vector3(c[0].x * 0.3, 2.0, -40)
+		add_child(a)
+		a.global_position = c[0]
+
 
 ## Suelo (arena mojada → seca → guijarros → pasto) y mar con espuma.
 func _dress_ground_and_sea() -> void:

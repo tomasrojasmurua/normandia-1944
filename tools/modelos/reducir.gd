@@ -3,6 +3,9 @@ extends SceneTree
 ## (unos miles), con la textura de color achicada. Uso:
 ##   godot --headless --script tools/modelos/reducir.gd -- entrada.glb salida_base [triangulos]
 ## Escribe salida_base.obj/.mtl/.png (para Mixamo) y salida_base.glb (para mirar).
+## OJO: esta reducción rompe las costuras de la textura (la cara queda mal), así
+## que sirve SOLO para subir a Mixamo y obtener el esqueleto. La malla que usa
+## el juego se hace con gltfpack + tools/modelos/piel.gd.
 
 func _init() -> void:
 	var args := OS.get_cmdline_user_args()

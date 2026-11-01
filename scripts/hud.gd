@@ -140,7 +140,7 @@ func _expulsar(w: Weapons, delta: float) -> void:
 		_shots_vistos = w.shots_fired
 		_clips_vistos = w.clips_ejected
 	var origen: Vector2 = _v(w, "vm_pos") + _v(w, "expulsion") + w.view_offset
-	if w.ads_amount > 0.5 or w.uses_3d_view():
+	if w.ads_amount > 0.5:
 		origen = Vector2(size.x / 2.0 + 40, size.y / 2.0 + 30)
 	while _shots_vistos < w.shots_fired:
 		_shots_vistos += 1
@@ -174,7 +174,7 @@ func _v(w: Weapons, campo: String) -> Vector2:
 
 
 func _draw_viewmodel(w: Weapons) -> void:
-	if w.uses_3d_view() or _player.dead or w.scoped():   # con mira telescópica solo se ve el círculo
+	if w.sprite_cadera[w.current] == null or _player.dead or w.scoped():   # con mira telescópica solo se ve el círculo
 		return
 	var centro := (size / 2.0).floor()
 	var off := w.view_offset.round()

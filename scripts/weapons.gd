@@ -33,9 +33,6 @@ var clips_ejected := 0            # cuenta clips vacíos del Garand expulsados
 
 var _player: Node
 var _camera: Camera3D
-var _models: Array[Node3D] = []
-var _flashes: Array[Node3D] = []
-var _last_flash: Node3D
 var _cooldown := 0.0
 var _reload_t := -1.0      # >=0 mientras recarga
 var _switch_t := -1.0
@@ -57,11 +54,8 @@ func _ready() -> void:
 		var d := Armas.datos(slots[i])
 		ammo.append(d["mag"])
 		reserve.append(d["reserve"])
-		_models.append(null)
-		_flashes.append(null)
 		_set_slot(i, slots[i])
 	sprite_granada = _load_opt("res://assets/armas/arma_granada.png")
-	_show(current)
 
 
 func def() -> Dictionary:
@@ -72,17 +66,9 @@ func id() -> String:
 	return slots[current]
 
 
-## Pone el arma "id" en la ranura i (modelo 3D e imágenes).
+## Pone el arma "id" en la ranura i (con sus imágenes).
 func _set_slot(i: int, arma_id: String) -> void:
 	slots[i] = arma_id
-	if _models[i]:
-		_models[i].queue_free()
-	match arma_id:
-		"garand": _models[i] = _build_garand()
-		"colt": _models[i] = _build_colt()
-		_: _models[i] = _build_generic(arma_id)
-	_flashes[i] = _last_flash
-	_models[i].visible = i == current
 	sprite_cadera[i] = Armas.imagen("arma_%s_cadera" % arma_id)
 	sprite_mira[i] = Armas.imagen("arma_%s_mira" % arma_id)
 
@@ -179,7 +165,6 @@ func _process(delta: float) -> void:
 		_switch_t += delta
 		if before < 0.18 and _switch_t >= 0.18:
 			current = _switch_to
-			_show(current)
 		if _switch_t >= 0.38:
 			_switch_t = -1.0
 
@@ -229,11 +214,7 @@ func _animate(_delta: float, w: Dictionary) -> void:
 	if _player.sprinting:
 		pos += Vector3(-0.04, -0.07, 0.04)
 		rot += Vector3(-12, 35, 8)
-	# (con imagen 2D, la recarga la anima hud.gd con su propio clip/cargador)
-	if _reload_t >= 0.0 and uses_3d_view():
-		var r := sin(PI * clampf(_reload_t / w["reload"], 0.0, 1.0))
-		pos += Vector3(0, -0.1, 0.05) * r
-		rot += Vector3(20, 0, 35) * r
+	# (la recarga la anima hud.gd con su propio clip/cargador)
 	if _switch_t >= 0.0 or _throw_t >= 0.0:
 		var s := sin(PI * clampf(_switch_t / 0.38, 0.0, 1.0)) if _switch_t >= 0.0 \
 			else sin(PI * clampf(_throw_t / 0.6, 0.0, 1.0))
@@ -252,14 +233,6 @@ func _animate(_delta: float, w: Dictionary) -> void:
 		+ Vector2(d.z, d.z) * 400.0
 	view_angle = rot.z - rot.x * 0.5
 	flash_2d = maxf(flash_2d - _delta, 0.0)
-	# Modelo 3D solo al apuntar (o si no hay imagen para esta arma)
-	if current < _models.size():
-		_models[current].visible = uses_3d_view() and not scoped()
-
-
-## true si ahora se ve el modelo 3D; false si se dibuja la imagen 2D.
-func uses_3d_view() -> bool:
-	return sprite_cadera[current] == null
 
 
 ## true mientras se mira por una mira telescópica (el HUD dibuja el círculo).
@@ -293,11 +266,7 @@ func _fire() -> void:
 		clips_ejected += 1
 		get_tree().create_timer(0.12).timeout.connect(func() -> void: Game.play("ping", -3.0))
 
-	var flash := _flashes[current]
-	flash.visible = uses_3d_view()
 	flash_2d = 0.06
-	flash.rotation.z = randf() * TAU
-	get_tree().create_timer(0.05).timeout.connect(func() -> void: flash.visible = false)
 
 	# Disparo instantáneo (rayo) desde el centro de la pantalla
 	var b := _camera.global_basis
@@ -368,188 +337,3 @@ func enemy_under_crosshair() -> bool:
 		if fwd.angle_to(to) < allowed:
 			return true
 	return false
-
-
-func _show(index: int) -> void:
-	for i in _models.size():
-		_models[i].visible = i == index
-
-
-# ------------------------------------------------------------ modelos
-# La línea de mira de cada arma está en y = 0, x = 0 del modelo: así, al
-# apuntar, el alza y el punto de mira quedan justo en el centro de la pantalla.
-
-# Texturas pixeladas de 32 px (tools/arte/generar_arte.py) proyectadas sobre
-# cada caja. "metros" = cuánto mide una repetición de la textura.
-static func _tex(nombre: String, metros: float, tinte := Color.WHITE) -> StandardMaterial3D:
-	var mat := StandardMaterial3D.new()
-	mat.albedo_texture = load("res://assets/armas/%s.png" % nombre)
-	mat.albedo_color = tinte
-	mat.uv1_triplanar = true
-	mat.uv1_scale = Vector3.ONE / metros
-	mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_PER_VERTEX
-	mat.specular_mode = BaseMaterial3D.SPECULAR_DISABLED
-	return mat
-
-var _wood := _tex("madera", 0.14)
-var _wood_dark := _tex("madera", 0.08, Color(0.6, 0.5, 0.45))
-var _metal := _tex("metal", 0.08)
-var _metal_dark := _tex("metal", 0.08, Color(0.45, 0.45, 0.45))
-var _metal_light := _tex("metal", 0.08, Color(1.35, 1.35, 1.35))
-var _brass := Game.material(Color("#c99a3e"))
-var _skin := _tex("piel", 0.1)
-var _sleeve := _tex("manga", 0.16)
-var _cuff := _tex("manga", 0.16, Color(0.7, 0.7, 0.65))
-
-
-func _build_garand() -> Node3D:
-	var g := Node3D.new()
-	add_child(g)
-	# Cajón de mecanismos, clip de latón y palanca del cerrojo
-	Game.box(g, Vector3(0.042, 0.044, 0.22), Vector3(0, -0.034, -0.13), _metal)
-	Game.box(g, Vector3(0.02, 0.008, 0.05), Vector3(0, -0.02, -0.15), _brass)
-	Game.box(g, Vector3(0.008, 0.012, 0.4), Vector3(0.024, -0.045, -0.42), _metal)
-	Game.box(g, Vector3(0.016, 0.014, 0.02), Vector3(0.034, -0.03, -0.19), _metal_light)
-	# Alza de agujero (el punto de mira se ve por el centro, en y = 0)
-	Game.box(g, Vector3(0.034, 0.012, 0.03), Vector3(0, -0.018, -0.035), _metal)
-	# (agujero de 12 mm centrado en y = 0, aro fino de 3-4 mm)
-	Game.box(g, Vector3(0.004, 0.022, 0.005), Vector3(0.008, -0.001, -0.045), _metal_dark)
-	Game.box(g, Vector3(0.004, 0.022, 0.005), Vector3(-0.008, -0.001, -0.045), _metal_dark)
-	Game.box(g, Vector3(0.012, 0.004, 0.005), Vector3(0, 0.008, -0.045), _metal_dark)
-	Game.box(g, Vector3(0.012, 0.006, 0.005), Vector3(0, -0.009, -0.045), _metal_dark)
-	Game.box(g, Vector3(0.008, 0.01, 0.01), Vector3(0.028, -0.016, -0.04), _metal_light)   # perillas
-	Game.box(g, Vector3(0.008, 0.01, 0.01), Vector3(-0.028, -0.016, -0.04), _metal_light)
-	# Madera: guardamanos superior, caja, empuñadura y culata
-	Game.box(g, Vector3(0.038, 0.026, 0.14), Vector3(0, -0.036, -0.32), _wood)
-	Game.box(g, Vector3(0.038, 0.026, 0.2), Vector3(0, -0.04, -0.58), _wood)
-	Game.box(g, Vector3(0.048, 0.05, 0.48), Vector3(0, -0.075, -0.48), _wood)
-	Game.box(g, Vector3(0.05, 0.06, 0.16), Vector3(0, -0.08, -0.12), _wood)
-	Game.box(g, Vector3(0.046, 0.07, 0.1), Vector3(0, -0.1, 0.0), _wood, Vector3(-20, 0, 0))
-	Game.box(g, Vector3(0.05, 0.1, 0.26), Vector3(0, -0.11, 0.14), _wood, Vector3(-6, 0, 0))
-	Game.box(g, Vector3(0.052, 0.105, 0.012), Vector3(0, -0.122, 0.27), _metal, Vector3(-6, 0, 0))
-	Game.box(g, Vector3(0.018, 0.03, 0.06), Vector3(0, -0.12, -0.08), _metal)          # guardamonte
-	# Cañón, abrazaderas y punto de mira con orejas
-	Game.box(g, Vector3(0.02, 0.02, 0.24), Vector3(0, -0.034, -0.74), _metal)
-	Game.box(g, Vector3(0.028, 0.03, 0.06), Vector3(0, -0.045, -0.83), _metal)
-	Game.box(g, Vector3(0.05, 0.054, 0.015), Vector3(0, -0.06, -0.56), _metal)
-	Game.box(g, Vector3(0.046, 0.05, 0.015), Vector3(0, -0.058, -0.72), _metal)
-	Game.box(g, Vector3(0.004, 0.022, 0.006), Vector3(0, -0.011, -0.86), _metal_light)
-	Game.box(g, Vector3(0.004, 0.026, 0.012), Vector3(0.011, -0.013, -0.86), _metal)
-	Game.box(g, Vector3(0.004, 0.026, 0.012), Vector3(-0.011, -0.013, -0.86), _metal)
-	# Mano derecha en la empuñadura
-	Game.box(g, Vector3(0.06, 0.06, 0.08), Vector3(0.01, -0.115, 0.0), _skin, Vector3(-20, 0, 0))
-	for k in 3:
-		Game.box(g, Vector3(0.052, 0.016, 0.018), Vector3(0.004, -0.148, -0.03 + k * 0.021), _skin)
-	Game.box(g, Vector3(0.016, 0.016, 0.05), Vector3(-0.028, -0.085, -0.03), _skin)
-	Game.box(g, Vector3(0.09, 0.09, 0.03), Vector3(0.035, -0.15, 0.06), _cuff)
-	Game.box(g, Vector3(0.085, 0.085, 0.25), Vector3(0.04, -0.16, 0.19), _sleeve)
-	# Mano izquierda bajo el guardamanos
-	Game.box(g, Vector3(0.06, 0.02, 0.09), Vector3(0, -0.108, -0.44), _skin)
-	Game.box(g, Vector3(0.018, 0.06, 0.09), Vector3(-0.032, -0.08, -0.44), _skin)
-	for k in 4:
-		Game.box(g, Vector3(0.014, 0.04, 0.016), Vector3(0.031, -0.075, -0.41 - k * 0.02), _skin)
-	Game.box(g, Vector3(0.095, 0.095, 0.03), Vector3(-0.045, -0.13, -0.37), _cuff, Vector3(0, -25, 0))
-	Game.box(g, Vector3(0.09, 0.09, 0.3), Vector3(-0.08, -0.15, -0.24), _sleeve, Vector3(0, -25, 0))
-	_last_flash = _build_flash(g, Vector3(0, -0.035, -0.9))
-	return g
-
-
-func _build_colt() -> Node3D:
-	var c := Node3D.new()
-	add_child(c)
-	# Corredera con estrías, alza y punto de mira (línea de mira en y = 0)
-	Game.box(c, Vector3(0.028, 0.03, 0.2), Vector3(0, -0.018, -0.095), _metal)
-	for k in 5:
-		Game.box(c, Vector3(0.03, 0.022, 0.003), Vector3(0, -0.018, -0.004 - k * 0.008), _metal_dark)
-	Game.box(c, Vector3(0.008, 0.008, 0.008), Vector3(0.007, -0.002, -0.006), _metal_dark)
-	Game.box(c, Vector3(0.008, 0.008, 0.008), Vector3(-0.007, -0.002, -0.006), _metal_dark)
-	Game.box(c, Vector3(0.004, 0.008, 0.006), Vector3(0, -0.004, -0.19), _metal_light)
-	Game.box(c, Vector3(0.02, 0.02, 0.01), Vector3(0, -0.02, -0.199), _metal_light)    # boca
-	Game.box(c, Vector3(0.01, 0.014, 0.01), Vector3(0, -0.004, 0.009), _metal_dark, Vector3(-30, 0, 0))  # martillo
-	# Armazón, guardamonte, empuñadura y base del cargador
-	Game.box(c, Vector3(0.026, 0.022, 0.15), Vector3(0, -0.044, -0.085), _metal_light)
-	Game.box(c, Vector3(0.012, 0.004, 0.04), Vector3(0, -0.072, -0.05), _metal)
-	Game.box(c, Vector3(0.012, 0.025, 0.004), Vector3(0, -0.06, -0.07), _metal)
-	Game.box(c, Vector3(0.03, 0.09, 0.045), Vector3(0, -0.09, 0.0), _wood_dark, Vector3(15, 0, 0))
-	Game.box(c, Vector3(0.026, 0.006, 0.04), Vector3(0, -0.135, 0.012), _metal, Vector3(15, 0, 0))
-	# Dos manos en la empuñadura
-	Game.box(c, Vector3(0.045, 0.07, 0.06), Vector3(0.012, -0.097, 0.008), _skin, Vector3(15, 0, 0))
-	Game.box(c, Vector3(0.04, 0.06, 0.065), Vector3(-0.03, -0.102, 0.0), _skin)
-	Game.box(c, Vector3(0.014, 0.014, 0.05), Vector3(-0.02, -0.058, -0.04), _skin)
-	Game.box(c, Vector3(0.085, 0.085, 0.03), Vector3(0.035, -0.125, 0.06), _cuff, Vector3(0, 10, 0))
-	Game.box(c, Vector3(0.085, 0.085, 0.03), Vector3(-0.045, -0.125, 0.05), _cuff, Vector3(0, -15, 0))
-	Game.box(c, Vector3(0.08, 0.08, 0.25), Vector3(0.04, -0.13, 0.19), _sleeve, Vector3(0, 10, 0))
-	Game.box(c, Vector3(0.08, 0.08, 0.25), Vector3(-0.065, -0.13, 0.18), _sleeve, Vector3(0, -15, 0))
-	_last_flash = _build_flash(c, Vector3(0, -0.02, -0.21))
-	return c
-
-
-## Modelo 3D de respaldo para las armas que todavía no tienen imagen, armado
-## según su "tipo". La línea de mira queda en y = 0, x = 0, como en los otros.
-func _build_generic(arma_id: String) -> Node3D:
-	var d := Armas.datos(arma_id)
-	var tipo: String = d["tipo"]
-	var g := Node3D.new()
-	add_child(g)
-	var con_madera: bool = arma_id in ["carbine", "thompson", "bar", "springfield", "kar98k", "stg44"]
-	var culata := _wood if con_madera else _metal_dark
-	var boca := Vector3(0, -0.035, -0.8)
-	match tipo:
-		"pistola":
-			Game.box(g, Vector3(0.026, 0.028, 0.2), Vector3(0, -0.02, -0.1), _metal)
-			Game.box(g, Vector3(0.024, 0.02, 0.14), Vector3(0, -0.044, -0.08), _metal_dark)
-			Game.box(g, Vector3(0.03, 0.09, 0.04), Vector3(0, -0.09, 0.0), _wood_dark, Vector3(25 if arma_id == "luger" else 15, 0, 0))
-			Game.box(g, Vector3(0.004, 0.009, 0.006), Vector3(0, -0.003, -0.19), _metal_light)
-			Game.box(g, Vector3(0.06, 0.075, 0.07), Vector3(0.005, -0.1, 0.005), _skin)
-			Game.box(g, Vector3(0.08, 0.08, 0.25), Vector3(0.04, -0.13, 0.17), _sleeve, Vector3(0, 10, 0))
-			boca = Vector3(0, -0.02, -0.21)
-		"bazuca":
-			Game.box(g, Vector3(0.08, 0.08, 1.4), Vector3(0, -0.06, -0.35), _tex("manga", 0.3, Color(0.75, 0.8, 0.65)))
-			Game.box(g, Vector3(0.1, 0.1, 0.08), Vector3(0, -0.06, -1.05), _metal_dark)
-			Game.box(g, Vector3(0.1, 0.1, 0.08), Vector3(0, -0.06, 0.33), _metal_dark)
-			Game.box(g, Vector3(0.03, 0.03, 0.03), Vector3(0, -0.005, -0.4), _metal)     # mira
-			Game.box(g, Vector3(0.04, 0.12, 0.05), Vector3(0, -0.14, -0.2), _wood)      # empuñadura
-			Game.box(g, Vector3(0.06, 0.07, 0.08), Vector3(0, -0.17, -0.2), _skin)
-			Game.box(g, Vector3(0.09, 0.09, 0.3), Vector3(0.05, -0.2, -0.0), _sleeve)
-			boca = Vector3(0, -0.06, -1.1)
-		_:
-			var largo := 0.75 if tipo == "fusil" else (0.5 if tipo == "subfusil" else 0.9)
-			Game.box(g, Vector3(0.042, 0.046, 0.24), Vector3(0, -0.035, -0.14), _metal)        # cajón
-			Game.box(g, Vector3(0.006, 0.02, 0.006), Vector3(0, -0.006, -0.06), _metal_dark)   # alza
-			Game.box(g, Vector3(0.04, 0.045, largo * 0.55), Vector3(0, -0.06, -0.26 - largo * 0.27),
-				_wood if con_madera else _metal)                                                # guardamanos
-			Game.box(g, Vector3(0.02, 0.02, largo * 0.5), Vector3(0, -0.035, -0.26 - largo * 0.6), _metal)  # cañón
-			Game.box(g, Vector3(0.004, 0.022, 0.006), Vector3(0, -0.011, -0.24 - largo * 0.84), _metal_light)
-			Game.box(g, Vector3(0.048, 0.09, 0.32), Vector3(0, -0.1, 0.12), culata, Vector3(-8, 0, 0))   # culata
-			if tipo != "fusil" or arma_id == "carbine":   # cargador hacia abajo
-				var curvo := arma_id == "stg44"
-				Game.box(g, Vector3(0.026, 0.16 if arma_id != "mp40" else 0.2, 0.04),
-					Vector3(0, -0.15, -0.2), _metal_dark, Vector3(-18 if curvo else 0, 0, 0))
-			if arma_id == "springfield":   # mira telescópica
-				Game.box(g, Vector3(0.03, 0.03, 0.3), Vector3(0, 0.0, -0.15), _metal_dark)
-			if tipo == "ametralladora":    # bípode plegado y camisa del cañón
-				Game.box(g, Vector3(0.05, 0.05, 0.3), Vector3(0, -0.035, -0.6), _metal_dark)
-				Game.box(g, Vector3(0.012, 0.012, 0.3), Vector3(0.02, -0.07, -0.62), _metal)
-				Game.box(g, Vector3(0.012, 0.012, 0.3), Vector3(-0.02, -0.07, -0.62), _metal)
-			Game.box(g, Vector3(0.06, 0.06, 0.08), Vector3(0.01, -0.12, 0.02), _skin)           # manos
-			Game.box(g, Vector3(0.085, 0.085, 0.25), Vector3(0.04, -0.16, 0.19), _sleeve)
-			Game.box(g, Vector3(0.06, 0.05, 0.09), Vector3(0, -0.1, -0.38), _skin)
-			Game.box(g, Vector3(0.09, 0.09, 0.3), Vector3(-0.08, -0.15, -0.24), _sleeve, Vector3(0, -25, 0))
-			boca = Vector3(0, -0.035, -0.26 - largo * 1.0)
-	_last_flash = _build_flash(g, boca)
-	return g
-
-
-func _build_flash(parent: Node3D, pos: Vector3) -> Node3D:
-	var f := Node3D.new()
-	f.position = pos
-	parent.add_child(f)
-	var mat := StandardMaterial3D.new()
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.albedo_color = Color(1.0, 0.85, 0.4)
-	Game.box(f, Vector3(0.09, 0.025, 0.02), Vector3(0, 0, -0.03), mat)
-	Game.box(f, Vector3(0.025, 0.09, 0.02), Vector3(0, 0, -0.03), mat)
-	Game.box(f, Vector3(0.035, 0.035, 0.1), Vector3(0, 0, -0.07), mat)
-	f.visible = false
-	return f

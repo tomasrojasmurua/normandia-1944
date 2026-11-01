@@ -1,12 +1,15 @@
 extends Node3D
 class_name Soldado
-## Cuerpo de un soldado (alemán o americano): modelo articulado hecho de
-## piezas simples con texturas pixeladas (assets/soldados), con su equipo y su
-## arma. No piensa: enemy.gd / aliado.gd le dicen qué pose tomar.
+## Cuerpo de un soldado con su arma. No piensa: enemy.gd / aliado.gd le dicen
+## qué pose tomar.
+##  - Alemán: modelo 3D (Meshy) con esqueleto y animaciones de Mixamo
+##    (sección "modelo 3D" al final).
+##  - Americano: modelo articulado de piezas simples con texturas pixeladas
+##    (assets/soldados); las manos se ponen solas sobre el arma (cinemática
+##    inversa de dos huesos).
 ##
 ## Poses: "reposo" (arma baja), "pie" (de pie apuntando), "rodilla" (rodilla en
 ## tierra apuntando), "agachado" (escondido tras una cobertura).
-## Las manos se ponen solas sobre el arma (cinemática inversa de dos huesos).
 
 @export var bando := "aleman"      # "aleman" o "aliado"
 @export var arma := "kar98k"
@@ -25,7 +28,6 @@ var nodo_arma: Node3D
 var boca: Node3D                   # punta del cañón (fogonazo y trazadoras)
 var _hombro := [null, null]        # derecho, izquierdo
 var _codo := [null, null]
-var _mano := [null, null]
 var _muslo := [null, null]
 var _rodilla := [null, null]
 var _fogonazo: Node3D
@@ -65,7 +67,7 @@ static func _mat(nombre: String, metros: float, tinte := Color.WHITE) -> Standar
 
 
 func _ready() -> void:
-	if bando == "aleman" and ResourceLoader.exists(MX_DIR + "rifle_idle.fbx"):
+	if bando == "aleman":
 		_construir_mixamo()
 	else:
 		_construir()
@@ -240,63 +242,43 @@ func pos_cabeza() -> Vector3:
 # ================================================================ modelo
 
 func _construir() -> void:
-	var aleman := bando == "aleman"
-	var chaqueta := _mat("tela_feldgrau", 0.5) if aleman else _mat("tela_m41", 0.5)
-	var pantalon := _mat("tela_gris", 0.5) if aleman else _mat("tela_hbt", 0.5)
-	var cuero := _mat("cuero", 0.3)
-	var correaje := cuero if aleman else _mat("lona", 0.3)
+	# Soldado americano hecho de piezas (el alemán usa el modelo 3D, más abajo)
+	var chaqueta := _mat("tela_m41", 0.5)
+	var pantalon := _mat("tela_hbt", 0.5)
+	var correaje := _mat("lona", 0.3)
 	var piel := Game.material(Color(0.76, 0.56, 0.44))
 	var raiz := Node3D.new()
 	add_child(raiz)
 
 	cadera = _nodo(raiz, Vector3(0, 0.95, 0))
 	_caja(cadera, Vector3(0.34, 0.2, 0.22), Vector3(0, -0.04, 0), pantalon)
-	if aleman:   # faldón de la guerrera bajo el cinturón
-		_caja(cadera, Vector3(0.38, 0.16, 0.25), Vector3(0, 0.0, 0), chaqueta)
 
-	# Piernas
+	# Piernas: polainas de lona y botas cafés
 	for i in 2:
 		var lado := 1.0 if i == 0 else -1.0
 		_muslo[i] = _nodo(cadera, Vector3(lado * 0.1, -0.08, 0))
 		_capsula(_muslo[i], MUSLO + 0.06, 0.085, pantalon)
 		_rodilla[i] = _nodo(_muslo[i], Vector3(0, -MUSLO, 0))
-		if aleman:   # botas altas de cuero hasta la rodilla
-			_capsula(_rodilla[i], PIERNA + 0.04, 0.072, cuero)
-		else:        # polainas de lona y botas cafés
-			_capsula(_rodilla[i], PIERNA * 0.55, 0.068, pantalon)
-			var polaina := _nodo(_rodilla[i], Vector3(0, -PIERNA * 0.45, 0))
-			_capsula(polaina, PIERNA * 0.5, 0.072, _mat("lona", 0.3))
-		_caja(_rodilla[i], Vector3(0.1, 0.08, 0.24), Vector3(0, -PIERNA + 0.02, -0.05),
-			cuero if aleman else _mat("cuero", 0.3, Color(1.6, 1.15, 0.8)))
+		_capsula(_rodilla[i], PIERNA * 0.55, 0.068, pantalon)
+		var polaina := _nodo(_rodilla[i], Vector3(0, -PIERNA * 0.45, 0))
+		_capsula(polaina, PIERNA * 0.5, 0.072, correaje)
+		_caja(_rodilla[i], Vector3(0.1, 0.08, 0.24), Vector3(0, -PIERNA + 0.02, -0.05), _mat("cuero", 0.3, Color(1.6, 1.15, 0.8)))
 
-	# Torso
+	# Torso con el equipo
 	torso = _nodo(cadera, Vector3(0, 0.04, 0))
 	_caja(torso, Vector3(0.36, 0.22, 0.22), Vector3(0, 0.1, 0), chaqueta)        # cintura
 	_caja(torso, Vector3(0.42, 0.3, 0.25), Vector3(0, 0.33, 0), chaqueta)        # pecho
 	_caja(torso, Vector3(0.36, 0.06, 0.2), Vector3(0, 0.49, 0), chaqueta)        # hombros
 	_caja(torso, Vector3(0.4, 0.05, 0.25), Vector3(0, 0.0, 0), correaje)         # cinturón
-	if aleman:
-		for lado in [-1.0, 1.0]:
-			for k in 3:   # cartucheras de cuero (3 por lado)
-				_caja(torso, Vector3(0.055, 0.07, 0.045), Vector3(lado * (0.05 + k * 0.055), 0.04, -0.14), cuero)
-			# tirantes en Y
-			_caja(torso, Vector3(0.035, 0.42, 0.02), Vector3(lado * 0.1, 0.25, -0.13), cuero, Vector3(0, 0, lado * 8))
-		_caja(torso, Vector3(0.035, 0.42, 0.02), Vector3(0, 0.25, 0.13), cuero)            # tirante de atrás
-		_caja(torso, Vector3(0.12, 0.13, 0.08), Vector3(0.21, -0.03, 0.05), _mat("tela_gris", 0.3, Color(0.85, 0.9, 0.75)))  # morral de pan
-		_cilindro(torso, 0.045, 0.14, Vector3(0.2, -0.02, 0.15), _mat("tela_feldgrau", 0.2, Color(0.6, 0.55, 0.45)))  # cantimplora
-		var bote := _cilindro(torso, 0.055, 0.26, Vector3(-0.05, 0.12, 0.17), _mat("tela_gris", 0.15, Color(0.9, 1.0, 0.85)))   # caja de la máscara antigás
-		bote.rotation_degrees = Vector3(0, 0, 70)
-		_caja(torso, Vector3(0.06, 0.18, 0.03), Vector3(-0.2, -0.04, 0.08), cuero)    # pala
-	else:
-		for lado in [-1.0, 1.0]:
-			for k in 4:   # cartucheras de lona del cinturón M1923
-				_caja(torso, Vector3(0.06, 0.08, 0.045), Vector3(lado * (0.04 + k * 0.05), 0.02, -0.14), correaje)
-			_caja(torso, Vector3(0.04, 0.44, 0.02), Vector3(lado * 0.1, 0.26, -0.13), correaje, Vector3(0, 0, lado * 6))  # tirantes
-		_caja(torso, Vector3(0.28, 0.22, 0.1), Vector3(0, 0.3, 0.17), correaje)     # mochila
-		_caja(torso, Vector3(0.07, 0.24, 0.03), Vector3(0.0, 0.2, 0.235), _mat("cuero", 0.2, Color(1.3, 1.3, 1.1)))  # pala en la mochila
-		_cilindro(torso, 0.045, 0.14, Vector3(-0.2, -0.04, 0.08), correaje)          # cantimplora
+	for lado in [-1.0, 1.0]:
+		for k in 4:   # cartucheras de lona del cinturón M1923
+			_caja(torso, Vector3(0.06, 0.08, 0.045), Vector3(lado * (0.04 + k * 0.05), 0.02, -0.14), correaje)
+		_caja(torso, Vector3(0.04, 0.44, 0.02), Vector3(lado * 0.1, 0.26, -0.13), correaje, Vector3(0, 0, lado * 6))  # tirantes
+	_caja(torso, Vector3(0.28, 0.22, 0.1), Vector3(0, 0.3, 0.17), correaje)     # mochila
+	_caja(torso, Vector3(0.07, 0.24, 0.03), Vector3(0.0, 0.2, 0.235), _mat("cuero", 0.2, Color(1.3, 1.3, 1.1)))  # pala en la mochila
+	_cilindro(torso, 0.045, 0.14, Vector3(-0.2, -0.04, 0.08), correaje)          # cantimplora
 
-	# Cabeza y casco
+	# Cabeza y casco M1 con red
 	_cilindro(torso, 0.055, 0.1, Vector3(0, 0.55, 0), piel)                         # cuello
 	cabeza = _nodo(torso, Vector3(0, 0.58, 0))
 	_caja(cabeza, Vector3(0.17, 0.21, 0.19), Vector3(0, 0.11, 0), piel)
@@ -313,17 +295,11 @@ func _construir() -> void:
 	frente.rotation.y = PI
 	cabeza.add_child(frente)
 	casco = _nodo(cabeza, Vector3(0, 0.16, 0.01))
-	if aleman:   # Stahlhelm M35: cúpula y faldón acampanado
-		var mc := _mat("casco_aleman", 0.25)
-		_esfera(casco, 0.135, 0.13, Vector3(0, 0.0, 0), mc)
-		var faldon := _cono(casco, 0.135, 0.165, 0.07, Vector3(0, -0.04, 0.015), mc)
-		faldon.scale = Vector3(1.0, 1.0, 1.08)
-	else:        # M1 con red
-		var mc := _mat("casco_us", 0.12)
-		_esfera(casco, 0.15, 0.15, Vector3(0, -0.01, 0), mc)
-		_cono(casco, 0.15, 0.165, 0.02, Vector3(0, -0.02, 0), mc)
-		_caja(casco, Vector3(0.012, 0.12, 0.012), Vector3(0.12, -0.08, 0), correaje)   # barboquejo suelto
-		_caja(casco, Vector3(0.012, 0.12, 0.012), Vector3(-0.12, -0.08, 0), correaje)
+	var mc := _mat("casco_us", 0.12)
+	_esfera(casco, 0.15, 0.15, Vector3(0, -0.01, 0), mc)
+	_cono(casco, 0.15, 0.165, 0.02, Vector3(0, -0.02, 0), mc)
+	_caja(casco, Vector3(0.012, 0.12, 0.012), Vector3(0.12, -0.08, 0), correaje)   # barboquejo suelto
+	_caja(casco, Vector3(0.012, 0.12, 0.012), Vector3(-0.12, -0.08, 0), correaje)
 
 	# Brazos
 	for i in 2:
@@ -332,7 +308,7 @@ func _construir() -> void:
 		_capsula(_hombro[i], BRAZO + 0.06, 0.06, chaqueta)
 		_codo[i] = _nodo(_hombro[i], Vector3(0, -BRAZO, 0))
 		_capsula(_codo[i], ANTEBRAZO + 0.04, 0.05, chaqueta)
-		_mano[i] = _caja(_codo[i], Vector3(0.07, 0.09, 0.05), Vector3(0, -ANTEBRAZO - 0.03, 0), piel)
+		_caja(_codo[i], Vector3(0.07, 0.09, 0.05), Vector3(0, -ANTEBRAZO - 0.03, 0), piel)
 
 	# Arma
 	nodo_arma = _nodo(torso, Vector3(0.1, 0.3, -0.3))
@@ -471,6 +447,7 @@ const MX_ANIMS := {
 }
 static var _mx_lib: AnimationLibrary
 static var _mx_mat: StandardMaterial3D
+static var _mx_malla: Mesh
 
 var _mx := false
 var _sk: Skeleton3D
@@ -483,8 +460,7 @@ var _b_indice := [-1, -1]
 var _anim := ""
 var _encorvado := 0.0
 var _pitch := 0.0
-var _acumulado := 0.0
-var _cuadro := randi() % 3
+var _acumulado := randf() * 0.06
 
 
 static func _libreria() -> AnimationLibrary:
@@ -497,6 +473,8 @@ static func _libreria() -> AnimationLibrary:
 			an.loop_mode = Animation.LOOP_LINEAR if MX_ANIMS[nombre][1] else Animation.LOOP_NONE
 			_mx_lib.add_animation(nombre, an)
 			fuente.free()
+		if ResourceLoader.exists(MX_DIR + "cuerpo.res"):
+			_mx_malla = load(MX_DIR + "cuerpo.res")
 		_mx_mat = StandardMaterial3D.new()
 		_mx_mat.albedo_texture = load(MX_DIR + "textura.png")
 		_mx_mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST_WITH_MIPMAPS
@@ -514,6 +492,8 @@ func _construir_mixamo() -> void:
 	add_child(_modelo)
 	_sk = _modelo.find_children("*", "Skeleton3D", true, false)[0]
 	for mi: MeshInstance3D in _modelo.find_children("*", "MeshInstance3D", true, false):
+		if _mx_malla:
+			mi.mesh = _mx_malla     # malla propia, más liviana y con mejor cara
 		mi.material_override = _mx_mat
 		mi.extra_cull_margin = 0.02
 	_ap = _modelo.find_children("*", "AnimationPlayer", true, false)[0]
@@ -558,20 +538,26 @@ func _girar_hueso(b: int, q_padre: Quaternion, eje: Vector3, angulo: float) -> v
 
 func _process_mixamo(delta: float) -> void:
 	_t += delta
-	# Los lejanos se animan menos seguido (no se nota y ahorra mucho)
+	# Deformar el modelo es lo caro, así que la pose se actualiza pocas veces
+	# por segundo (15 de cerca, 8 de lejos, 3 fuera de la vista), estilo
+	# animación retro. Cada soldado empieza desfasado para repartir la carga.
 	_acumulado += delta
-	_cuadro += 1
+	var intervalo := 1.0 / 15.0
 	var cam := get_viewport().get_camera_3d()
-	var paso := 1
 	if cam:
-		var dist := cam.global_position.distance_to(global_position)
-		paso = 1 if dist < 12.0 else (2 if dist < 25.0 else 3)
-	if _cuadro % paso != 0 and _anim != "":
+		var centro := global_position + Vector3(0, 1.0, 0)
+		if not cam.is_position_in_frustum(centro):
+			intervalo = 1.0 / 3.0
+		elif cam.global_position.distance_squared_to(centro) > 20.0 * 20.0:
+			intervalo = 1.0 / 8.0
+	if _acumulado < intervalo:
 		return
 	delta = _acumulado
 	_acumulado = 0.0
 	if muerto:
 		_ap.advance(delta)
+		if not _ap.is_playing():
+			set_process(false)      # ya cayó: queda quieto para siempre
 		return
 	_retroceso = move_toward(_retroceso, 0.0, delta * 6.0)
 	_sacudon = _sacudon.move_toward(Vector3.ZERO, delta * 3.0)

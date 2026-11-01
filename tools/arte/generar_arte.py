@@ -479,7 +479,7 @@ def icono_garand():
     R(50, 4, 62, 5, m); R(52, 4, 62, 4, M)
     R(60, 2, 61, 3, g)                            # punto de mira
     img = contorno(img)
-    img.save(UI / "icono_garand.png")
+    # (solo para la lámina; en el juego se usa el perfil de ChatGPT)
     return img
 
 
@@ -502,7 +502,7 @@ def icono_colt():
             R(x0 + 2, y, x0 + 2, y, Wc); R(x0 + 5, y, x0 + 5, y, Wc)
     R(1, 17, 8, 17, g)
     img = contorno(img)
-    img.save(UI / "icono_colt.png")
+    # (solo para la lámina; en el juego se usa el perfil de ChatGPT)
     return img
 
 
@@ -526,7 +526,7 @@ def icono_granada():
     rect(px, 10, 4, 11, 4, m); rect(px, 11, 5, 11, 12, m)       # palanca
     px[4, 4] = px[3, 5] = px[4, 6] = px[5, 5] = m               # anilla
     img = contorno(img)
-    img.save(UI / "icono_granada.png")
+    # (solo para la lámina; en el juego se usa el perfil de ChatGPT)
     return img
 
 
@@ -668,101 +668,6 @@ def _ruido_img(tam, semilla, base, claro, oscuro, p_claro, p_oscuro):
     return img, px, rnd
 
 
-def tex_madera_arma():
-    """Nogal aceitado: vetas horizontales onduladas."""
-    import math
-    t = 32
-    base = mezcla(rgb("madera"), rgb("madera_osc"), 0.35)
-    img, px, rnd = _ruido_img(t, 11, base, rgb("madera"), mezcla(base, rgb("madera_osc"), 0.5), 0.08, 0.08)
-    for k in range(7):
-        y0 = rnd.uniform(0, t)
-        fase = rnd.uniform(0, 6.28)
-        col = rgb("madera_osc") if k % 2 == 0 else mezcla(rgb("madera"), rgb("madera_clara"), 0.5)
-        for x in range(t):
-            # la onda completa un número entero de ciclos para que se repita sin costura
-            y = int(y0 + 1.6 * math.sin(2 * math.pi * x / t * 2 + fase)) % t
-            px[x, y] = col[:3]
-    img.save(ARMAS / "madera.png")
-
-
-def tex_metal_arma():
-    """Acero fosfatado (gris verdoso mate) con desgaste en claro."""
-    base = mezcla(rgb("acero"), rgb("oliva_1"), 0.35)
-    img, px, rnd = _ruido_img(32, 12, base, mezcla(rgb("acero_claro"), base, 0.7),
-                              mezcla(base, rgb("negro"), 0.3), 0.06, 0.12)
-    img.save(ARMAS / "metal.png")
-
-
-def tex_piel():
-    base = rgb("piel")
-    img, px, rnd = _ruido_img(32, 13, base, mezcla(base, rgb("crema"), 0.15),
-                              mezcla(base, rgb("piel_osc"), 0.3), 0.08, 0.14)
-    # suciedad y arena
-    for _ in range(12):
-        x, y = rnd.randrange(32), rnd.randrange(32)
-        px[x, y] = mezcla(rgb("piel"), rgb("arena_moj"), 0.5)[:3]
-    img.save(ARMAS / "piel.png")
-
-
-def tex_manga():
-    """Sarga verde oliva de la chaqueta M1941, con pliegues."""
-    base = mezcla(rgb("oliva_3"), rgb("arena_moj"), 0.35)
-    img, px, rnd = _ruido_img(32, 14, base, mezcla(base, rgb("oliva_4"), 0.6),
-                              mezcla(base, rgb("oliva_1"), 0.5), 0.06, 0.06)
-    for y in range(32):
-        for x in range(32):
-            if (x + y) % 4 == 0:   # tejido diagonal
-                px[x, y] = mezcla(tuple(list(px[x, y]) + [255]), rgb("oliva_1"), 0.25)[:3]
-    for k in range(3):             # pliegues
-        x0 = rnd.randrange(32)
-        for y in range(32):
-            x = (x0 + y // 3) % 32
-            px[x, y] = mezcla(tuple(list(px[x, y]) + [255]), rgb("oliva_0"), 0.35)[:3]
-    img.save(ARMAS / "manga.png")
-
-
-def clip_garand():
-    """Clip en bloque de latón con 8 cartuchos, visto de lado (entra desde arriba)."""
-    img = Image.new("RGBA", (26, 22), (0, 0, 0, 0))
-    px = img.load()
-    lat, lat_c, lat_o = rgb("laton"), mezcla(rgb("laton"), rgb("crema"), 0.45), mezcla(rgb("laton"), rgb("madera_osc"), 0.45)
-    cob = mezcla(rgb("oxido"), rgb("laton"), 0.35)
-    # 8 cartuchos escalonados en dos filas: puntas de cobre arriba, vainas abajo
-    for i in range(8):
-        x = 2 + i * 3
-        y = 2 if i % 2 == 0 else 4
-        rect(px, x, y, x + 2, y + 1, cob)
-        px[x + 1, y - 1] = cob
-        rect(px, x, y + 2, x + 2, y + 10, lat)
-        rect(px, x, y + 2, x, y + 10, lat_c)
-        rect(px, x + 2, y + 2, x + 2, y + 10, lat_o)
-    # el clip (chapa) abraza la base
-    rect(px, 1, 14, 25, 18, lat_o)
-    rect(px, 1, 14, 25, 14, lat_c)
-    rect(px, 3, 16, 23, 16, lat)
-    img = contorno(img)
-    img.save(ARMAS / "clip_garand.png")
-    return img
-
-
-def cargador_colt():
-    """Cargador del Colt (pavonado) con la bala de arriba asomando."""
-    img = Image.new("RGBA", (12, 34), (0, 0, 0, 0))
-    px = img.load()
-    m, mc, mo = mezcla(rgb("acero"), rgb("negro"), 0.3), rgb("acero"), mezcla(rgb("acero"), rgb("negro"), 0.65)
-    rect(px, 2, 4, 9, 30, m)
-    rect(px, 2, 4, 3, 30, mc)
-    rect(px, 9, 4, 9, 30, mo)
-    for y in (12, 18, 24):         # agujeros de inspección
-        px[6, y] = rgb("negro")[:3] + (255,)
-    rect(px, 1, 30, 10, 32, mo)    # base
-    rect(px, 4, 1, 7, 3, rgb("laton"))   # bala
-    rect(px, 5, 0, 6, 0, mezcla(rgb("oxido"), rgb("laton"), 0.35))
-    img = contorno(img)
-    img.save(ARMAS / "cargador_colt.png")
-    return img
-
-
 def arpillera():
     """Tela de saco (arpillera) repetible, con el color de la foto de los sacos."""
     t = 32
@@ -875,10 +780,7 @@ def _cara(nombre, piel, semilla):
 
 def texturas_soldados():
     SOLDADOS.mkdir(parents=True, exist_ok=True)
-    feld = (98, 104, 88, 255)                         # Feldgrau M40
-    _tela("tela_feldgrau", feld, mezcla(feld, rgb("crema"), 0.15), mezcla(feld, rgb("negro"), 0.35), 41, manchas=4)
-    stein = (86, 86, 78, 255)                         # pantalón gris piedra
-    _tela("tela_gris", stein, mezcla(stein, rgb("crema"), 0.12), mezcla(stein, rgb("negro"), 0.35), 42, manchas=6)
+    # (el alemán ya no usa texturas propias: es el modelo 3D de assets/soldados/aleman)
     od = (110, 104, 74, 255)                          # chaqueta M1941 (oliva claro)
     _tela("tela_m41", od, mezcla(od, rgb("crema"), 0.15), mezcla(od, rgb("negro"), 0.3), 43, manchas=5)
     hbt = (82, 88, 60, 255)                           # pantalón HBT oliva
@@ -887,7 +789,6 @@ def texturas_soldados():
     _tela("lona", web, mezcla(web, rgb("crema"), 0.2), mezcla(web, rgb("madera_osc"), 0.35), 45)
     cuero = (34, 30, 26, 255)
     _tela("cuero", cuero, (58, 50, 42, 255), (18, 16, 14, 255), 46)
-    _casco("casco_aleman", (80, 86, 74, 255))
     _casco("casco_us", (78, 82, 52, 255), red=True)
     _cara("cara_1", rgb("piel"), 51)
     _cara("cara_2", mezcla(rgb("piel"), rgb("crema"), 0.2), 52)
@@ -970,8 +871,6 @@ if __name__ == "__main__":
     icono_agachado()
     retrato_provisional()
     ARMAS.mkdir(parents=True, exist_ok=True)
-    tex_madera_arma(); tex_metal_arma(); tex_piel(); tex_manga()
-    clip_garand(); cargador_colt()
     arpillera()
     texturas_soldados()
     paleta_png()

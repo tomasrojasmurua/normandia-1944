@@ -71,6 +71,8 @@ func _buttons() -> Array:
 		["crouch", "AGACHAR", Vector2(w - 180, b - 20), 15.0],
 		["layout", "MODO: " + ("GARRA" if claw else "2 DEDOS"), Vector2(w / 2.0, 14), 12.0],
 	]
+	if _player and _player.pickup_near != null:
+		list.append(["use", "TOMAR", Vector2(w - 150, b - 82), 17.0])
 	if claw:
 		list.append(["fire_left", "FUEGO", Vector2(58, 64), 30.0])
 	return list
@@ -122,7 +124,10 @@ func _touch_down(index: int, pos: Vector2) -> void:
 		_pressed[btn] = true
 		_fingers[index] = {"role": "fire" if btn == "fire" else "button", "last": pos, "btn": btn}
 		match btn:
-			"fire", "fire_left": _player.weapons.pull_trigger()
+			"fire", "fire_left":
+				_player.touch_fire = true
+				_player.weapons.pull_trigger()
+			"use": _player.recoger()
 			"layout": _toggle_layout()
 			"aim": _player.touch_aim = not _player.touch_aim
 			"reload": _player.weapons.reload()
@@ -154,6 +159,8 @@ func _touch_up(index: int) -> void:
 		_player.touch_sprint = false
 	if f.has("btn"):
 		_pressed.erase(f["btn"])
+		if f["btn"] in ["fire", "fire_left"] and not _pressed.has("fire") and not _pressed.has("fire_left"):
+			_player.touch_fire = false
 	_fingers.erase(index)
 
 

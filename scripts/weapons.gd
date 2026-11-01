@@ -1,30 +1,15 @@
 extends Node3D
 class_name Weapons
-## Armas del jugador: M1 Garand (slot 1) y Colt M1911 (slot 2).
-## Va dentro de la cámara. Construye los modelos con cajas, dispara con un
-## rayo desde el centro de la pantalla y maneja munición, recarga, mira y retroceso.
-## Para ajustar el juego, cambia los números de WEAPONS (daño, munición, etc.).
+## Armas del jugador: dos ranuras (1 = arma principal, 2 = pistola). Empiezan
+## con el M1 Garand y el Colt M1911; se cambian al recoger armas del suelo.
+## Va dentro de la cámara. Dispara con un rayo desde el centro de la pantalla
+## (o un cohete, la bazuca) y maneja munición, recarga, mira y retroceso.
+## Los números de cada arma (daño, munición, etc.) están en armas.gd.
 
-const WEAPONS := [
-	{
-		"name": "M1 GARAND", "mag": 8, "reserve": 80,
-		"damage": 100.0,          # 100 = derriba al enemigo de un tiro en el cuerpo
-		"interval": 0.17,         # segundos mínimos entre disparos
-		"reload": 2.3,            # segundos de recarga
-		"spread_hip": 1.2,        # dispersión en grados sin apuntar
-		"spread_ads": 0.15,       # dispersión apuntando por la mira
-		"recoil": 2.6,            # grados que sube la vista al disparar
-		"sound": "rifle", "ads_fov": 42.0,
-		"hip": Vector3(0.16, -0.15, -0.26), "ads": Vector3(0, 0, -0.06),
-	},
-	{
-		"name": "COLT M1911", "mag": 7, "reserve": 28,
-		"damage": 45.0, "interval": 0.14, "reload": 1.6,
-		"spread_hip": 1.5, "spread_ads": 0.5, "recoil": 2.0,
-		"sound": "pistol", "ads_fov": 55.0,
-		"hip": Vector3(0.1, -0.06, -0.22), "ads": Vector3(0, 0, -0.26),
-	},
-]
+## Qué arma hay en cada ranura (ids de Armas.DATOS): 0 = principal, 1 = pistola.
+## Se cambian al recoger armas del suelo (equip()).
+var slots: Array[String] = ["garand", "colt"]
+var trigger_held := false   # gatillo apretado (para las automáticas); lo pone player.gd
 
 var ammo: Array[int] = []
 var reserve: Array[int] = []
@@ -37,9 +22,8 @@ var last_shot := {}        # datos del último disparo (para pruebas)
 # --- Arma dibujada en 2D (imágenes de ChatGPT pixeladas), como en los FPS de los 90.
 # assets/armas/arma_<id>_cadera.png = desde la cadera; arma_<id>_mira.png = por la
 # mira (opcional). Si un arma no tiene imagen, se usa su modelo 3D de cajas.
-const SPRITES := ["garand", "colt"]
-var sprite_cadera: Array[Texture2D] = []
-var sprite_mira: Array[Texture2D] = []
+var sprite_cadera: Array[Texture2D] = [null, null]
+var sprite_mira: Array[Texture2D] = [null, null]
 var sprite_granada: Texture2D = null
 var view_offset := Vector2.ZERO   # desplazamiento en píxeles de pantalla
 var view_angle := 0.0             # giro en grados
@@ -51,6 +35,7 @@ var _player: Node
 var _camera: Camera3D
 var _models: Array[Node3D] = []
 var _flashes: Array[Node3D] = []
+var _last_flash: Node3D
 var _cooldown := 0.0
 var _reload_t := -1.0      # >=0 mientras recarga
 var _switch_t := -1.0
@@ -68,20 +53,56 @@ var _empty_wait := -1.0
 func _ready() -> void:
 	_player = owner
 	_camera = get_parent() as Camera3D
-	for w in WEAPONS:
-		ammo.append(w["mag"])
-		reserve.append(w["reserve"])
-	_models.append(_build_garand())
-	_models.append(_build_colt())
-	for id in SPRITES:
-		sprite_cadera.append(_load_opt("res://assets/armas/arma_%s_cadera.png" % id))
-		sprite_mira.append(_load_opt("res://assets/armas/arma_%s_mira.png" % id))
+	for i in slots.size():
+		var d := Armas.datos(slots[i])
+		ammo.append(d["mag"])
+		reserve.append(d["reserve"])
+		_models.append(null)
+		_flashes.append(null)
+		_set_slot(i, slots[i])
 	sprite_granada = _load_opt("res://assets/armas/arma_granada.png")
 	_show(current)
 
 
 func def() -> Dictionary:
-	return WEAPONS[current]
+	return Armas.datos(slots[current])
+
+
+func id() -> String:
+	return slots[current]
+
+
+## Pone el arma "id" en la ranura i (modelo 3D e imágenes).
+func _set_slot(i: int, arma_id: String) -> void:
+	slots[i] = arma_id
+	if _models[i]:
+		_models[i].queue_free()
+	match arma_id:
+		"garand": _models[i] = _build_garand()
+		"colt": _models[i] = _build_colt()
+		_: _models[i] = _build_generic(arma_id)
+	_flashes[i] = _last_flash
+	_models[i].visible = i == current
+	sprite_cadera[i] = Armas.imagen("arma_%s_cadera" % arma_id)
+	sprite_mira[i] = Armas.imagen("arma_%s_mira" % arma_id)
+
+
+## Recoge un arma: va a su ranura (principal o pistola) y devuelve la que
+## había ahí, para dejarla en el suelo: {"id", "mag", "reserve"}.
+func equip(arma_id: String, mag: int, res: int) -> Dictionary:
+	var i: int = Armas.datos(arma_id)["ranura"]
+	var vieja := {"id": slots[i], "mag": ammo[i], "reserve": reserve[i]}
+	if i == current:
+		_reload_t = -1.0
+	_set_slot(i, arma_id)
+	ammo[i] = mag
+	reserve[i] = res
+	if i != current:
+		select(i)
+	else:
+		_switch_t = 0.0      # la animación de cambio, para que se note
+		_switch_to = i
+	return vieja
 
 
 func is_reloading() -> bool:
@@ -112,7 +133,7 @@ func reload() -> void:
 
 
 func select(index: int) -> void:
-	if index == current or index < 0 or index >= WEAPONS.size() or _switch_t >= 0.0 or _throw_t >= 0.0:
+	if index == current or index < 0 or index >= slots.size() or _switch_t >= 0.0 or _throw_t >= 0.0:
 		return
 	_reload_t = -1.0  # cambiar de arma cancela la recarga
 	_switch_t = 0.0
@@ -121,7 +142,7 @@ func select(index: int) -> void:
 
 
 func next_weapon() -> void:
-	select((current + 1) % WEAPONS.size())
+	select((current + 1) % slots.size())
 
 
 ## Animación de lanzar granada (el arma baja un momento).
@@ -138,6 +159,11 @@ func _process(delta: float) -> void:
 	_kick = maxf(_kick - delta * 7.0, 0.0)
 	_recover_recoil(delta)
 	var w := def()
+
+	# Automáticas: siguen disparando mientras el gatillo esté apretado
+	if trigger_held and w.get("auto", false) and _cooldown <= 0.0 and ammo[current] > 0 \
+			and not busy() and not _player.sprinting and not _player.dead:
+		_fire()
 
 	if _reload_t >= 0.0:
 		_reload_t += delta
@@ -228,12 +254,17 @@ func _animate(_delta: float, w: Dictionary) -> void:
 	flash_2d = maxf(flash_2d - _delta, 0.0)
 	# Modelo 3D solo al apuntar (o si no hay imagen para esta arma)
 	if current < _models.size():
-		_models[current].visible = uses_3d_view()
+		_models[current].visible = uses_3d_view() and not scoped()
 
 
 ## true si ahora se ve el modelo 3D; false si se dibuja la imagen 2D.
 func uses_3d_view() -> bool:
 	return sprite_cadera[current] == null
+
+
+## true mientras se mira por una mira telescópica (el HUD dibuja el círculo).
+func scoped() -> bool:
+	return def().get("scope", false) and ads_amount > 0.6
 
 
 ## 0..1 mientras se recarga; -1 si no.
@@ -255,9 +286,10 @@ func _fire() -> void:
 	ammo[current] -= 1
 	_cooldown = w["interval"]
 	_kick = 1.0
-	Game.play(w["sound"], 0.0, randf_range(0.94, 1.06))
-	shots_fired += 1
-	if current == 0 and ammo[current] == 0:
+	Game.play(w["sound"], 0.0, w.get("pitch", 1.0) * randf_range(0.94, 1.06))
+	if not w.get("rocket", false):
+		shots_fired += 1
+	if w.get("recarga", "") == "clip" and ammo[current] == 0:
 		clips_ejected += 1
 		get_tree().create_timer(0.12).timeout.connect(func() -> void: Game.play("ping", -3.0))
 
@@ -274,6 +306,11 @@ func _fire() -> void:
 	var rad := sqrt(randf()) * spread
 	var dir := (-b.z + b.x * cos(ang) * rad + b.y * sin(ang) * rad).normalized()
 	var from := _camera.global_position
+	if w.get("rocket", false):
+		Cohete.lanzar(get_tree().current_scene, from + dir * 0.6, dir, w["damage"])
+		_player.look(Vector2(0, -deg_to_rad(w["recoil"])))
+		_recoil_left += deg_to_rad(w["recoil"]) * RECOIL_RECOVERY
+		return
 	var q := PhysicsRayQueryParameters3D.create(from, from + dir * 250.0, 1 | 4)
 	q.exclude = [_player.get_rid()]
 	var hit := get_world_3d().direct_space_state.intersect_ray(q)
@@ -414,7 +451,7 @@ func _build_garand() -> Node3D:
 		Game.box(g, Vector3(0.014, 0.04, 0.016), Vector3(0.031, -0.075, -0.41 - k * 0.02), _skin)
 	Game.box(g, Vector3(0.095, 0.095, 0.03), Vector3(-0.045, -0.13, -0.37), _cuff, Vector3(0, -25, 0))
 	Game.box(g, Vector3(0.09, 0.09, 0.3), Vector3(-0.08, -0.15, -0.24), _sleeve, Vector3(0, -25, 0))
-	_flashes.append(_build_flash(g, Vector3(0, -0.035, -0.9)))
+	_last_flash = _build_flash(g, Vector3(0, -0.035, -0.9))
 	return g
 
 
@@ -444,8 +481,64 @@ func _build_colt() -> Node3D:
 	Game.box(c, Vector3(0.085, 0.085, 0.03), Vector3(-0.045, -0.125, 0.05), _cuff, Vector3(0, -15, 0))
 	Game.box(c, Vector3(0.08, 0.08, 0.25), Vector3(0.04, -0.13, 0.19), _sleeve, Vector3(0, 10, 0))
 	Game.box(c, Vector3(0.08, 0.08, 0.25), Vector3(-0.065, -0.13, 0.18), _sleeve, Vector3(0, -15, 0))
-	_flashes.append(_build_flash(c, Vector3(0, -0.02, -0.21)))
+	_last_flash = _build_flash(c, Vector3(0, -0.02, -0.21))
 	return c
+
+
+## Modelo 3D de respaldo para las armas que todavía no tienen imagen, armado
+## según su "tipo". La línea de mira queda en y = 0, x = 0, como en los otros.
+func _build_generic(arma_id: String) -> Node3D:
+	var d := Armas.datos(arma_id)
+	var tipo: String = d["tipo"]
+	var g := Node3D.new()
+	add_child(g)
+	var con_madera: bool = arma_id in ["carbine", "thompson", "bar", "springfield", "kar98k", "stg44"]
+	var culata := _wood if con_madera else _metal_dark
+	var boca := Vector3(0, -0.035, -0.8)
+	match tipo:
+		"pistola":
+			Game.box(g, Vector3(0.026, 0.028, 0.2), Vector3(0, -0.02, -0.1), _metal)
+			Game.box(g, Vector3(0.024, 0.02, 0.14), Vector3(0, -0.044, -0.08), _metal_dark)
+			Game.box(g, Vector3(0.03, 0.09, 0.04), Vector3(0, -0.09, 0.0), _wood_dark, Vector3(25 if arma_id == "luger" else 15, 0, 0))
+			Game.box(g, Vector3(0.004, 0.009, 0.006), Vector3(0, -0.003, -0.19), _metal_light)
+			Game.box(g, Vector3(0.06, 0.075, 0.07), Vector3(0.005, -0.1, 0.005), _skin)
+			Game.box(g, Vector3(0.08, 0.08, 0.25), Vector3(0.04, -0.13, 0.17), _sleeve, Vector3(0, 10, 0))
+			boca = Vector3(0, -0.02, -0.21)
+		"bazuca":
+			Game.box(g, Vector3(0.08, 0.08, 1.4), Vector3(0, -0.06, -0.35), _tex("manga", 0.3, Color(0.75, 0.8, 0.65)))
+			Game.box(g, Vector3(0.1, 0.1, 0.08), Vector3(0, -0.06, -1.05), _metal_dark)
+			Game.box(g, Vector3(0.1, 0.1, 0.08), Vector3(0, -0.06, 0.33), _metal_dark)
+			Game.box(g, Vector3(0.03, 0.03, 0.03), Vector3(0, -0.005, -0.4), _metal)     # mira
+			Game.box(g, Vector3(0.04, 0.12, 0.05), Vector3(0, -0.14, -0.2), _wood)      # empuñadura
+			Game.box(g, Vector3(0.06, 0.07, 0.08), Vector3(0, -0.17, -0.2), _skin)
+			Game.box(g, Vector3(0.09, 0.09, 0.3), Vector3(0.05, -0.2, -0.0), _sleeve)
+			boca = Vector3(0, -0.06, -1.1)
+		_:
+			var largo := 0.75 if tipo == "fusil" else (0.5 if tipo == "subfusil" else 0.9)
+			Game.box(g, Vector3(0.042, 0.046, 0.24), Vector3(0, -0.035, -0.14), _metal)        # cajón
+			Game.box(g, Vector3(0.006, 0.02, 0.006), Vector3(0, -0.006, -0.06), _metal_dark)   # alza
+			Game.box(g, Vector3(0.04, 0.045, largo * 0.55), Vector3(0, -0.06, -0.26 - largo * 0.27),
+				_wood if con_madera else _metal)                                                # guardamanos
+			Game.box(g, Vector3(0.02, 0.02, largo * 0.5), Vector3(0, -0.035, -0.26 - largo * 0.6), _metal)  # cañón
+			Game.box(g, Vector3(0.004, 0.022, 0.006), Vector3(0, -0.011, -0.24 - largo * 0.84), _metal_light)
+			Game.box(g, Vector3(0.048, 0.09, 0.32), Vector3(0, -0.1, 0.12), culata, Vector3(-8, 0, 0))   # culata
+			if tipo != "fusil" or arma_id == "carbine":   # cargador hacia abajo
+				var curvo := arma_id == "stg44"
+				Game.box(g, Vector3(0.026, 0.16 if arma_id != "mp40" else 0.2, 0.04),
+					Vector3(0, -0.15, -0.2), _metal_dark, Vector3(-18 if curvo else 0, 0, 0))
+			if arma_id == "springfield":   # mira telescópica
+				Game.box(g, Vector3(0.03, 0.03, 0.3), Vector3(0, 0.0, -0.15), _metal_dark)
+			if tipo == "ametralladora":    # bípode plegado y camisa del cañón
+				Game.box(g, Vector3(0.05, 0.05, 0.3), Vector3(0, -0.035, -0.6), _metal_dark)
+				Game.box(g, Vector3(0.012, 0.012, 0.3), Vector3(0.02, -0.07, -0.62), _metal)
+				Game.box(g, Vector3(0.012, 0.012, 0.3), Vector3(-0.02, -0.07, -0.62), _metal)
+			Game.box(g, Vector3(0.06, 0.06, 0.08), Vector3(0.01, -0.12, 0.02), _skin)           # manos
+			Game.box(g, Vector3(0.085, 0.085, 0.25), Vector3(0.04, -0.16, 0.19), _sleeve)
+			Game.box(g, Vector3(0.06, 0.05, 0.09), Vector3(0, -0.1, -0.38), _skin)
+			Game.box(g, Vector3(0.09, 0.09, 0.3), Vector3(-0.08, -0.15, -0.24), _sleeve, Vector3(0, -25, 0))
+			boca = Vector3(0, -0.035, -0.26 - largo * 1.0)
+	_last_flash = _build_flash(g, boca)
+	return g
 
 
 func _build_flash(parent: Node3D, pos: Vector3) -> Node3D:

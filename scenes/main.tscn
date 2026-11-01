@@ -78,30 +78,37 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.1, 6)
 [node name="Enemy1" type="CharacterBody3D" parent="Enemies"]
 transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, -6, 0, -37.2)
 script = ExtResource("5_enemy")
+arma = "kar98k"
 
 [node name="Enemy2" type="CharacterBody3D" parent="Enemies"]
 transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, -2.5, 0, -37.2)
 script = ExtResource("5_enemy")
+arma = "mp40"
 
 [node name="Enemy3" type="CharacterBody3D" parent="Enemies"]
 transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 3.5, 0, -37.2)
 script = ExtResource("5_enemy")
+arma = "stg44"
 
 [node name="Enemy4" type="CharacterBody3D" parent="Enemies"]
 transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 7, 0, -37.2)
 script = ExtResource("5_enemy")
+arma = "kar98k"
 
 [node name="Enemy5" type="CharacterBody3D" parent="Enemies"]
 transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 2, 3.45, -41)
 script = ExtResource("5_enemy")
+arma = "mg42"
 
 [node name="Enemy6" type="CharacterBody3D" parent="Enemies"]
 transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, -14, 0, -25.2)
 script = ExtResource("5_enemy")
+arma = "kar98k"
 
 [node name="Enemy7" type="CharacterBody3D" parent="Enemies"]
 transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 13, 0, -21.2)
 script = ExtResource("5_enemy")
+arma = "mp40"
 
 [node name="UI" type="CanvasLayer" parent="."]
 

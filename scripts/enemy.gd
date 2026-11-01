@@ -11,10 +11,13 @@ class_name Enemy
 @export var reaction_time := 1.4            # segundos que tarda en disparar tras verte
 @export var fire_interval := Vector2(3.0, 5.0)
 @export var accuracy := 1.0                 # multiplicador de puntería (1 = normal)
+## Arma que lleva (y que bota al morir). Vacío = al azar (Armas.BOTIN_ALEMAN).
+@export var arma := ""
 
 var dead := false
 
 var _model: Node3D
+var _rifle: Array[Node3D] = []
 var _muzzle: Node3D
 var _flash: Node3D
 var _player: Player
@@ -29,6 +32,10 @@ func _ready() -> void:
 	collision_layer = 4          # capa 3: enemigos
 	collision_mask = 1 | 2
 	_fire_timer = randf_range(fire_interval.x, fire_interval.y)
+	if arma == "":
+		var rng := RandomNumberGenerator.new()
+		rng.randomize()
+		arma = Armas.botin_aleman(rng)
 	_los_timer = randf() * 0.3
 	_build()
 
@@ -130,6 +137,13 @@ func _die(dir: Vector3, headshot: bool) -> void:
 	var tw := create_tween().set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 	tw.tween_property(_model, "rotation", Vector3(signf(local.z if absf(local.z) > 0.1 else 1.0) * PI / 2, 0, randf_range(-0.3, 0.3)), 0.45)
 	tw.parallel().tween_property(_model, "position:y", 0.1, 0.45)
+	# Suelta su arma al lado (con algo de munición)
+	for n in _rifle:
+		n.visible = false
+	var d := Armas.datos(arma)
+	var lado := global_basis.x * randf_range(-0.6, 0.6) + dir.normalized() * 0.5
+	ArmaSuelta.soltar(get_parent(), global_position + Vector3(lado.x, 0.05, lado.z), arma,
+		randi_range(int(d["mag"]) / 2, int(d["mag"])), int(d["mag"]))
 
 
 func _build() -> void:
@@ -156,8 +170,8 @@ func _build() -> void:
 	Game.box(m, Vector3(0.2, 0.22, 0.22), Vector3(0, 1.58, 0), skin)            # cabeza
 	Game.box(m, Vector3(0.27, 0.12, 0.29), Vector3(0, 1.73, 0), helmet)         # casco Stahlhelm
 	Game.box(m, Vector3(0.32, 0.08, 0.34), Vector3(0, 1.66, 0.02), helmet)
-	Game.box(m, Vector3(0.05, 0.07, 0.95), Vector3(0.08, 1.4, -0.45), wood)     # fusil Kar98k
-	Game.box(m, Vector3(0.025, 0.025, 0.25), Vector3(0.08, 1.42, -1.0), metal)
+	_rifle.append(Game.box(m, Vector3(0.05, 0.07, 0.95), Vector3(0.08, 1.4, -0.45), wood))     # fusil Kar98k
+	_rifle.append(Game.box(m, Vector3(0.025, 0.025, 0.25), Vector3(0.08, 1.42, -1.0), metal))
 	_muzzle = Node3D.new()
 	_muzzle.position = Vector3(0.08, 1.42, -1.14)
 	m.add_child(_muzzle)

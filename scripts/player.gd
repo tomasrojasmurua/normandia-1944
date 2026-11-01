@@ -34,6 +34,8 @@ var dead := false
 var crouching := false
 var sprinting := false
 var aiming := false
+var touch_fire := false              # el dedo está sobre FUEGO (para las automáticas)
+var pickup_near: Node = null         # arma en el suelo que se puede recoger (ArmaSuelta)
 var bob_time := 0.0
 var damage_flash := 0.0     # el HUD pinta la pantalla de rojo
 var hit_angle := 0.0        # dirección del último disparo recibido (HUD)
@@ -92,6 +94,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		weapons.next_weapon()
 	elif event.is_action_pressed("grenade"):
 		throw_grenade()
+	elif event.is_action_pressed("use"):
+		recoger()
 	elif event.is_action_pressed("crouch"):
 		toggle_crouch()
 
@@ -112,6 +116,13 @@ func look_touch(pixels: Vector2) -> void:
 		d *= aim_friction
 	weapons.player_looked(d.y)
 	look(d)
+
+
+## Recoge el arma del suelo que está más cerca (tecla E o botón TOMAR).
+func recoger() -> void:
+	if dead or pickup_near == null or not is_instance_valid(pickup_near) or weapons.busy():
+		return
+	pickup_near.tomar(self)
 
 
 func toggle_crouch() -> void:
@@ -212,6 +223,7 @@ func _physics_process(delta: float) -> void:
 
 	var captured := Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
 	aiming = touch_aim or (captured and Input.is_action_pressed("aim"))
+	weapons.trigger_held = touch_fire or (captured and Input.is_action_pressed("fire"))
 	var wants_sprint := Input.is_action_pressed("sprint") or touch_sprint
 	sprinting = wants_sprint and input.y < -0.3 and not aiming and is_on_floor() and not weapons.busy()
 	if sprinting and crouching:

@@ -68,6 +68,8 @@ func _draw() -> void:
 	_draw_viewmodel(w)
 	_draw_volando()
 	var top := s.y - BAR_H
+	if w.scoped() and not _player.dead:
+		_draw_scope((s / 2.0).floor(), top)
 	# El centro de la cámara es el centro de TODA la pantalla (la barra se dibuja
 	# encima de la vista 3D), y por ahí salen las balas.
 	var center := (s / 2.0).floor()
@@ -95,6 +97,12 @@ func _draw() -> void:
 	Estilo.texto(self, "NORMANDY 1944  V%s" % ProjectSettings.get_setting("application/config/version"),
 		Vector2(4, 10), Color(Estilo.CREMA, 0.35))
 
+	# Arma en el suelo para recoger
+	var suelta := _player.pickup_near as ArmaSuelta
+	if suelta and is_instance_valid(suelta) and not _player.dead:
+		var tecla := "[TOMAR]" if DisplayServer.is_touchscreen_available() else "[E]"
+		Estilo.texto_c(self, "%s RECOGER %s" % [tecla, suelta.nombre()], s.x / 2, top - 40, Estilo.AMBAR_CLARO)
+
 	# --- Barra inferior
 	Estilo.marco(self, Rect2(0, top, s.x, BAR_H), "lisa")
 	var right_w := 486.0
@@ -108,28 +116,19 @@ func _draw() -> void:
 
 
 # Arma en la mano dibujada como imagen (estilo Doom / Hamburger Hill).
-# Por arma (0 = Garand, 1 = Colt), en píxeles de la imagen:
-#   VM_POS   = dónde va la esquina superior izquierda en reposo (pantalla)
-#   VM_BOCA  = punta del cañón (para el fogonazo)
-#   VM_MIRA  = punto que llega al centro de la pantalla al apuntar
-# MIRA_POS = dónde va la imagen "por la mira" para que el punto de mira
-# quede justo en el centro de la pantalla (320, 180), por donde salen las balas.
-const VM_POS := [Vector2(96, 18), Vector2(70, 30)]
+# Los datos de cada arma (vm_pos, vm_boca, vm_mira, mira_pos, mira_poste,
+# recarga_punto, expulsion) están en armas.gd. mira_pos se ajusta para que el
+# punto de mira quede justo en el centro de la pantalla (320, 180), por donde
+# salen las balas. VM_PIVOT = punto de giro de la imagen (las manos).
 const VM_PIVOT := Vector2(420, 330)
-const VM_BOCA := [Vector2(251, 135), Vector2(326, 142)]
-const VM_MIRA := [Vector2(259, 119), Vector2(334, 136)]
-const MIRA_POS := [Vector2(-3, 34), Vector2(-3, 33)]
-const MIRA_POSTE := [Vector2(323, 146), Vector2(323, 147)]
 # Recarga dibujada: dónde entra el clip del Garand (cajón abierto) y dónde
 # entra el cargador del Colt (base de la empuñadura), en píxeles de la imagen.
-const RECARGA_PUNTO := [Vector2(338, 170), Vector2(409, 350)]
 const _CLIP := preload("res://assets/armas/pieza_clip_garand.png")      # foto de ChatGPT pixelada
-const _CARGADOR := preload("res://assets/armas/pieza_cargador_colt.png")
+const _CARGADOR := preload("res://assets/armas/pieza_cargador_colt.png")   # si el arma no tiene el suyo
 var _cargador_pantalla := Vector2.ZERO
 const _VAINA := preload("res://assets/armas/pieza_vaina.png")
 const _CLIP_VACIO := preload("res://assets/armas/pieza_clip_vacio.png")
 # Dónde salen las vainas (en la imagen de cada arma): la ventana del cajón / corredera
-const EXPULSION := [Vector2(338, 168), Vector2(371, 165)]
 var _volando: Array = []    # piezas en el aire: [textura, pos, vel, ángulo, giro, vida, escala]
 var _shots_vistos := -1
 var _clips_vistos := -1
@@ -140,12 +139,12 @@ func _expulsar(w: Weapons, delta: float) -> void:
 	if _shots_vistos < 0:
 		_shots_vistos = w.shots_fired
 		_clips_vistos = w.clips_ejected
-	var origen: Vector2 = VM_POS[w.current] + EXPULSION[w.current] + w.view_offset
-	if w.ads_amount > 0.5:
+	var origen: Vector2 = _v(w, "vm_pos") + _v(w, "expulsion") + w.view_offset
+	if w.ads_amount > 0.5 or w.uses_3d_view():
 		origen = Vector2(size.x / 2.0 + 40, size.y / 2.0 + 30)
 	while _shots_vistos < w.shots_fired:
 		_shots_vistos += 1
-		var esc := 1.0 if w.current == 0 else 0.65
+		var esc := 0.65 if w.def()["tipo"] in ["pistola", "subfusil"] else 1.0
 		_volando.append([_VAINA, origen, Vector2(randf_range(70, 120), randf_range(-190, -140)),
 			randf_range(-0.3, 0.3), randf_range(-14, -8), 0.9, esc])
 	while _clips_vistos < w.clips_ejected:
@@ -169,6 +168,11 @@ func _draw_volando() -> void:
 const GRANADA_POS := Vector2(120, 40)
 
 
+## Dato de imagen del arma actual (ver armas.gd); Vector2.ZERO si no lo tiene.
+func _v(w: Weapons, campo: String) -> Vector2:
+	return w.def().get(campo, Vector2.ZERO)
+
+
 func _draw_viewmodel(w: Weapons) -> void:
 	if w.uses_3d_view() or _player.dead:
 		return
@@ -184,18 +188,18 @@ func _draw_viewmodel(w: Weapons) -> void:
 	var mira: Texture2D = w.sprite_mira[w.current]
 	if mira and a >= 0.5:
 		# Por la mira: la imagen sube desde abajo y queda fija con el poste al centro
-		var pos: Vector2 = MIRA_POS[w.current] + Vector2(0, roundf((1.0 - a) * 2.0 * 120.0)) + off * 0.5
+		var pos: Vector2 = _v(w, "mira_pos") + Vector2(0, roundf((1.0 - a) * 2.0 * 120.0)) + off * 0.5
 		pos += centro - Vector2(320, 180)
 		draw_texture(mira, pos.round())
 		if w.flash_2d > 0.0:
-			_draw_flash_2d(pos + MIRA_POSTE[w.current] + Vector2(0, -3), 0.6)
+			_draw_flash_2d(pos + _v(w, "mira_poste") + Vector2(0, -3), 0.6)
 		return
 	# Desde la cadera; al apuntar se desliza hasta que su punto de mira llega al centro
 	var t := smoothstep(0.0, 1.0, a)
-	var hacia: Vector2 = centro - (VM_POS[w.current] + VM_MIRA[w.current])
+	var hacia: Vector2 = centro - (_v(w, "vm_pos") + _v(w, "vm_mira"))
 	var desliz := hacia * (t * 0.6 if mira else t)
 	var giro := deg_to_rad(w.view_angle) * (1.0 - t)
-	var o: Vector2 = VM_POS[w.current] - VM_PIVOT
+	var o: Vector2 = _v(w, "vm_pos") - VM_PIVOT
 	# Recarga: el arma se mueve y aparece el clip o el cargador
 	var rp := w.reload_progress()
 	var pieza := Vector4.ZERO   # x, y = posición de la pieza (imagen); z = 1 si se ve; w = 1 si va detrás
@@ -203,8 +207,8 @@ func _draw_viewmodel(w: Weapons) -> void:
 		var baja := smoothstep(0.0, 0.18, rp) * (1.0 - smoothstep(0.8, 1.0, rp))
 		var k := smoothstep(0.25, 0.6, rp)      # la pieza llega a su lugar
 		var golpe := 3.0 if rp > 0.6 and rp < 0.66 else 0.0
-		var punto: Vector2 = o + RECARGA_PUNTO[w.current]
-		if w.current == 0:   # Garand: baja e inclina a la izquierda; el clip entra desde arriba
+		var punto: Vector2 = o + _v(w, "recarga_punto")
+		if w.def().get("recarga", "") == "clip":   # Garand: baja e inclina a la izquierda; el clip entra desde arriba
 			off += Vector2(-30, 60 + golpe) * baja
 			giro -= deg_to_rad(14.0) * baja
 			if rp > 0.2 and rp < 0.64:
@@ -225,9 +229,10 @@ func _draw_viewmodel(w: Weapons) -> void:
 		draw_texture(_CLIP, Vector2(pieza.x, pieza.y).round())
 	if pieza.z > 0.0 and pieza.w > 0.0:   # cargador del Colt subiendo hacia la empuñadura, al doble
 		draw_set_transform(_cargador_pantalla, deg_to_rad(12.0), Vector2.ONE)
-		draw_texture(_CARGADOR, Vector2.ZERO)
+		var cargador := Armas.imagen("pieza_cargador_" + w.id())
+		draw_texture(cargador if cargador else _CARGADOR, Vector2.ZERO)
 	if w.flash_2d > 0.0:
-		_draw_flash_2d(o + VM_BOCA[w.current], 1.0)
+		_draw_flash_2d(o + _v(w, "vm_boca"), 1.0)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
@@ -240,6 +245,18 @@ func _draw_flash_2d(c: Vector2, escala: float) -> void:
 		draw_line(c, c + d * largo * (1.0 if i % 2 == 0 else 0.6), Color(1.0, 0.75, 0.25), 3.0)
 	draw_circle(c, 5.0 * escala, Color(1.0, 0.85, 0.4))
 	draw_circle(c, 2.5 * escala, Color(1.0, 1.0, 0.85))
+
+
+## Mira telescópica (Springfield): todo negro salvo un círculo, con retícula.
+func _draw_scope(c: Vector2, top: float) -> void:
+	var r := minf(c.y, top / 2.0) * 0.95
+	draw_arc(c, r + 300.0, 0, TAU, 72, Estilo.NEGRO, 600.0)
+	draw_arc(c, r, 0, TAU, 72, Color(0.02, 0.02, 0.02), 3.0)
+	var neg := Color(0.02, 0.02, 0.02)
+	draw_line(c - Vector2(r, 0), c - Vector2(6, 0), neg, 1.0)
+	draw_line(c + Vector2(6, 0), c + Vector2(r, 0), neg, 1.0)
+	draw_rect(Rect2(c.x - 1, c.y + 2, 3, r - 2), neg)          # poste grueso desde abajo
+	draw_line(c - Vector2(0, r), c - Vector2(0, 6), neg, 1.0)
 
 
 func _draw_crosshair(c: Vector2, spread_deg: float) -> void:
@@ -367,7 +384,7 @@ func _draw_ammo(r: Rect2) -> void:
 	if w.is_reloading():
 		if int(Time.get_ticks_msec() / 250) % 2 == 0:
 			Estilo.texto_c(self, "RECARGANDO", inner.get_center().x, inner.end.y - 3, Estilo.CREMA)
-	elif w.current == 0 and mag > 0:
+	elif w.def().get("recarga", "") == "clip" and mag > 0:
 		# Balas del clip del Garand
 		for i in mag:
 			draw_texture(Estilo.ICONO_BALA, Vector2(roundf(inner.get_center().x - mag * 2.5) + i * 5, by + 1))
@@ -386,8 +403,13 @@ func _draw_slots(r: Rect2) -> void:
 		var selected := i == w.current
 		Estilo.texto(self, str(i + 1), inner.position + Vector2(3, 10),
 			Estilo.AMBAR if selected else Estilo.OLIVA_4)
-		var tex := Estilo.ICONO_GARAND if i == 0 else Estilo.ICONO_COLT
+		var tex := Armas.imagen("perfil_" + w.slots[i])
 		var tinte := Color.WHITE if selected else Color(0.45, 0.5, 0.42)
-		Estilo.icono(self, tex, inner.get_center() + Vector2(1, 1), tinte)
+		if tex:
+			Estilo.icono(self, tex, inner.get_center() + Vector2(1, 1), tinte)
+		else:   # sin foto todavía: el nombre del arma
+			var nombre: String = Armas.datos(w.slots[i])["name"]
+			Estilo.texto_c(self, nombre.split(" ")[0], inner.get_center().x + 3, inner.get_center().y + 4,
+				Estilo.CREMA if selected else Estilo.OLIVA_4)
 		if selected:
 			draw_rect(Rect2(inner.position.x + 3, inner.end.y - 4, inner.size.x - 6, 2), Estilo.AMBAR)

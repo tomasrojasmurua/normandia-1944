@@ -77,6 +77,13 @@ func _ready() -> void:
 
 	_add_bluffs()
 
+	# Cajas de suministros con armas aliadas (para probarlas) y una Luger junto al búnker
+	var cajas := {"thompson": Vector3(4, 0, 2), "bar": Vector3(-5, 0, -1), "carbine": Vector3(-12, 0, -8),
+		"springfield": Vector3(10, 0, -12), "bazooka": Vector3(-8, 0, -18)}
+	for arma_id in cajas:
+		_add_crate(cajas[arma_id], arma_id, rng)
+	ArmaSuelta.soltar(self, Vector3(8.4, 0.05, -39.0), "luger", -1, -1)
+
 
 ## Suelo (arena mojada → seca → guijarros → pasto) y mar con espuma.
 func _dress_ground_and_sea() -> void:
@@ -98,6 +105,16 @@ func _dress_ground_and_sea() -> void:
 
 
 ## Acantilado cubierto de pasto detrás del búnker (como los de Omaha).
+## Caja de madera de suministros con un arma encima.
+func _add_crate(pos: Vector3, arma_id: String, rng: RandomNumberGenerator) -> void:
+	var giro := rng.randf_range(-30.0, 30.0)
+	_add_box(pos + Vector3(0, 0.27, 0), Vector3(1.1, 0.54, 0.55), _wood, Vector3(0, giro, 0))
+	Game.box(self, Vector3(1.12, 0.05, 0.57), pos + Vector3(0, 0.12, 0), _dark, Vector3(0, giro, 0))   # zunchos
+	Game.box(self, Vector3(1.12, 0.05, 0.57), pos + Vector3(0, 0.42, 0), _dark, Vector3(0, giro, 0))
+	var a := ArmaSuelta.soltar(self, pos + Vector3(0, 0.55, 0), arma_id, -1, -1)
+	a.rotation.y = deg_to_rad(giro)
+
+
 func _add_bluffs() -> void:
 	var slope := 30.0
 	var h := 14.0

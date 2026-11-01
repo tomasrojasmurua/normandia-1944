@@ -77,6 +77,7 @@ def textura(origen, destino):
 # Armas en primera persona: imagen de 1536x1024 con fondo verde puro.
 # ESCALA_ARMA = cuánto se achica para el juego (la pantalla mide 640x360).
 ESCALA_ARMA = 0.36
+ESCALA_MIRA = 0.42   # las vistas por la mira van un poco más grandes
 ARMAS_SPRITES = RAIZ / "assets" / "armas"
 
 
@@ -98,7 +99,8 @@ def quitar_verde(img):
 
 def arma(origen, destino):
     img = quitar_verde(Image.open(origen))
-    w, h = int(img.width * ESCALA_ARMA), int(img.height * ESCALA_ARMA)
+    escala = ESCALA_MIRA if "_mira" in origen.stem else ESCALA_ARMA
+    w, h = int(img.width * escala), int(img.height * escala)
     # Reducir color y alfa por separado; el alfa queda todo o nada (bordes de píxel nítidos)
     big = img.resize((w * 4, h * 4), Image.LANCZOS)
     small = big.resize((w, h), Image.BOX)

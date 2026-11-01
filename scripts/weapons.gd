@@ -34,11 +34,13 @@ var hit_marker := 0.0      # >0 cuando acabas de acertar (el HUD dibuja una X)
 var ads_amount := 0.0      # 0 = cadera, 1 = apuntando por la mira
 var last_shot := {}        # datos del último disparo (para pruebas)
 
-# --- Arma dibujada en 2D (imagen de ChatGPT pixelada), como en los FPS de los 90.
-# Si existe assets/armas/arma_<id>_cadera.png se muestra esa imagen en vez del
-# modelo 3D mientras NO se apunta; al apuntar se ve el modelo 3D con la mira.
+# --- Arma dibujada en 2D (imágenes de ChatGPT pixeladas), como en los FPS de los 90.
+# assets/armas/arma_<id>_cadera.png = desde la cadera; arma_<id>_mira.png = por la
+# mira (opcional). Si un arma no tiene imagen, se usa su modelo 3D de cajas.
 const SPRITES := ["garand", "colt"]
 var sprite_cadera: Array[Texture2D] = []
+var sprite_mira: Array[Texture2D] = []
+var sprite_granada: Texture2D = null
 var view_offset := Vector2.ZERO   # desplazamiento en píxeles de pantalla
 var view_angle := 0.0             # giro en grados
 var flash_2d := 0.0               # >0 mientras se ve el fogonazo 2D
@@ -70,8 +72,9 @@ func _ready() -> void:
 	_models.append(_build_garand())
 	_models.append(_build_colt())
 	for id in SPRITES:
-		var path := "res://assets/armas/arma_%s_cadera.png" % id
-		sprite_cadera.append(load(path) if ResourceLoader.exists(path) else null)
+		sprite_cadera.append(_load_opt("res://assets/armas/arma_%s_cadera.png" % id))
+		sprite_mira.append(_load_opt("res://assets/armas/arma_%s_mira.png" % id))
+	sprite_granada = _load_opt("res://assets/armas/arma_granada.png")
 	_show(current)
 
 
@@ -213,9 +216,11 @@ func _animate(_delta: float, w: Dictionary) -> void:
 	position = pos
 	rotation_degrees = rot
 
-	# Lo mismo traducido a la imagen 2D (píxeles de pantalla y grados)
-	var d := pos - hip
-	view_offset = Vector2(d.x * 900.0 - (rot.y - 3.0) * 2.0, -d.y * 900.0) + Vector2(d.z, d.z) * 400.0
+	# Lo mismo traducido a la imagen 2D (píxeles de pantalla y grados), sin el
+	# paso de cadera a mira, que la imagen hace por su cuenta (hud.gd)
+	var d := pos - hip.lerp(ads, t)
+	view_offset = Vector2(d.x * 900.0 - (rot.y - lerpf(3.0, 0.0, t)) * 2.0, -d.y * 900.0) \
+		+ Vector2(d.z, d.z) * 400.0
 	view_angle = rot.z - rot.x * 0.5
 	flash_2d = maxf(flash_2d - _delta, 0.0)
 	# Modelo 3D solo al apuntar (o si no hay imagen para esta arma)
@@ -225,7 +230,16 @@ func _animate(_delta: float, w: Dictionary) -> void:
 
 ## true si ahora se ve el modelo 3D; false si se dibuja la imagen 2D.
 func uses_3d_view() -> bool:
-	return sprite_cadera[current] == null or ads_amount >= 0.5
+	return sprite_cadera[current] == null
+
+
+## 0..1 mientras se lanza una granada; -1 si no.
+func throw_progress() -> float:
+	return _throw_t / 0.6 if _throw_t >= 0.0 else -1.0
+
+
+static func _load_opt(path: String) -> Texture2D:
+	return load(path) if ResourceLoader.exists(path) else null
 
 
 func _fire() -> void:

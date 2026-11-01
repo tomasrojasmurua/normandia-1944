@@ -105,34 +105,64 @@ func _draw() -> void:
 
 
 # Arma en la mano dibujada como imagen (estilo Doom / Hamburger Hill).
-# VM_POS = esquina superior izquierda de la imagen en reposo; VM_PIVOT = punto
-# de giro (las manos); VM_BOCA = punta del cañón dentro de la imagen.
-const VM_POS := [Vector2(96, 18), Vector2(96, 18)]
+# Por arma (0 = Garand, 1 = Colt), en píxeles de la imagen:
+#   VM_POS   = dónde va la esquina superior izquierda en reposo (pantalla)
+#   VM_BOCA  = punta del cañón (para el fogonazo)
+#   VM_MIRA  = punto que llega al centro de la pantalla al apuntar
+# MIRA_POS = dónde va la imagen "por la mira" para que el punto de mira
+# quede justo en el centro de la pantalla (320, 180), por donde salen las balas.
+const VM_POS := [Vector2(96, 18), Vector2(70, 30)]
 const VM_PIVOT := Vector2(420, 330)
-const VM_BOCA := [Vector2(251, 135), Vector2(0, 0)]
+const VM_BOCA := [Vector2(251, 135), Vector2(326, 142)]
+const VM_MIRA := [Vector2(259, 119), Vector2(334, 136)]
+const MIRA_POS := [Vector2(-3, 34), Vector2.ZERO]
+const MIRA_POSTE := [Vector2(323, 146), Vector2.ZERO]
+const GRANADA_POS := Vector2(120, 40)
 
 
 func _draw_viewmodel(w: Weapons) -> void:
 	if w.uses_3d_view() or _player.dead:
 		return
-	var tex: Texture2D = w.sprite_cadera[w.current]
-	draw_set_transform(VM_PIVOT + w.view_offset.round(), deg_to_rad(w.view_angle), Vector2.ONE)
+	var centro := (size / 2.0).floor()
+	var off := w.view_offset.round()
+	# Granada en la mano mientras se lanza: sube y vuelve a bajar
+	var tp := w.throw_progress()
+	if tp >= 0.0 and w.sprite_granada:
+		var sube := sin(PI * clampf(tp * 1.4, 0.0, 1.0))
+		draw_texture(w.sprite_granada, GRANADA_POS + Vector2(-40.0 * sube, 230.0 * (1.0 - sube)).round())
+		return
+	var a := w.ads_amount
+	var mira: Texture2D = w.sprite_mira[w.current]
+	if mira and a >= 0.5:
+		# Por la mira: la imagen sube desde abajo y queda fija con el poste al centro
+		var pos: Vector2 = MIRA_POS[w.current] + Vector2(0, roundf((1.0 - a) * 2.0 * 120.0)) + off * 0.5
+		pos += centro - Vector2(320, 180)
+		draw_texture(mira, pos.round())
+		if w.flash_2d > 0.0:
+			_draw_flash_2d(pos + MIRA_POSTE[w.current] + Vector2(0, -3), 0.6)
+		return
+	# Desde la cadera; al apuntar se desliza hasta que su punto de mira llega al centro
+	var t := smoothstep(0.0, 1.0, a)
+	var hacia: Vector2 = centro - (VM_POS[w.current] + VM_MIRA[w.current])
+	var desliz := hacia * (t * 0.6 if mira else t)
+	var giro := deg_to_rad(w.view_angle) * (1.0 - t)
+	draw_set_transform((VM_PIVOT + off + desliz).round(), giro, Vector2.ONE)
 	var o: Vector2 = VM_POS[w.current] - VM_PIVOT
-	draw_texture(tex, o.round())
+	draw_texture(w.sprite_cadera[w.current], o.round())
 	if w.flash_2d > 0.0:
-		_draw_flash_2d(o + VM_BOCA[w.current])
+		_draw_flash_2d(o + VM_BOCA[w.current], 1.0)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
 ## Fogonazo de píxeles: estrella amarilla con centro blanco, al azar cada vez.
-func _draw_flash_2d(c: Vector2) -> void:
-	var largo := randf_range(14.0, 22.0)
+func _draw_flash_2d(c: Vector2, escala: float) -> void:
+	var largo := randf_range(14.0, 22.0) * escala
 	for i in 5:
 		var a := -PI * 0.85 + i * 0.35 + randf_range(-0.1, 0.1)
 		var d := Vector2(cos(a), sin(a))
 		draw_line(c, c + d * largo * (1.0 if i % 2 == 0 else 0.6), Color(1.0, 0.75, 0.25), 3.0)
-	draw_circle(c, 5.0, Color(1.0, 0.85, 0.4))
-	draw_circle(c, 2.5, Color(1.0, 1.0, 0.85))
+	draw_circle(c, 5.0 * escala, Color(1.0, 0.85, 0.4))
+	draw_circle(c, 2.5 * escala, Color(1.0, 1.0, 0.85))
 
 
 func _draw_crosshair(c: Vector2, spread_deg: float) -> void:

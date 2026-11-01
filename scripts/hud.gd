@@ -24,6 +24,7 @@ func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	Game.message.connect(_on_message)
 	_cargar_retratos()
+	Game.warmup.call_deferred()
 
 
 func _cargar_retratos() -> void:
@@ -81,6 +82,10 @@ func _draw() -> void:
 		Estilo.texto_c(self, "HAS CAIDO", s.x / 2, top / 2 + 2, Estilo.ROJO, Estilo.TAM_GRANDE)
 		Estilo.texto_c(self, "REINICIANDO...", s.x / 2, top / 2 + 18, Estilo.CREMA)
 
+	if Game.warming:   # pantalla de espera mientras se preparan los efectos
+		draw_rect(Rect2(Vector2.ZERO, s), Estilo.NEGRO)
+		Estilo.texto_c(self, "PREPARANDO LA PLAYA...", s.x / 2, s.y / 2, Estilo.AMBAR)
+		return
 	Estilo.texto(self, "NORMANDY 1944  V%s" % ProjectSettings.get_setting("application/config/version"),
 		Vector2(4, 10), Color(Estilo.CREMA, 0.35))
 

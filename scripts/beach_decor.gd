@@ -41,6 +41,7 @@ func _ready() -> void:
 	_grass = textured("pasto_duna", 2.5, Color(0.85, 0.85, 0.8))
 	_wood = textured("madera", 2.0)
 	_dress_ground_and_sea()
+	Game.sea_from_z = 10.0   # el mar empieza en z = 10 (igual que z_orilla en los shaders)
 
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed_value

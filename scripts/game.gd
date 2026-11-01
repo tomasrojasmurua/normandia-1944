@@ -21,6 +21,12 @@ var _next_player := 0
 var _rng := RandomNumberGenerator.new()
 var _mat_cache := {}
 
+## Desde qué Z empieza el agua (lo fija el escenario). Los impactos ahí salpican.
+var sea_from_z := INF
+## true mientras se "precalientan" los efectos al empezar (el HUD tapa la pantalla).
+var warming := false
+var _warmed := false
+
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -151,7 +157,38 @@ func blood(pos: Vector3) -> void:
 
 
 func dust(pos: Vector3, normal := Vector3.UP) -> void:
+	if pos.z > sea_from_z and pos.y < 0.3:
+		splash(pos)
+		return
 	_burst(pos, Color(0.7, 0.64, 0.5), 8, 2.0, 0.5, 0.05, normal, 0.6)
+
+
+## Salpicadura de agua: columna blanca que sube y cae.
+func splash(pos: Vector3) -> void:
+	pos.y = maxf(pos.y, 0.05)
+	_burst(pos, Color(0.85, 0.88, 0.86), 12, 4.0, 0.7, 0.06, Vector3.UP, 1.0, 12.0)
+	_burst(pos, Color(0.6, 0.66, 0.64), 6, 1.5, 0.5, 0.09, Vector3.UP, 0.8, 40.0)
+
+
+## Precalentar: los navegadores compilan cada efecto la primera vez que se
+## dibuja, y eso traba el juego un momento. Aquí se dibuja uno de cada uno
+## frente a la cámara al empezar, mientras el HUD muestra "PREPARANDO".
+func warmup() -> void:
+	var cam := get_viewport().get_camera_3d()
+	if cam == null or _warmed:
+		return
+	_warmed = true
+	warming = true
+	var p := cam.global_position - cam.global_basis.z * 3.0
+	blood(p)
+	_burst(p, Color(0.7, 0.64, 0.5), 8, 2.0, 0.5, 0.05, Vector3.UP, 0.6)
+	splash(p)
+	tracer(p + cam.global_basis.x, p - cam.global_basis.x)
+	_explosion_fx(p)
+	for i in 4:
+		await get_tree().process_frame
+	await get_tree().create_timer(0.35).timeout
+	warming = false
 
 
 func tracer(from: Vector3, to: Vector3, color := Color(1.0, 0.75, 0.3)) -> void:
@@ -181,7 +218,24 @@ func tracer(from: Vector3, to: Vector3, color := Color(1.0, 0.75, 0.3)) -> void:
 ## Explosión de granada: efecto visual, sonido y daño en un radio.
 func explode(pos: Vector3, radius: float, damage: float) -> void:
 	play_at("explosion", pos, 6.0)
-	# Bola de fuego
+	_explosion_fx(pos)
+	for e in get_tree().get_nodes_in_group("enemies"):
+		var chest: Vector3 = e.global_position + Vector3(0, 1.0, 0)
+		var d := pos.distance_to(chest)
+		if d < radius and _clear_path(pos, chest):
+			e.hit(damage * (1.0 - d / radius), false, chest, (chest - pos).normalized())
+	var player := get_tree().get_first_node_in_group("player")
+	if player:
+		var center: Vector3 = player.global_position + Vector3(0, 1.0, 0)
+		var d := pos.distance_to(center)
+		if d < radius and _clear_path(pos, center):
+			player.take_damage(damage * 0.8 * (1.0 - d / radius), pos)
+		if d < 30.0:
+			player.shake(1.2 * (1.0 - d / 30.0))
+
+
+## Lo visual de la explosión: bola de fuego, humo y tierra (o agua).
+func _explosion_fx(pos: Vector3) -> void:
 	var fire := MeshInstance3D.new()
 	var sphere := SphereMesh.new()
 	sphere.radius = 1.0
@@ -201,23 +255,11 @@ func explode(pos: Vector3, radius: float, damage: float) -> void:
 	tw.tween_property(fire, "scale", Vector3.ONE * 2.2, 0.12)
 	tw.tween_property(mat, "albedo_color", Color(0.3, 0.28, 0.25, 0.0), 0.3)
 	tw.tween_callback(fire.queue_free)
-	# Humo y tierra
 	_burst(pos, Color(0.32, 0.31, 0.29), 18, 2.5, 1.6, 0.45, Vector3.UP, -0.15)
-	_burst(pos, Color(0.42, 0.36, 0.26), 26, 7.0, 1.0, 0.12, Vector3.UP, 1.5)
-
-	for e in get_tree().get_nodes_in_group("enemies"):
-		var chest: Vector3 = e.global_position + Vector3(0, 1.0, 0)
-		var d := pos.distance_to(chest)
-		if d < radius and _clear_path(pos, chest):
-			e.hit(damage * (1.0 - d / radius), false, chest, (chest - pos).normalized())
-	var player := get_tree().get_first_node_in_group("player")
-	if player:
-		var center: Vector3 = player.global_position + Vector3(0, 1.0, 0)
-		var d := pos.distance_to(center)
-		if d < radius and _clear_path(pos, center):
-			player.take_damage(damage * 0.8 * (1.0 - d / radius), pos)
-		if d < 30.0:
-			player.shake(1.2 * (1.0 - d / 30.0))
+	if pos.z > sea_from_z and pos.y < 0.5:
+		_burst(pos, Color(0.85, 0.88, 0.86), 30, 9.0, 1.2, 0.12, Vector3.UP, 1.2, 15.0)
+	else:
+		_burst(pos, Color(0.42, 0.36, 0.26), 26, 7.0, 1.0, 0.12, Vector3.UP, 1.5)
 
 
 func _clear_path(from: Vector3, to: Vector3) -> bool:
@@ -227,7 +269,7 @@ func _clear_path(from: Vector3, to: Vector3) -> bool:
 
 
 func _burst(pos: Vector3, color: Color, amount: int, speed: float, life: float,
-		size: float, dir: Vector3, gravity_scale: float) -> void:
+		size: float, dir: Vector3, gravity_scale: float, spread := 55.0) -> void:
 	var p := CPUParticles3D.new()
 	p.one_shot = true
 	p.emitting = false
@@ -240,7 +282,7 @@ func _burst(pos: Vector3, color: Color, amount: int, speed: float, life: float,
 	box.material = _unshaded(color)
 	p.mesh = box
 	p.direction = dir
-	p.spread = 55.0
+	p.spread = spread
 	p.initial_velocity_min = speed * 0.4
 	p.initial_velocity_max = speed
 	p.gravity = Vector3(0, -9.8 * gravity_scale, 0)

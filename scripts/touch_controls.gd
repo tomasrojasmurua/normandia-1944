@@ -5,7 +5,8 @@ extends Control
 ## - Mitad derecha: deslizar el dedo para mirar.
 ## - Botones a la derecha: FUEGO (puedes arrastrar el dedo desde él para
 ##   seguir apuntando), MIRA (activa/desactiva), RECARGA, GRANADA,
-##   SALTAR y AGACHAR.
+##   SALTAR y AGACHAR (los chicos se ven con ícono:
+##   balas = recarga, granada, flecha arriba = saltar, flecha abajo = agachar).
 ## - Tocar las armas 1 / 2 de la barra inferior cambia de arma.
 ## - Botón de arriba al centro: cambia entre modo "2 DEDOS" y modo "GARRA".
 ##   GARRA agrega un segundo FUEGO arriba a la izquierda para el índice
@@ -17,6 +18,12 @@ extends Control
 
 const HUD_H := 52
 const SETTINGS_PATH := "user://ajustes.cfg"
+const _BOTON_G := preload("res://assets/ui/boton_g.png")
+const _BOTON_G_ON := preload("res://assets/ui/boton_g_on.png")
+const _BOTON_M := preload("res://assets/ui/boton_m.png")
+const _BOTON_M_ON := preload("res://assets/ui/boton_m_on.png")
+const _BOTON_C := preload("res://assets/ui/boton_c.png")
+const _BOTON_C_ON := preload("res://assets/ui/boton_c_on.png")
 
 var claw := false           # modo GARRA activado
 
@@ -26,14 +33,12 @@ var _fingers := {}          # índice del dedo -> {"role": ..., "last": Vector2,
 var _move_pos := Vector2.ZERO
 var _move_origin := Vector2.ZERO
 var _pressed := {}          # botón -> true mientras se mantiene presionado
-var _font: Font
 
 
 func _ready() -> void:
 	_player = get_node_or_null(player_path) as Player
 	visible = DisplayServer.is_touchscreen_available()
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_font = ThemeDB.fallback_font
 	var cfg := ConfigFile.new()
 	if cfg.load(SETTINGS_PATH) == OK:
 		claw = cfg.get_value("controles", "garra", false)
@@ -83,7 +88,7 @@ func _button_at(pos: Vector2) -> String:
 
 func _pill(btn: Array) -> Rect2:
 	var c: Vector2 = btn[2]
-	return Rect2(c - Vector2(40, 9), Vector2(80, 18))
+	return Rect2(c - Vector2(52, 9), Vector2(104, 18))
 
 
 func _input(event: InputEvent) -> void:
@@ -167,25 +172,39 @@ func _draw() -> void:
 		draw_circle(_move_origin, stick_radius, Color(1, 1, 1, 0.12))
 		draw_arc(_move_origin, stick_radius, 0, TAU, 24, ring, 1.0)
 		draw_circle(knob, stick_radius * 0.4, Color(1, 1, 1, 0.4))
-	# Botones
+	# Botones (discos de chapa; los chicos llevan ícono en vez de texto)
 	for btn in _buttons():
 		var name: String = btn[0]
-		var c: Vector2 = btn[2]
+		var c: Vector2 = (btn[2] as Vector2).round()
 		var r: float = btn[3]
 		var active: bool = _pressed.has(name) or (name == "aim" and _player.touch_aim) \
 			or (name == "crouch" and _player.crouching)
-		var fill := Color(0.98, 0.66, 0.16, 0.45) if active else Color(0.1, 0.13, 0.08, 0.45)
-		var fs := 10 if r > 20 else 8
+		var label: String = btn[1]
 		if name == "layout":
 			var pr := _pill(btn)
-			draw_rect(pr, fill)
-			draw_rect(pr, Color(0.84, 0.9, 0.74, 0.6), false, 1.0)
-			fs = 8
-		else:
-			draw_circle(c, r, fill)
-			draw_arc(c, r, 0, TAU, 20, Color(0.84, 0.9, 0.74, 0.6), 1.0)
-		var label: String = btn[1]
-		var tw := _font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
-		var tp := c + Vector2(-tw / 2.0, fs * 0.35)
-		draw_string_outline(_font, tp, label, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, 1, Color.BLACK)
-		draw_string(_font, tp, label, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(0.92, 0.95, 0.85))
+			draw_rect(pr, Color(Estilo.AMBAR, 0.55) if active else Color(Estilo.OLIVA_0, 0.6))
+			draw_rect(pr, Color(Estilo.OLIVA_4, 0.8), false, 1.0)
+			Estilo.texto_c(self, label, c.x, c.y + 4, Estilo.CREMA)
+			continue
+		var tex: Texture2D = _BOTON_G_ON if active else _BOTON_G
+		if r < 16.5:
+			tex = _BOTON_C_ON if active else _BOTON_C
+		elif r < 25.0:
+			tex = _BOTON_M_ON if active else _BOTON_M
+		var d := roundf(r * 2.0 + 2.0)
+		draw_texture_rect(tex, Rect2(c - Vector2(d, d) / 2.0, Vector2(d, d)), false)
+		var tinte := Color(1, 1, 1, 0.9)
+		match name:
+			"reload":
+				for k in 3:
+					draw_texture(Estilo.ICONO_BALA, c + Vector2(-6 + k * 4, -4), tinte)
+			"grenade":
+				Estilo.icono(self, Estilo.ICONO_GRANADA, c, tinte)
+			"crouch":
+				Estilo.icono(self, Estilo.ICONO_AGACHADO, c + Vector2(0, 1), tinte)
+			"jump":
+				draw_set_transform(c, PI, Vector2.ONE)
+				Estilo.icono(self, Estilo.ICONO_AGACHADO, Vector2(0, 1), tinte)
+				draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+			_:
+				Estilo.texto_c(self, label, c.x, c.y + 4, Estilo.CREMA)

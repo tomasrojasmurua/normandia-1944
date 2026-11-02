@@ -118,11 +118,21 @@ func _ready() -> void:
 		_sandbag_wall(Vector3(x, 0, -36.0), 4.0, 6, 2, 0.0, rng2)
 	_build_bags()
 
-	# Las cuatro escuadras americanas (la del jugador y tres con sargento IA)
-	get_parent().add_child.call_deferred(Escuadras.new())
-	# La defensa alemana: nidos de MG42, morteros y refuerzos
-	if not Game.prueba_carga:
-		get_parent().add_child.call_deferred(Defensa.new())
+	if Game.modo_red:
+		# Prototipo del cooperativo: solo los jugadores en la playa (sin IA)
+		var enemigos := get_parent().get_node_or_null("Enemies")
+		if enemigos:
+			enemigos.queue_free()
+		get_parent().add_child.call_deferred(Red.new())
+		var p := get_parent().get_node_or_null("Player") as Node3D
+		if p:   # que no aparezcan todos en el mismo lugar
+			p.position.x += randf_range(-8.0, 8.0)
+	else:
+		# Las cuatro escuadras americanas (la del jugador y tres con sargento IA)
+		get_parent().add_child.call_deferred(Escuadras.new())
+		# La defensa alemana: nidos de MG42, morteros y refuerzos
+		if not Game.prueba_carga:
+			get_parent().add_child.call_deferred(Defensa.new())
 
 	# Mapa de caminos para la IA, con todo lo de arriba ya puesto
 	_hornear_navegacion.call_deferred()
@@ -138,7 +148,7 @@ func _exit_tree() -> void:
 
 func _hornear_navegacion() -> void:
 	Navegacion.hornear(get_parent(), AABB(Vector3(-45, -2, -75), Vector3(90, 26, 88)))
-	if not Game.prueba_carga:
+	if not Game.prueba_carga and not Game.modo_red:
 		# Defensa alemana: los 7 de la escena + 13 en las trincheras (20 en total)
 		var rng := RandomNumberGenerator.new()
 		rng.seed = seed_value + 99

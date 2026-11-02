@@ -1,0 +1,14 @@
+# Servidor del cooperativo (Cloudflare Workers). Lo instala GitHub Actions
+# (.github/workflows/servidor.yml) con los secretos CLOUDFLARE_API_TOKEN y
+# CLOUDFLARE_ACCOUNT_ID del repositorio.
+name = "normandy-1944"
+main = "src/index.js"
+compatibility_date = "2025-06-01"
+
+[[durable_objects.bindings]]
+name = "SALAS"
+class_name = "Sala"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Sala"]

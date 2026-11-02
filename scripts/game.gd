@@ -27,6 +27,8 @@ const AJUSTES := "user://ajustes.cfg"
 var garra := false
 ## Disparo táctil "al soltar": mantener FUEGO apunta por la mira, soltarlo dispara.
 var disparo_soltar := false
+var modo_red := false         # prototipo del cooperativo (ver red.gd)
+var sala := ""                # código de la sala (4 números)
 var prueba_carga := false     # menú "PRUEBA DE CARGA": playa llena (ver prueba_carga.gd)
 var soldados_3d := false       # true = modelos 3D (pesados); false = sprites
 

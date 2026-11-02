@@ -295,6 +295,8 @@ func _fire() -> void:
 	_recoil_wait = 0.06
 
 	last_shot = {"from": from, "dir": dir, "hit": hit}
+	if Red.activo():   # que los demás jugadores vean la trazadora
+		Red.disparo(from + dir * 0.6, hit["position"] if not hit.is_empty() else from + dir * 120.0)
 	if hit.is_empty():
 		return
 	var target: Object = hit["collider"]

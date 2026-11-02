@@ -8,6 +8,7 @@ const ANCHO := 200.0
 const ALTO := 26.0
 
 var pantalla := "inicio"
+var _codigo := ""             # código de sala que se está escribiendo
 var _tactil := DisplayServer.is_touchscreen_available()
 
 
@@ -27,7 +28,7 @@ func _botones() -> Array:
 		"inicio":
 			return [
 				["jugar", Rect2(X, y0, ANCHO, ALTO), "UN JUGADOR", true, ""],
-				["coop", Rect2(X, y0 + paso, ANCHO, ALTO), "COOPERATIVO", false, "PRONTO"],
+				["coop", Rect2(X, y0 + paso, ANCHO, ALTO), "COOPERATIVO", true, "PRUEBA"],
 				["controles", Rect2(X, y0 + paso * 2, ANCHO, ALTO), "CONTROLES", true, ""],
 				["creditos", Rect2(X, y0 + paso * 3, ANCHO, ALTO), "CRÉDITOS", true, ""],
 				["carga", Rect2(X, y0 + paso * 4, ANCHO, ALTO), "PRUEBA DE CARGA", true, ""],
@@ -40,17 +41,51 @@ func _botones() -> Array:
 				lista.append(["disparo", Rect2(X + 230, 96, 220, ALTO), "DISPARO", true,
 					"AL SOLTAR" if Game.disparo_soltar else "AL TOCAR"])
 			return lista
+		"coop":
+			return [
+				["crear", Rect2(X, y0, ANCHO, ALTO), "CREAR SALA", true, ""],
+				["unirse", Rect2(X, y0 + paso, ANCHO, ALTO), "UNIRSE A UNA SALA", true, ""],
+				["volver", Rect2(X, size.y - 44, 120, ALTO), "VOLVER", true, ""],
+			]
+		"unirse":
+			# Teclado de números para escribir el código de la sala
+			var lista := []
+			for i in 10:
+				var k := (i + 1) % 10
+				var col := (i % 5)
+				var fila := i / 5
+				lista.append(["n%d" % k, Rect2(X + col * 44, 150 + fila * 40, 38, 32), str(k), _codigo.length() < 4, ""])
+			lista.append(["borrar", Rect2(X, 236, 104, ALTO), "BORRAR", _codigo.length() > 0, ""])
+			lista.append(["entrar", Rect2(X + 114, 236, 104, ALTO), "ENTRAR", _codigo.length() == 4, ""])
+			lista.append(["volver", Rect2(X, size.y - 44, 120, ALTO), "VOLVER", true, ""])
+			return lista
 		_:
 			return [["volver", Rect2(X, size.y - 44, 120, ALTO), "VOLVER", true, ""]]
 
 
 func _pulsado(id: String) -> void:
+	if id.begins_with("n") and id.length() == 2:
+		_codigo += id.substr(1)
+		return
 	match id:
+		"coop":
+			pantalla = "coop"
+		"crear":
+			_entrar_sala("%04d" % (randi() % 10000))
+		"unirse":
+			_codigo = ""
+			pantalla = "unirse"
+		"borrar":
+			_codigo = _codigo.substr(0, _codigo.length() - 1)
+		"entrar":
+			_entrar_sala(_codigo)
 		"carga":
+			Game.modo_red = false
 			Game.prueba_carga = true
 			Game.empezar_mision()
 		"jugar":
 			Game.prueba_carga = false
+			Game.modo_red = false
 			Game.empezar_mision()
 		"controles", "creditos":
 			pantalla = id
@@ -80,9 +115,34 @@ func _draw() -> void:
 			_controles()
 		"creditos":
 			_creditos()
+		"coop":
+			_coop()
+		"unirse":
+			_unirse()
 	_dibujar_botones()
 	Estilo.texto(self, "V%s" % ProjectSettings.get_setting("application/config/version"),
 		Vector2(s.x - 44, s.y - 8), Color(Estilo.CREMA, 0.4))
+
+
+func _entrar_sala(codigo: String) -> void:
+	Game.prueba_carga = false
+	Game.modo_red = true
+	Game.sala = codigo
+	Game.empezar_mision()
+
+
+func _coop() -> void:
+	Estilo.texto(self, "COOPERATIVO", Vector2(X, 66), Estilo.CREMA, 33)
+	Estilo.texto(self, "PRUEBA DE RED: HASTA 4 JUGADORES EN LA PLAYA, SIN ENEMIGOS.", Vector2(X, 96), Estilo.AMBAR_CLARO)
+	Estilo.texto(self, "UNO CREA LA SALA Y LES DICTA EL CÓDIGO A LOS DEMÁS.", Vector2(X, 110), Estilo.CREMA)
+
+
+func _unirse() -> void:
+	Estilo.texto(self, "CÓDIGO DE LA SALA", Vector2(X, 96), Estilo.CREMA)
+	var txt := ""
+	for i in 4:
+		txt += (_codigo[i] if i < _codigo.length() else "_") + " "
+	Estilo.texto(self, txt, Vector2(X, 134), Estilo.AMBAR, 33)
 
 
 func _titulo() -> void:

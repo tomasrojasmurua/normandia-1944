@@ -27,6 +27,7 @@ const AJUSTES := "user://ajustes.cfg"
 var garra := false
 ## Disparo táctil "al soltar": mantener FUEGO apunta por la mira, soltarlo dispara.
 var disparo_soltar := false
+var soldados_3d := false       # true = modelos 3D (pesados); false = sprites
 
 ## Desde qué Z empieza el agua (lo fija el escenario). Los impactos ahí salpican.
 var sea_from_z := INF
@@ -42,6 +43,7 @@ func _ready() -> void:
 	if cfg.load(AJUSTES) == OK:
 		garra = cfg.get_value("controles", "garra", false)
 		disparo_soltar = cfg.get_value("controles", "disparo_soltar", false)
+		soldados_3d = cfg.get_value("graficos", "soldados_3d", false)
 	_build_sounds()
 	for i in 10:
 		var p := AudioStreamPlayer.new()
@@ -57,6 +59,15 @@ func _process(delta: float) -> void:
 ## Se llama al empezar una misión (y al reiniciar tras morir).
 func reset_mission() -> void:
 	elapsed = 0.0
+
+
+## Soldados con sprites (liviano, por defecto) o con los modelos 3D (para comparar).
+func cambiar_soldados() -> void:
+	soldados_3d = not soldados_3d
+	var cfg := ConfigFile.new()
+	cfg.load(AJUSTES)
+	cfg.set_value("graficos", "soldados_3d", soldados_3d)
+	cfg.save(AJUSTES)
 
 
 func cambiar_garra() -> void:

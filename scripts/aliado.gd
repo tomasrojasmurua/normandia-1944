@@ -215,7 +215,7 @@ func _disparar() -> void:
 	chance *= objetivo.factor_blanco()
 	if tiro_ia(objetivo, chance, -6.0):
 		var pecho: Vector3 = objetivo.global_position + Vector3(0, 1.1, 0)
-		var dir := (pecho - cuerpo.boca.global_position).normalized()
+		var dir: Vector3 = (pecho - cuerpo.boca.global_position).normalized()
 		objetivo.hit(Armas.datos(arma)["damage"], randf() < 0.1, pecho, dir)
 
 

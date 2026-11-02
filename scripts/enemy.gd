@@ -273,7 +273,7 @@ func _intentar_granada(dist: float) -> bool:
 	var g := Grenade.new()
 	g.modelo_aleman()
 	get_parent().add_child(g)
-	var desde := cuerpo.pos_cabeza() + Vector3(0, 0.3, 0) - global_basis.z * 0.5
+	var desde: Vector3 = cuerpo.pos_cabeza() + Vector3(0, 0.3, 0) - global_basis.z * 0.5
 	g.global_position = desde
 	g.add_collision_exception_with(self)
 	# Tiro parabólico al blanco (con error de hasta 3 m)

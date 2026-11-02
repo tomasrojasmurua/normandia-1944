@@ -44,7 +44,9 @@ func _botones() -> Array:
 	if _tactil:
 		lista.append(["garra", Rect2(x, 174, 220, 26), "MODO TÁCTIL", true, "GARRA" if Game.garra else "2 DEDOS"])
 		lista.append(["disparo", Rect2(x, 208, 220, 26), "DISPARO", true, "AL SOLTAR" if Game.disparo_soltar else "AL TOCAR"])
-	lista.append(["menu", Rect2(x, 242 if _tactil else 174, 220, 26), "SALIR AL MENÚ", true, ""])
+	var y := 242.0 if _tactil else 174.0
+	lista.append(["soldados", Rect2(x, y, 220, 26), "SOLDADOS", true, "3D" if Game.soldados_3d else "SPRITES"])
+	lista.append(["menu", Rect2(x, y + 34, 220, 26), "SALIR AL MENÚ", true, ""])
 	return lista
 
 
@@ -58,6 +60,9 @@ func _pulsado(id: String) -> void:
 			Game.cambiar_garra()
 		"disparo":
 			Game.cambiar_disparo()
+		"soldados":   # se nota al recargar la playa
+			Game.cambiar_soldados()
+			Game.empezar_mision()
 		"menu":
 			Game.ir_al_menu()
 
@@ -65,7 +70,7 @@ func _pulsado(id: String) -> void:
 func _draw() -> void:
 	if get_tree().paused:
 		draw_rect(Rect2(Vector2.ZERO, size), Color(Estilo.NEGRO, 0.6))
-		var panel := Rect2(size.x / 2.0 - 130, 90, 260, 194 if _tactil else 126)
+		var panel := Rect2(size.x / 2.0 - 130, 90, 260, 228 if _tactil else 160)
 		Estilo.marco(self, panel, "chapa")
 		Estilo.texto_c(self, "PAUSA", size.x / 2.0, 124, Estilo.AMBAR, Estilo.TAM_GRANDE)
 	_dibujar_botones()

@@ -14,7 +14,7 @@ const VEL_TROTE := 3.4
 const GRAVEDAD := 9.8
 
 var dead := false
-var cuerpo: Soldado
+var cuerpo    # SoldadoSprite (o Soldado, el 3D, si se elige en la pausa)
 var cobertura: Dictionary = {}    # punto de cobertura donde está (o vacío)
 var en_cobertura := false          # está detrás de algo bajo: se agacha y se asoma
 var moviendo := false
@@ -33,7 +33,7 @@ var _col_cabeza: CollisionShape3D
 
 
 func _crear_cuerpo(bando: String) -> void:
-	cuerpo = Soldado.new()
+	cuerpo = Soldado.new() if Game.soldados_3d else SoldadoSprite.new()
 	cuerpo.bando = bando
 	cuerpo.arma = arma
 	add_child(cuerpo)
@@ -217,7 +217,7 @@ func tomar_cobertura_inicial() -> void:
 ## Dibuja la trazadora y el polvo; devuelve true si acertó.
 func tiro_ia(blanco: Node3D, prob: float, sonido_db: float) -> bool:
 	var d := Armas.datos(arma)
-	var from := cuerpo.boca.global_position
+	var from: Vector3 = cuerpo.boca.global_position
 	var target: Vector3 = blanco.pos_cabeza() - Vector3(0, 0.35, 0)
 	var dist := from.distance_to(target)
 	var acierta := randf() < prob

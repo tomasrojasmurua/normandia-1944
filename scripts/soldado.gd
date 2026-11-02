@@ -1,7 +1,10 @@
 extends Node3D
 class_name Soldado
-## Cuerpo de un soldado con su arma. No piensa: enemy.gd / aliado.gd (y en el
-## cooperativo, la red) le dicen qué pose tomar.
+## Cuerpo 3D de un soldado con su arma. No piensa: enemy.gd / aliado.gd (y en
+## el cooperativo, la red) le dicen qué pose tomar.
+## Desde v0.12 el juego usa soldado_sprite.gd (sprites sacados de este modelo
+## con tools/sprites/hornear.gd, mucho más livianos); este queda para hornear
+## los sprites y como opción "SOLDADOS: 3D" en la pausa, para comparar.
 ##
 ## Modelo esculpido con IA (Meshy) con esqueleto y animaciones de Mixamo:
 ##   assets/soldados/aleman/     (bando "aleman")
@@ -70,6 +73,26 @@ var _pitch := 0.0
 var _acumulado := randf() * 0.06
 
 
+## Las animaciones de Mixamo para caminar y correr avanzan solas (la cadera se
+## va 2,5 m hacia adelante en cada zancada de correr y vuelve de golpe al
+## repetirse). El que mueve al soldado es el juego, así que se quita ese
+## avance: si no, el cuerpo se adelanta y salta para atrás en cada vuelta.
+static func _quitar_avance(an: Animation) -> void:
+	for i in an.get_track_count():
+		if an.track_get_type(i) != Animation.TYPE_POSITION_3D or not str(an.track_get_path(i)).ends_with("Hips"):
+			continue
+		var n := an.track_get_key_count(i)
+		if n < 2:
+			continue
+		var ini: Vector3 = an.track_get_key_value(i, 0)
+		var deriva: Vector3 = an.track_get_key_value(i, n - 1) - ini
+		deriva.y = 0.0
+		var t_fin := an.track_get_key_time(i, n - 1)
+		for k in n:
+			var v: Vector3 = an.track_get_key_value(i, k)
+			an.track_set_key_value(i, k, v - deriva * (an.track_get_key_time(i, k) / t_fin))
+
+
 static func _cargar(dir: String) -> Dictionary:
 	if not _recursos.has(dir):
 		var lib := AnimationLibrary.new()
@@ -81,6 +104,8 @@ static func _cargar(dir: String) -> Dictionary:
 			var ap: AnimationPlayer = fuente.find_children("*", "AnimationPlayer", true, false)[0]
 			var an: Animation = ap.get_animation("mixamo_com").duplicate()
 			an.loop_mode = Animation.LOOP_LINEAR if ANIMS[nombre][1] else Animation.LOOP_NONE
+			if ANIMS[nombre][1]:
+				_quitar_avance(an)
 			lib.add_animation(nombre, an)
 			fuente.free()
 		var mat := StandardMaterial3D.new()

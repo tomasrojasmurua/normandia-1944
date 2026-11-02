@@ -6,7 +6,6 @@ extends Control
 ## indicador de dirección. Colores, letra y marcos vienen de Estilo.
 
 const BAR_H := 52
-const SOLDIER_NAME := "MURPHY"
 
 ## Retratos de 38x33 en assets/ui/retratos/ (hechos con tools/arte/adaptar_imagenes.py).
 ## Si existe retrato_<nombre>_herido.png se muestra con poca vida; si no, se tiñe de rojo.
@@ -454,7 +453,10 @@ func _flecha(c: Vector2) -> void:
 
 func _draw_portrait(r: Rect2) -> void:
 	Estilo.marco(self, r, "chapa")
-	Estilo.texto_c(self, SOLDIER_NAME, r.position.x + r.size.x / 2, r.position.y + 9, Estilo.CREMA)
+	if _player.nombre.to_lower() != soldado:   # tomaste el lugar de otro: su nombre y su cara
+		soldado = _player.nombre.to_lower()
+		_cargar_retratos()
+	_nombre_angosto(_player.nombre, r.position.x + r.size.x / 2, r.position.y + 9, Estilo.CREMA, r.size.x - 6)
 	var hp := clampf(_player.health / _player.max_health, 0.0, 1.0)
 	# Retrato: se tiñe de rojo con el daño y queda gris al morir
 	var face := Rect2(r.position + Vector2(4, 11), Vector2(40, 35))

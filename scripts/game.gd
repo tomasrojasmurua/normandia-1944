@@ -367,7 +367,7 @@ func explode(pos: Vector3, radius: float, damage: float) -> void:
 		var center: Vector3 = player.global_position + Vector3(0, 1.0, 0)
 		var d := pos.distance_to(center)
 		if d < radius and _clear_path(pos, center):
-			player.take_damage(damage * 0.8 * (1.0 - d / radius), pos)
+			player.take_damage(damage * 0.8 * (1.0 - d / radius), pos, false)
 		if d < 30.0:
 			player.shake(1.2 * (1.0 - d / 30.0))
 

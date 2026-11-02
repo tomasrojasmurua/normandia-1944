@@ -99,12 +99,12 @@ func veo(blanco: Node3D, alcance: float) -> bool:
 
 ## Al más cercano que veo de un grupo ("americanos" o "enemies").
 ## `preferido` cuenta como más cerca (el jugador atrae más fuego).
-func elegir_objetivo(grupo: String, alcance: float, preferido: Node = null) -> Node3D:
+func elegir_objetivo(grupo: String, alcance: float, preferido: Node = null, excluir: Node = null) -> Node3D:
 	var mejor: Node3D = null
 	var mejor_d := INF
 	for n in get_tree().get_nodes_in_group(grupo):
 		var b := n as Node3D
-		if b == null or b.dead:
+		if b == null or b.dead or b == excluir:
 			continue
 		var d := global_position.distance_to(b.global_position)
 		if b == preferido:

@@ -29,6 +29,7 @@ const BUNKER := Vector3(0, 0, -42)
 var _player: Player
 var _sees := false
 var _alert := 0.0
+var _blanco_desde := 0.0        # desde cuándo apunta al blanco actual
 var _los_timer := 0.0
 var _fire_timer := 0.0
 var _rafaga := 0                # balas que quedan en la ráfaga en curso
@@ -76,11 +77,20 @@ func _physics_process(delta: float) -> void:
 	_los_timer -= delta
 	if _los_timer <= 0.0:
 		_los_timer = 0.3
-		objetivo = elegir_objetivo("americanos", sight_range, _player)
+		var antes := objetivo
+		objetivo = elegir_objetivo("americanos", sight_range)
+		# Que no te disparen más de 4 a la vez: el resto busca otro blanco
+		if objetivo == _player and antes != _player and _tiradores_al_jugador() >= 4:
+			objetivo = elegir_objetivo("americanos", sight_range, null, _player)
+		if objetivo != antes:
+			_blanco_desde = Game.elapsed
 		_sees = objetivo != null
 		if _sees:
 			_actualizar_amenaza(objetivo.global_position)
 
+	if objetivo != null and not is_instance_valid(objetivo):   # el jugador tomó su lugar
+		objetivo = null
+		_sees = false
 	if moviendo:     # corre en _process (combatiente.gd), cuadro a cuadro
 		_rafaga = 0
 		return
@@ -124,6 +134,14 @@ func _physics_process(delta: float) -> void:
 	if en_cobertura:
 		_asomado -= delta
 		cuerpo.pose = "rodilla" if _asomado > 0.0 or _rafaga > 0 else "agachado"
+
+
+func _tiradores_al_jugador() -> int:
+	var n := 0
+	for e in get_tree().get_nodes_in_group("enemies"):
+		if e != self and e.objetivo == _player:
+			n += 1
+	return n
 
 
 func _actualizar_amenaza(pos: Vector3) -> void:
@@ -256,8 +274,9 @@ func _shoot() -> void:
 	if auto:
 		chance *= 0.4      # las ráfagas son menos precisas, pero son muchas balas
 	chance *= objetivo.factor_blanco()
-	if objetivo is Aliado:
-		chance *= 0.85     # a la escuadra le pegan un poco menos (si no, el jugador queda solo)
+	# Los primeros tiros a un blanco nuevo pasan cerca (avisan): la puntería
+	# llega a su máximo después de ~3 s siguiéndolo. Da tiempo a cubrirse.
+	chance *= clampf((Game.elapsed - _blanco_desde - 0.5) / 2.0, 0.2, 1.0)
 	if tiro_ia(objetivo, chance, 2.0):
 		# Letal: un tiro de fusil (Kar98k: 115) mata; las automáticas, 2 o 3 balas
 		objetivo.take_damage(Armas.datos(arma)["damage"], global_position)

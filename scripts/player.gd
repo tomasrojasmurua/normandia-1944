@@ -14,8 +14,11 @@ class_name Player
 @export var touch_look_sensitivity := 0.006
 @export var aim_friction := 0.55      # 1 = sin asistencia al apuntar en el celular
 @export var max_health := 100.0
-@export var regen_delay := 6.0        # segundos sin recibir daño antes de recuperarse
-@export var regen_per_second := 4.0   # 0 = sin recuperación
+@export var regen_delay := 5.0        # segundos sin recibir daño antes de recuperarse
+@export var regen_per_second := 8.0   # 0 = sin recuperación
+## Daño máximo de un solo tiro: un balazo de fusil te deja grave (30 de vida),
+## el segundo te mata. Los alemanes, en cambio, caen de un tiro.
+const DANO_MAX_TIRO := 70.0
 @export var grenades := 3
 
 const STAND_HEIGHT := 1.75
@@ -30,6 +33,7 @@ const CROUCH_HEAD := 1.0
 
 var gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 var health := 100.0
+var nombre := "MURPHY"                # el soldado que manejas (cambia al tomar el lugar de otro)
 var dead := false
 var crouching := false
 var sprinting := false
@@ -174,11 +178,11 @@ func factor_blanco() -> float:
 	return f
 
 
-func take_damage(amount: float, from_pos: Vector3) -> void:
+func take_damage(amount: float, from_pos: Vector3, es_bala := true) -> void:
 	if dead or amount <= 0.0:
 		return
 	if not Game.prueba_carga:   # en la prueba de carga el jugador no muere
-		health -= amount
+		health -= minf(amount, DANO_MAX_TIRO) if es_bala else amount
 	_since_hit = 0.0
 	damage_flash = 1.0
 	shake(0.25)
@@ -194,13 +198,60 @@ func shake(amount: float) -> void:
 	_shake = maxf(_shake, amount)
 
 
+## Al caer, como en Hamburger Hill: tomas el lugar del siguiente hombre vivo
+## de tu escuadra. La misión se reinicia solo si no queda nadie.
 func _die() -> void:
 	dead = true
 	health = 0.0
 	weapons.visible = false
-	Game.say("[HAS CAIDO]", Game.COLOR_BAD)
-	await get_tree().create_timer(4.0).timeout
-	get_tree().reload_current_scene()
+	Game.say("[%s CAÍDO]" % nombre, Game.COLOR_BAD)
+	var donde := global_transform
+	await get_tree().create_timer(2.5).timeout
+	if not is_inside_tree():
+		return
+	_dejar_cuerpo(donde)
+	var relevo := Escuadras.relevo_jugador()
+	if relevo == null:
+		Game.say("[TU ESCUADRA FUE ANIQUILADA]", Game.COLOR_BAD)
+		await get_tree().create_timer(2.5).timeout
+		get_tree().reload_current_scene()
+		return
+	_tomar_lugar(relevo)
+
+
+## Pasa a manejar a este compañero: su lugar, su arma, su nombre y su cara.
+func _tomar_lugar(a: Aliado) -> void:
+	global_position = a.global_position
+	rotation.y = 0.0     # mirando hacia el búnker
+	head.rotation = Vector3.ZERO
+	head.position.y = STAND_HEAD
+	camera.h_offset = 0
+	camera.v_offset = 0
+	_set_crouch(false)
+	velocity = Vector3.ZERO
+	var d := Armas.datos(a.arma)
+	weapons.equip(a.arma, int(d["mag"]), int(d["mag"]) * 3)
+	weapons.visible = true
+	nombre = a.nombre
+	health = max_health
+	_since_hit = 0.0
+	damage_flash = 0.0
+	hit_indicator = 0.0
+	grenades = maxi(grenades, 2)
+	Escuadras.quitar_de_escuadra(a)
+	a.queue_free()
+	dead = false
+	Game.say("[AHORA ERES %s]" % nombre, Game.COLOR_GOOD)
+
+
+## Tu cuerpo queda en la arena (un soldado de sprites, ya caído).
+func _dejar_cuerpo(donde: Transform3D) -> void:
+	var c := SoldadoSprite.new()
+	c.bando = "aliado"
+	c.arma = weapons.id()
+	get_parent().add_child(c)
+	c.global_transform = Transform3D(Basis(Vector3.UP, rotation.y), Vector3(donde.origin.x, global_position.y, donde.origin.z))
+	c.morir(-global_basis.z, false)
 
 
 func _physics_process(delta: float) -> void:

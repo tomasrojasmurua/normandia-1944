@@ -98,6 +98,33 @@ static func ranuras_jugador() -> Array:
 	return actual.datos[0]["ranuras"]
 
 
+## El compañero vivo que toma el jugador al caer (el más cercano), o null.
+static func relevo_jugador() -> Aliado:
+	if actual == null:
+		return null
+	var p := actual.get_tree().get_first_node_in_group("player") as Node3D
+	var mejor: Aliado = null
+	for a in actual.datos[0]["ranuras"]:
+		if a and is_instance_valid(a) and not a.dead:
+			if mejor == null or a.global_position.distance_to(p.global_position) < mejor.global_position.distance_to(p.global_position):
+				mejor = a
+	return mejor
+
+
+## Saca a un soldado de su puesto (el jugador tomó su lugar): llegará un refuerzo.
+static func quitar_de_escuadra(a: Aliado) -> void:
+	if actual == null:
+		return
+	var r: Array = actual.datos[a.escuadra]["ranuras"]
+	var i := r.find(a)
+	if i >= 0:
+		r[i] = null
+	a.dead = true
+	a.remove_from_group("americanos")
+	a.remove_from_group("aliados")
+	Coberturas.liberar(a)
+
+
 # ================================================================ bajas y refuerzos
 
 func _process(delta: float) -> void:

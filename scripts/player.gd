@@ -177,7 +177,8 @@ func factor_blanco() -> float:
 func take_damage(amount: float, from_pos: Vector3) -> void:
 	if dead or amount <= 0.0:
 		return
-	health -= amount
+	if not Game.prueba_carga:   # en la prueba de carga el jugador no muere
+		health -= amount
 	_since_hit = 0.0
 	damage_flash = 1.0
 	shake(0.25)

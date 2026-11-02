@@ -59,10 +59,13 @@ func _ready() -> void:
 		_add_hedgehog(pos, rng.randf() * TAU)
 		Coberturas.agregar_erizo(pos)
 
-	# Búnker de concreto con tronera (franja oscura) hacia el mar
-	_add_box(Vector3(0, 1.5, -42), Vector3(14, 3, 5), _concrete)
-	_add_box(Vector3(0, 3.2, -42), Vector3(15, 0.5, 6), _concrete)  # techo
-	Game.box(self, Vector3(8, 0.45, 0.1), Vector3(0, 2.0, -39.47), _dark)
+	# Búnker: dos casamatas de concreto (modelo de Meshy) con la tronera hacia
+	# el mar. Las cajas de siempre quedan invisibles: son las que chocan y
+	# sostienen a la MG42 del techo.
+	_add_box(Vector3(0, 1.5, -42), Vector3(14, 3, 5), _concrete).get_child(0).visible = false
+	_add_box(Vector3(0, 3.2, -42), Vector3(15, 0.5, 6), _concrete).get_child(0).visible = false  # techo
+	for x in [-3.6, 3.6]:
+		Ambiente.modelo(self, "bunker", Vector3(x, 0, -42), 90.0, Vector3(3.2, 2.85, 3.8), false)
 
 	# Parapetos de sacos de arena donde se cubren los enemigos (saco por saco)
 	_sandbag_wall(Vector3(-4.5, 0, -36), 6.0, 6, 2, 0.0, rng)
@@ -80,6 +83,17 @@ func _ready() -> void:
 		_add_box(p + Vector3(0, 1.0, 0), Vector3(0.22, 2.6, 0.22), _wood, tilt)
 
 	_add_bluffs()
+
+	# Ambiente del desembarco: vegetación, alambre, cráteres, horizonte, cielo
+	var rng3 := RandomNumberGenerator.new()
+	rng3.seed = seed_value + 6
+	Ambiente.crear(self, rng3)
+	# Tanques Sherman quemados en la arena (sirven de cobertura)
+	Ambiente.modelo(self, "sherman", Vector3(-22, 0, -7), 25.0, Vector3.ONE * 3.0, true, true)
+	Ambiente.modelo(self, "sherman", Vector3(21, 0, -15), -40.0, Vector3.ONE * 3.0, true, true)
+	# Lanchas Higgins en la orilla, con la rampa hacia la playa
+	for l in [[-30.0, 13.0, 95.0], [-12.0, 16.5, 85.0], [9.0, 12.5, 100.0], [27.0, 15.0, 80.0], [44.0, 19.0, 90.0]]:
+		Ambiente.modelo(self, "higgins", Vector3(l[0], -0.7, l[1]), l[2], Vector3.ONE * 5.8, true)
 
 	# Cajas de suministros con armas aliadas (para probarlas) y una Luger junto al búnker
 	var cajas := {"thompson": Vector3(4, 0, 2), "bar": Vector3(-5, 0, -1), "carbine": Vector3(-12, 0, -8),
@@ -268,7 +282,7 @@ func _build_bags() -> void:
 	add_child(inst)
 
 
-func _add_box(pos: Vector3, box_size: Vector3, mat: Material, rot_deg := Vector3.ZERO) -> void:
+func _add_box(pos: Vector3, box_size: Vector3, mat: Material, rot_deg := Vector3.ZERO) -> StaticBody3D:
 	var body := StaticBody3D.new()
 	body.position = pos
 	body.rotation_degrees = rot_deg
@@ -284,3 +298,4 @@ func _add_box(pos: Vector3, box_size: Vector3, mat: Material, rot_deg := Vector3
 	shape.size = box_size
 	col.shape = shape
 	body.add_child(col)
+	return body

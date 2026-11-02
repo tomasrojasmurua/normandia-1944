@@ -59,16 +59,24 @@ var _med_cuadros := 0
 var _med_t := 0.0
 var _med_peor := 0.0
 var _med_texto := ""
+var _med_desglose := ""
+var _med_codigo := 0.0        # ms de nuestros guiones en el cuadro más lento
 var _med_color := Color.WHITE
 
 
 func _medir(delta: float) -> void:
 	_med_cuadros += 1
 	_med_t += delta
-	_med_peor = maxf(_med_peor, delta)
+	if delta > _med_peor:
+		# Desglose del cuadro más lento (para encontrar qué traba): cuánto fue
+		# nuestro código (guiones) y cuánto el motor (física, dibujo, navegador).
+		_med_peor = delta
+		_med_codigo = Game.codigo_cuadro_us / 1000.0
 	if _med_t >= 1.0:
 		var fps := roundi(_med_cuadros / _med_t)
 		_med_texto = "%d FPS  PEOR %d MS" % [fps, roundi(_med_peor * 1000.0)]
+		_med_desglose = "CODIGO %d  MOTOR %d" % [roundi(_med_codigo),
+			maxi(0, roundi(_med_peor * 1000.0 - _med_codigo))]
 		_med_color = Estilo.VERDE_LED if fps >= 50 else (Estilo.AMBAR if fps >= 30 else Estilo.ROJO)
 		_med_cuadros = 0
 		_med_t = 0.0
@@ -120,6 +128,7 @@ func _draw() -> void:
 	Estilo.texto(self, "NORMANDY 1944  V%s" % ProjectSettings.get_setting("application/config/version"),
 		Vector2(4, 10), Color(Estilo.CREMA, 0.35))
 	Estilo.texto(self, _med_texto, Vector2(4, 21), Color(_med_color, 0.7))
+	Estilo.texto(self, _med_desglose, Vector2(4, 32), Color(Estilo.CREMA, 0.55))
 
 	# Arma en el suelo para recoger
 	var suelta := _player.pickup_near as ArmaSuelta

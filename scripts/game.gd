@@ -45,10 +45,50 @@ func _ready() -> void:
 		disparo_soltar = cfg.get_value("controles", "disparo_soltar", false)
 		soldados_3d = cfg.get_value("graficos", "soldados_3d", false)
 	_build_sounds()
+	_crear_marcas()
 	for i in 10:
 		var p := AudioStreamPlayer.new()
 		add_child(p)
 		_players.append(p)
+
+
+# --- Para el medidor: cuánto tarda NUESTRO código (guiones) en cada cuadro.
+# Dos marcas: una corre antes que todos los guiones y otra después, en el
+# proceso y en la física. Lo que falta para el total del cuadro es el motor
+# (física, dibujo) y el navegador.
+var codigo_cuadro_us := 0     # guiones del último cuadro completo (proceso + física)
+var _t_proc := 0
+var _t_fis := 0
+var _fis_acum := 0
+var _fis_cuadro := 0
+
+
+class Marca extends Node:
+	var fin := false
+	var g: Node
+	func _process(_d: float) -> void:
+		if fin:
+			g.codigo_cuadro_us = Time.get_ticks_usec() - g._t_proc + g._fis_cuadro
+		else:
+			g._t_proc = Time.get_ticks_usec()
+			g._fis_cuadro = g._fis_acum
+			g._fis_acum = 0
+	func _physics_process(_d: float) -> void:
+		if fin:
+			g._fis_acum += Time.get_ticks_usec() - g._t_fis
+		else:
+			g._t_fis = Time.get_ticks_usec()
+
+
+func _crear_marcas() -> void:
+	for fin in [false, true]:
+		var m := Marca.new()
+		m.fin = fin
+		m.g = self
+		m.process_mode = Node.PROCESS_MODE_ALWAYS
+		m.process_priority = 100000 if fin else -100000
+		m.process_physics_priority = 100000 if fin else -100000
+		add_child(m)
 
 
 func _process(delta: float) -> void:

@@ -56,11 +56,16 @@ func _crear_cuerpo(bando: String) -> void:
 
 
 ## Las formas de choque siguen al cuerpo (agachado no se le puede pegar igual).
+## Cambiar una forma de choque obliga al motor de física a rehacerla, así que
+## solo se tocan cuando la pose cambió de verdad (antes: en cada paso).
 func _seguir_pose() -> void:
 	var alto: float = {"reposo": 1.48, "pie": 1.48, "rodilla": 1.12, "agachado": 0.8}[cuerpo.pose]
-	_capsula.height = lerpf(_capsula.height, alto, 0.15)
-	_col_cuerpo.position.y = _capsula.height / 2.0
-	_col_cabeza.global_position = cuerpo.pos_cabeza()
+	if absf(_capsula.height - alto) > 0.02:
+		_capsula.height = lerpf(_capsula.height, alto, 0.15)
+		_col_cuerpo.position.y = _capsula.height / 2.0
+	var cabeza: Vector3 = to_local(cuerpo.pos_cabeza())
+	if cabeza.distance_squared_to(_col_cabeza.position) > 0.03 * 0.03:
+		_col_cabeza.position = cabeza
 
 
 ## Altura de los ojos según la pose (para mirar por encima de los sacos).

@@ -70,15 +70,13 @@ func _unhandled_input(event: InputEvent) -> void:
 	if dead:
 		return
 	var captured := Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
-	# En PC: clic para capturar el mouse (ese clic no dispara), Esc para soltarlo.
+	# En PC: clic para capturar el mouse (ese clic no dispara). Esc = pausa (pausa.gd).
 	if event is InputEventMouseButton and event.pressed and not captured \
 			and not DisplayServer.is_touchscreen_available():
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 		get_viewport().set_input_as_handled()
 		return
-	if event.is_action_pressed("ui_cancel"):
-		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-	elif event is InputEventMouseMotion and captured:
+	if event is InputEventMouseMotion and captured:
 		var d: Vector2 = event.relative * mouse_sensitivity * (0.55 if aiming else 1.0)
 		weapons.player_looked(d.y)
 		look(d)

@@ -21,6 +21,11 @@ var _next_player := 0
 var _rng := RandomNumberGenerator.new()
 var _mat_cache := {}
 
+## Ajustes guardados en el celular/PC.
+const AJUSTES := "user://ajustes.cfg"
+## Controles táctiles en modo GARRA (FUEGO extra arriba a la izquierda).
+var garra := false
+
 ## Desde qué Z empieza el agua (lo fija el escenario). Los impactos ahí salpican.
 var sea_from_z := INF
 ## true mientras se "precalientan" los efectos al empezar (el HUD tapa la pantalla).
@@ -31,6 +36,9 @@ var _warmed := false
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	_rng.seed = 1944
+	var cfg := ConfigFile.new()
+	if cfg.load(AJUSTES) == OK:
+		garra = cfg.get_value("controles", "garra", false)
 	_build_sounds()
 	for i in 10:
 		var p := AudioStreamPlayer.new()
@@ -39,12 +47,33 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
-	elapsed += delta
+	if not get_tree().paused:
+		elapsed += delta
 
 
 ## Se llama al empezar una misión (y al reiniciar tras morir).
 func reset_mission() -> void:
 	elapsed = 0.0
+
+
+func cambiar_garra() -> void:
+	garra = not garra
+	var cfg := ConfigFile.new()
+	cfg.load(AJUSTES)
+	cfg.set_value("controles", "garra", garra)
+	cfg.save(AJUSTES)
+
+
+## Ir al menú principal / empezar la misión.
+func ir_al_menu() -> void:
+	get_tree().paused = false
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	get_tree().change_scene_to_file("res://scenes/menu.tscn")
+
+
+func empezar_mision() -> void:
+	get_tree().paused = false
+	get_tree().change_scene_to_file("res://scenes/main.tscn")
 
 
 func clock_text() -> String:

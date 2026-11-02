@@ -8,24 +8,20 @@ extends Control
 ##   SALTAR y AGACHAR (los chicos se ven con ícono:
 ##   balas = recarga, granada, flecha arriba = saltar, flecha abajo = agachar).
 ## - Tocar las armas 1 / 2 de la barra inferior cambia de arma.
-## - Botón de arriba al centro: cambia entre modo "2 DEDOS" y modo "GARRA".
-##   GARRA agrega un segundo FUEGO arriba a la izquierda para el índice
-##   izquierdo, así el pulgar derecho queda libre para apuntar.
-##   La elección queda guardada en el celular.
+## - Modo "GARRA" (se elige en el menú o en la pausa, Game.garra): agrega un
+##   segundo FUEGO arriba a la izquierda para el índice izquierdo, así el
+##   pulgar derecho queda libre para apuntar.
 
 @export var player_path: NodePath
 @export var stick_radius := 40.0
 
 const HUD_H := 52
-const SETTINGS_PATH := "user://ajustes.cfg"
 const _BOTON_G := preload("res://assets/ui/boton_g.png")
 const _BOTON_G_ON := preload("res://assets/ui/boton_g_on.png")
 const _BOTON_M := preload("res://assets/ui/boton_m.png")
 const _BOTON_M_ON := preload("res://assets/ui/boton_m_on.png")
 const _BOTON_C := preload("res://assets/ui/boton_c.png")
 const _BOTON_C_ON := preload("res://assets/ui/boton_c_on.png")
-
-var claw := false           # modo GARRA activado
 
 var _player: Player
 var _hud: Node
@@ -39,18 +35,6 @@ func _ready() -> void:
 	_player = get_node_or_null(player_path) as Player
 	visible = DisplayServer.is_touchscreen_available()
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var cfg := ConfigFile.new()
-	if cfg.load(SETTINGS_PATH) == OK:
-		claw = cfg.get_value("controles", "garra", false)
-
-
-func _toggle_layout() -> void:
-	claw = not claw
-	var cfg := ConfigFile.new()
-	cfg.load(SETTINGS_PATH)
-	cfg.set_value("controles", "garra", claw)
-	cfg.save(SETTINGS_PATH)
-	Game.say("[CONTROLES: %s]" % ("GARRA" if claw else "2 DEDOS"))
 
 
 func _process(_delta: float) -> void:
@@ -69,28 +53,19 @@ func _buttons() -> Array:
 		["grenade", "GRANADA", Vector2(w - 82, b - 118), 16.0],
 		["jump", "SALTAR", Vector2(w - 24, b - 22), 15.0],
 		["crouch", "AGACHAR", Vector2(w - 180, b - 20), 15.0],
-		["layout", "MODO: " + ("GARRA" if claw else "2 DEDOS"), Vector2(w / 2.0, 14), 12.0],
 	]
 	if _player and _player.pickup_near != null:
 		list.append(["use", "TOMAR", Vector2(w - 150, b - 82), 17.0])
-	if claw:
+	if Game.garra:
 		list.append(["fire_left", "FUEGO", Vector2(58, 64), 30.0])
 	return list
 
 
 func _button_at(pos: Vector2) -> String:
 	for btn in _buttons():
-		if btn[0] == "layout":
-			if _pill(btn).grow(4).has_point(pos):
-				return btn[0]
-		elif pos.distance_to(btn[2]) <= btn[3] + 4.0:
+		if pos.distance_to(btn[2]) <= btn[3] + 4.0:
 			return btn[0]
 	return ""
-
-
-func _pill(btn: Array) -> Rect2:
-	var c: Vector2 = btn[2]
-	return Rect2(c - Vector2(52, 9), Vector2(104, 18))
 
 
 func _input(event: InputEvent) -> void:
@@ -128,7 +103,6 @@ func _touch_down(index: int, pos: Vector2) -> void:
 				_player.touch_fire = true
 				_player.weapons.pull_trigger()
 			"use": _player.recoger()
-			"layout": _toggle_layout()
 			"aim": _player.touch_aim = not _player.touch_aim
 			"reload": _player.weapons.reload()
 			"grenade": _player.throw_grenade()
@@ -187,12 +161,6 @@ func _draw() -> void:
 		var active: bool = _pressed.has(name) or (name == "aim" and _player.touch_aim) \
 			or (name == "crouch" and _player.crouching)
 		var label: String = btn[1]
-		if name == "layout":
-			var pr := _pill(btn)
-			draw_rect(pr, Color(Estilo.AMBAR, 0.55) if active else Color(Estilo.OLIVA_0, 0.6))
-			draw_rect(pr, Color(Estilo.OLIVA_4, 0.8), false, 1.0)
-			Estilo.texto_c(self, label, c.x, c.y + 4, Estilo.CREMA)
-			continue
 		var tex: Texture2D = _BOTON_G_ON if active else _BOTON_G
 		if r < 16.5:
 			tex = _BOTON_C_ON if active else _BOTON_C

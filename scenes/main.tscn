@@ -5,6 +5,7 @@
 [ext_resource type="Script" path="res://scripts/touch_controls.gd" id="3_touch"]
 [ext_resource type="Script" path="res://scripts/hud.gd" id="4_hud"]
 [ext_resource type="Script" path="res://scripts/enemy.gd" id="5_enemy"]
+[ext_resource type="Script" path="res://scripts/pausa.gd" id="6_pausa"]
 
 [sub_resource type="ProceduralSkyMaterial" id="Sky_mat"]
 sky_top_color = Color(0.42, 0.48, 0.55, 1)
@@ -132,3 +133,13 @@ grow_vertical = 2
 mouse_filter = 2
 script = ExtResource("3_touch")
 player_path = NodePath("../../Player")
+
+[node name="Pausa" type="Control" parent="UI"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("6_pausa")

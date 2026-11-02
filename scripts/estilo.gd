@@ -73,6 +73,21 @@ static func marco(ci: CanvasItem, r: Rect2, tipo := "chapa") -> void:
 	caja(tipo).draw(ci.get_canvas_item(), r)
 
 
+## Botón de menú: chapa con texto. estado: "normal", "encima" (mouse encima
+## o tocado), "apagado" (no disponible). "nota" = texto chico a la derecha.
+static func boton(ci: CanvasItem, r: Rect2, t: String, estado := "normal", nota := "") -> void:
+	if estado == "encima":
+		marco(ci, r, "lisa")
+		ci.draw_rect(r.grow(-3), Color(AMBAR, 0.18))
+	else:
+		marco(ci, r, "chapa")
+	var col := AMBAR_CLARO if estado == "encima" else (Color(CREMA, 0.4) if estado == "apagado" else CREMA)
+	texto(ci, t, Vector2(r.position.x + 12, r.get_center().y + 4), col)
+	if nota != "":
+		var w := ancho_texto(nota)
+		texto(ci, nota, Vector2(r.end.x - 10 - w, r.get_center().y + 4), Color(AMBAR, 0.6 if estado == "apagado" else 0.9))
+
+
 ## Texto con sombra dura de 1 píxel (como en los juegos de los 90).
 static func texto(ci: CanvasItem, t: String, pos: Vector2, col: Color, tam := TAM, ancho := -1.0) -> void:
 	var sombra := Color(NEGRO, col.a)

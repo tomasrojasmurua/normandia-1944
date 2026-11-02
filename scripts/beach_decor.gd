@@ -97,6 +97,11 @@ func _ready() -> void:
 	_sandbag_wall(Vector3(-11.5, 0, -41), 4.0, 6, 2, 0.0, rng2)
 	_sandbag_wall(Vector3(11.5, 0, -41), 4.0, 6, 2, 0.0, rng2)
 	_sandbag_wall(Vector3(0, 0, -29), 3.0, 6, 2, 0.0, rng2)
+	if Game.prueba_carga:   # más trincheras al pie del acantilado para 30 alemanes
+		for x in [-36.0, -26.0, -18.0, 18.0, 26.0, 36.0, -6.0, 6.0]:
+			_sandbag_wall(Vector3(x, 0, -48.0 + absf(x) * 0.05), 5.0, 6, 2, 0.0, rng2)
+		for x in [-34.0, -14.0, 14.0, 34.0]:
+			_sandbag_wall(Vector3(x, 0, -36.0), 4.0, 6, 2, 0.0, rng2)
 	_build_bags()
 
 	# La escuadra: los otros tres del cooperativo (por ahora con IA)
@@ -111,6 +116,9 @@ func _ready() -> void:
 
 	# Mapa de caminos para la IA, con todo lo de arriba ya puesto
 	_hornear_navegacion.call_deferred()
+	if Game.prueba_carga:
+		var pc := PruebaCarga.new()
+		get_parent().add_child.call_deferred(pc)
 
 
 func _exit_tree() -> void:

@@ -27,6 +27,7 @@ const AJUSTES := "user://ajustes.cfg"
 var garra := false
 ## Disparo táctil "al soltar": mantener FUEGO apunta por la mira, soltarlo dispara.
 var disparo_soltar := false
+var prueba_carga := false     # menú "PRUEBA DE CARGA": playa llena (ver prueba_carga.gd)
 var soldados_3d := false       # true = modelos 3D (pesados); false = sprites
 
 ## Desde qué Z empieza el agua (lo fija el escenario). Los impactos ahí salpican.
@@ -96,6 +97,9 @@ var _next_3d := 0
 var _trazadoras: Array = []
 var _next_traz := 0
 var _emisores := {}           # tipo de estallido → [CPUParticles3D]
+var _fuegos: Array = []
+var _next_fuego := 0
+var carga_texto := ""         # para el medidor en la prueba de carga
 
 
 func _process(delta: float) -> void:
@@ -370,25 +374,40 @@ func explode(pos: Vector3, radius: float, damage: float) -> void:
 
 ## Lo visual de la explosión: bola de fuego, humo y tierra (o agua).
 func _explosion_fx(pos: Vector3) -> void:
-	var fire := MeshInstance3D.new()
-	var sphere := SphereMesh.new()
-	sphere.radius = 1.0
-	sphere.height = 2.0
-	sphere.radial_segments = 8
-	sphere.rings = 4
-	fire.mesh = sphere
-	var mat := StandardMaterial3D.new()
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	# Bola de fuego: reserva de 8 que se reciclan (ver play_at)
+	if _fuegos.is_empty():
+		var sphere := SphereMesh.new()
+		sphere.radius = 1.0
+		sphere.height = 2.0
+		sphere.radial_segments = 8
+		sphere.rings = 4
+		for i in 8:
+			var n := MeshInstance3D.new()
+			n.mesh = sphere
+			n.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			var m := StandardMaterial3D.new()
+			m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+			m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+			n.material_override = m
+			n.visible = false
+			add_child(n)
+			_fuegos.append(n)
+	var fire: MeshInstance3D = _fuegos[_next_fuego]
+	_next_fuego = (_next_fuego + 1) % _fuegos.size()
+	if fire.has_meta("tw"):
+		var viejo: Tween = fire.get_meta("tw")
+		if viejo and viejo.is_valid():
+			viejo.kill()
+	var mat: StandardMaterial3D = fire.material_override
 	mat.albedo_color = Color(1.0, 0.7, 0.25, 0.95)
-	fire.material_override = mat
-	_scene().add_child(fire)
 	fire.global_position = pos
 	fire.scale = Vector3.ONE * 0.2
+	fire.visible = true
 	var tw := fire.create_tween()
+	fire.set_meta("tw", tw)
 	tw.tween_property(fire, "scale", Vector3.ONE * 2.2, 0.12)
 	tw.tween_property(mat, "albedo_color", Color(0.3, 0.28, 0.25, 0.0), 0.3)
-	tw.tween_callback(fire.queue_free)
+	tw.tween_callback(func() -> void: fire.visible = false)
 	_burst(pos, Color(0.32, 0.31, 0.29), 18, 2.5, 1.6, 0.45, Vector3.UP, -0.15)
 	if pos.z > sea_from_z and pos.y < 0.5:
 		_burst(pos, Color(0.85, 0.88, 0.86), 30, 9.0, 1.2, 0.12, Vector3.UP, 1.2, 15.0)

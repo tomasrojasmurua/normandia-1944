@@ -30,6 +30,7 @@ func _botones() -> Array:
 				["coop", Rect2(X, y0 + paso, ANCHO, ALTO), "COOPERATIVO", false, "PRONTO"],
 				["controles", Rect2(X, y0 + paso * 2, ANCHO, ALTO), "CONTROLES", true, ""],
 				["creditos", Rect2(X, y0 + paso * 3, ANCHO, ALTO), "CRÉDITOS", true, ""],
+				["carga", Rect2(X, y0 + paso * 4, ANCHO, ALTO), "PRUEBA DE CARGA", true, ""],
 			]
 		"controles":
 			var lista := [["volver", Rect2(X, size.y - 44, 120, ALTO), "VOLVER", true, ""]]
@@ -45,7 +46,11 @@ func _botones() -> Array:
 
 func _pulsado(id: String) -> void:
 	match id:
+		"carga":
+			Game.prueba_carga = true
+			Game.empezar_mision()
 		"jugar":
+			Game.prueba_carga = false
 			Game.empezar_mision()
 		"controles", "creditos":
 			pantalla = id

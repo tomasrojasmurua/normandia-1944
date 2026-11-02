@@ -134,6 +134,8 @@ func _draw() -> void:
 		Vector2(4, 10), Color(Estilo.CREMA, 0.35))
 	Estilo.texto(self, _med_texto, Vector2(4, 21), Color(_med_color, 0.7))
 	Estilo.texto(self, _med_desglose, Vector2(4, 32), Color(Estilo.CREMA, 0.55))
+	if Game.prueba_carga:
+		Estilo.texto(self, Game.carga_texto, Vector2(4, 43), Color(Estilo.AMBAR_CLARO, 0.8))
 
 	# Arma en el suelo para recoger
 	var suelta := _player.pickup_near as ArmaSuelta

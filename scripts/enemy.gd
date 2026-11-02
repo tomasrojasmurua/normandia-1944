@@ -47,6 +47,7 @@ static var _ultimo_aviso := -100.0
 
 func _ready() -> void:
 	add_to_group("enemies")
+	health = minf(health, 60.0)   # un tiro de fusil al cuerpo mata (Garand 100, carabina 60)
 	collision_layer = 4          # capa 3: enemigos
 	collision_mask = 1 | 2
 	_fire_timer = randf_range(fire_interval.x, fire_interval.y) * 0.5
@@ -258,7 +259,8 @@ func _shoot() -> void:
 	if objetivo is Aliado:
 		chance *= 0.85     # a la escuadra le pegan un poco menos (si no, el jugador queda solo)
 	if tiro_ia(objetivo, chance, 2.0):
-		objetivo.take_damage(damage * (0.55 if auto else 1.0), global_position)
+		# Letal: un tiro de fusil (Kar98k: 115) mata; las automáticas, 2 o 3 balas
+		objetivo.take_damage(Armas.datos(arma)["damage"], global_position)
 
 
 ## Granada de palo: si el blanco está entre 9 y 26 m, y nadie lanzó una hace poco.

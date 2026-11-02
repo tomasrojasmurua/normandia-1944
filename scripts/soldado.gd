@@ -181,14 +181,17 @@ func _process(delta: float) -> void:
 	# por segundo (15 de cerca, 8 de lejos, 3 fuera de la vista), estilo
 	# animación retro. Cada soldado empieza desfasado para repartir la carga.
 	_acumulado += delta
-	var intervalo := 1.0 / 15.0
+	# Corriendo, las piernas necesitan más cuadros (si no, el cuerpo se desliza
+	# parejo y las piernas saltan, y se ve "lageado"): 30 de cerca, 15 de lejos.
+	var corre := andar != "" and not muerto
+	var intervalo := 1.0 / (30.0 if corre else 15.0)
 	var cam := get_viewport().get_camera_3d()
 	if cam:
 		var centro := global_position + Vector3(0, 1.0, 0)
 		if not cam.is_position_in_frustum(centro):
 			intervalo = 1.0 / 3.0
 		elif cam.global_position.distance_squared_to(centro) > 20.0 * 20.0:
-			intervalo = 1.0 / 8.0
+			intervalo = 1.0 / (15.0 if corre else 8.0)
 	if _acumulado < intervalo:
 		return
 	delta = _acumulado

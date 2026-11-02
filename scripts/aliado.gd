@@ -75,9 +75,8 @@ func _physics_process(delta: float) -> void:
 		objetivo = elegir_objetivo("enemies", ALCANCE)
 		amenaza = objetivo.global_position if objetivo else _enemigo_conocido()
 
-	if moviendo:
+	if moviendo:     # corre en _process (combatiente.gd), cuadro a cuadro
 		_rafaga = 0
-		_mover(delta)
 		return
 
 	_pensar_t -= delta

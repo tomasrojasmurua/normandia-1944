@@ -141,6 +141,14 @@ func ir_a(p: Dictionary, correr := true) -> bool:
 	return true
 
 
+## El desplazamiento va en _process (una vez por cada cuadro dibujado) y no
+## en _physics_process: así el soldado avanza parejo aunque el celular dibuje
+## a un ritmo distinto de la física (si no, se ve a tirones).
+func _process(delta: float) -> void:
+	if moviendo and not dead:
+		_mover(delta)
+
+
 func _mover(delta: float) -> void:
 	if _ruta_i >= _ruta.size():
 		_llegar()

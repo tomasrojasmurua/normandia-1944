@@ -80,9 +80,8 @@ func _physics_process(delta: float) -> void:
 		if _sees:
 			_actualizar_amenaza(objetivo.global_position)
 
-	if moviendo:
+	if moviendo:     # corre en _process (combatiente.gd), cuadro a cuadro
 		_rafaga = 0
-		_mover(delta)
 		return
 
 	_pensar_t -= delta

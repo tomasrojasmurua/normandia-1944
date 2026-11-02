@@ -107,6 +107,8 @@ func _draw() -> void:
 	# --- Efectos sobre la vista
 	if _player.damage_flash > 0.0:
 		draw_rect(Rect2(Vector2.ZERO, s), Color(0.7, 0.0, 0.0, _player.damage_flash * 0.3))
+	if _player.supresion > 0.02 and not _player.dead:
+		_draw_supresion(s, _player.supresion)
 	if _player.hit_indicator > 0.0 and not _player.dead:
 		_draw_hit_indicator(center, _player.hit_angle, minf(_player.hit_indicator, 1.0))
 	if not _player.dead and w.ads_amount < 0.5 and not _player.sprinting:
@@ -321,6 +323,19 @@ func _draw_crosshair(c: Vector2, spread_deg: float) -> void:
 		var b: Vector2 = c + d * (gap + 5)
 		draw_line(a + Vector2(1, 1), b + Vector2(1, 1), sombra, 1.0)
 		draw_line(a, b, col, 1.0)
+
+
+## Supresión: los bordes de la vista se oscurecen (marco de bandas, barato).
+func _draw_supresion(s: Vector2, f: float) -> void:
+	var top := s.y - BAR_H
+	for i in 6:
+		var a := f * 0.13 * (6 - i) / 6.0
+		var m := 8.0 + i * 10.0
+		var c := Color(0, 0, 0, a)
+		draw_rect(Rect2(0, 0, s.x, m), c)
+		draw_rect(Rect2(0, top - m, s.x, m), c)
+		draw_rect(Rect2(0, m, m * 1.4, top - 2 * m), c)
+		draw_rect(Rect2(s.x - m * 1.4, m, m * 1.4, top - 2 * m), c)
 
 
 func _draw_hit_indicator(c: Vector2, angle: float, alpha: float) -> void:

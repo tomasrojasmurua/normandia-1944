@@ -120,6 +120,9 @@ func _ready() -> void:
 
 	# Las cuatro escuadras americanas (la del jugador y tres con sargento IA)
 	get_parent().add_child.call_deferred(Escuadras.new())
+	# La defensa alemana: nidos de MG42, morteros y refuerzos
+	if not Game.prueba_carga:
+		get_parent().add_child.call_deferred(Defensa.new())
 
 	# Mapa de caminos para la IA, con todo lo de arriba ya puesto
 	_hornear_navegacion.call_deferred()

@@ -207,6 +207,7 @@ func _build_sounds() -> void:
 		"ping": [0.7, 1.0], "click": [0.06, 1.0], "reload": [0.9, 0.9],
 		"explosion": [1.8, 0.06], "hurt": [0.3, 0.2], "hit": [0.07, 1.0],
 		"throw": [0.35, 0.25], "bounce": [0.08, 0.5],
+		"zumbido": [0.22, 0.9], "silbido": [1.3, 1.0],
 	}
 	for sound in specs:
 		_sounds[sound] = _make(sound, specs[sound][0], specs[sound][1])
@@ -242,6 +243,10 @@ func _sample(sound: String, t: float, n: float) -> float:
 			return n * sin(PI * t / 0.35) * 0.35
 		"bounce":
 			return n * exp(-t * 90.0) * 0.5 + sin(TAU * 600.0 * t) * exp(-t * 70.0) * 0.3
+		"zumbido":   # bala que pasa cerca: chasquido seco y un zumbido que se aleja
+			return n * exp(-t * 60.0) * 0.6 + sin(TAU * (2300.0 - t * 4000.0) * t) * exp(-t * 14.0) * 0.25
+		"silbido":   # mortero cayendo: tono que baja y sube de volumen
+			return sin(TAU * (1500.0 - t * 700.0) * t) * minf(t / 1.1, 1.0) * 0.32 + n * 0.03
 	return 0.0
 
 

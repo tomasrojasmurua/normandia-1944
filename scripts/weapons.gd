@@ -195,6 +195,7 @@ func _process(delta: float) -> void:
 	if not _player.is_on_floor():
 		spread_now += 3.0
 	spread_now += _kick * 1.5
+	spread_now += _player.supresion * 2.5   # con balas pasando cerca cuesta apuntar
 
 	_animate(delta, w)
 

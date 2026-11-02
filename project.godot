@@ -7,7 +7,7 @@ config_version=5
 
 config/name="Normandy 1944"
 config/description="FPS cooperativo retro de la Segunda Guerra Mundial."
-config/version="0.15.1"
+config/version="0.16.0"
 run/main_scene="res://scenes/menu.tscn"
 config/features=PackedStringArray("4.7", "GL Compatibility")
 config/icon="res://icon.svg"

@@ -88,7 +88,7 @@ func _physics_process(delta: float) -> void:
 		if _sees:
 			_actualizar_amenaza(objetivo.global_position)
 
-	if objetivo != null and not is_instance_valid(objetivo):   # el jugador tomó su lugar
+	if not is_instance_valid(objetivo):   # sin blanco, o el jugador tomó su lugar (liberado)
 		objetivo = null
 		_sees = false
 	if moviendo:     # corre en _process (combatiente.gd), cuadro a cuadro
@@ -335,7 +335,7 @@ func _die(dir: Vector3, headshot: bool, por_jugador := true) -> void:
 	collision_mask = 0
 	if por_jugador:   # los que abaten las escuadras con IA no se anuncian (serían demasiados)
 		Game.say("[ENEMIGO ABATIDO]" if not headshot else "[ABATIDO - TIRO A LA CABEZA]")
-	if get_tree().get_nodes_in_group("enemies").is_empty():
+	if get_tree().get_nodes_in_group("enemies").is_empty() and (Defensa.restantes <= 0 or Game.prueba_carga):
 		Game.say("[ZONA DESPEJADA]", Game.COLOR_GOOD)
 	cuerpo.andar = ""
 	cuerpo.morir(dir, headshot)

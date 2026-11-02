@@ -33,6 +33,7 @@ const CROUCH_HEAD := 1.0
 
 var gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 var health := 100.0
+var supresion := 0.0                  # 0..1: balas pasando cerca (oscurece la vista y abre la puntería)
 var nombre := "MURPHY"                # el soldado que manejas (cambia al tomar el lugar de otro)
 var dead := false
 var crouching := false
@@ -194,6 +195,16 @@ func take_damage(amount: float, from_pos: Vector3, es_bala := true) -> void:
 		_die()
 
 
+## Una bala pasó cerca (a `dist` metros de la cabeza): asusta.
+func casi(dist: float) -> void:
+	if dead:
+		return
+	var f := clampf(1.0 - dist / 2.5, 0.15, 1.0)
+	supresion = minf(supresion + 0.18 * f, 1.0)
+	shake(0.12 * f)
+	Game.play("zumbido", -8.0 + 6.0 * f, randf_range(0.85, 1.2))
+
+
 func shake(amount: float) -> void:
 	_shake = maxf(_shake, amount)
 
@@ -259,6 +270,7 @@ func _physics_process(delta: float) -> void:
 		velocity.y -= gravity * delta
 
 	damage_flash = maxf(damage_flash - delta * 1.5, 0.0)
+	supresion = maxf(supresion - delta * 0.35, 0.0)
 	hit_indicator = maxf(hit_indicator - delta, 0.0)
 
 	if dead:

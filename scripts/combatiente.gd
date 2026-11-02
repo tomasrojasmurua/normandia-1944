@@ -231,6 +231,15 @@ func tiro_ia(blanco: Node3D, prob: float, sonido_db: float) -> bool:
 		target += side * randf_range(-1.6, 1.6) + Vector3(0, randf_range(-0.9, 0.6), 0)
 	var dir := (target - from).normalized()
 	var end := from + dir * (dist + (0.0 if acierta else 30.0))
+	if not acierta and self is Enemy:
+		# ¿pasó cerca del jugador? (supresión)
+		var p := get_tree().get_first_node_in_group("player") as Player
+		if p:
+			var cab := p.pos_cabeza()
+			var u := clampf((cab - from).dot(dir), 0.0, dist + 30.0)
+			var cerca := (from + dir * u).distance_to(cab)
+			if cerca < 2.5:
+				p.casi(cerca)
 	if not acierta:
 		var q := PhysicsRayQueryParameters3D.create(from, end, 1)
 		var w := get_world_3d().direct_space_state.intersect_ray(q)

@@ -45,6 +45,7 @@ var hit_indicator := 0.0
 var touch_move := Vector2.ZERO
 var touch_jump := false
 var touch_aim := false
+var touch_hold_aim := false          # FUEGO mantenido en modo "al soltar": apunta mientras dure
 var touch_sprint := false
 
 var _since_hit := 99.0
@@ -220,8 +221,10 @@ func _physics_process(delta: float) -> void:
 		input = touch_move
 
 	var captured := Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
-	aiming = touch_aim or (captured and Input.is_action_pressed("aim"))
-	weapons.trigger_held = touch_fire or (captured and Input.is_action_pressed("fire"))
+	aiming = touch_aim or touch_hold_aim or (captured and Input.is_action_pressed("aim"))
+	# En modo "al soltar", las automáticas empiezan la ráfaga recién cuando la mira ya subió
+	var touch_trigger := touch_fire and (not Game.disparo_soltar or weapons.ads_amount > 0.85)
+	weapons.trigger_held = touch_trigger or (captured and Input.is_action_pressed("fire"))
 	var wants_sprint := Input.is_action_pressed("sprint") or touch_sprint
 	sprinting = wants_sprint and input.y < -0.3 and not aiming and is_on_floor() and not weapons.busy()
 	if sprinting and crouching:

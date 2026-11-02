@@ -34,8 +34,10 @@ func _botones() -> Array:
 		"controles":
 			var lista := [["volver", Rect2(X, size.y - 44, 120, ALTO), "VOLVER", true, ""]]
 			if _tactil:
-				lista.append(["garra", Rect2(X, 96, 260, ALTO), "MODO TÁCTIL", true,
+				lista.append(["garra", Rect2(X, 96, 220, ALTO), "MODO TÁCTIL", true,
 					"GARRA" if Game.garra else "2 DEDOS"])
+				lista.append(["disparo", Rect2(X + 230, 96, 220, ALTO), "DISPARO", true,
+					"AL SOLTAR" if Game.disparo_soltar else "AL TOCAR"])
 			return lista
 		_:
 			return [["volver", Rect2(X, size.y - 44, 120, ALTO), "VOLVER", true, ""]]
@@ -51,6 +53,8 @@ func _pulsado(id: String) -> void:
 			pantalla = "inicio"
 		"garra":
 			Game.cambiar_garra()
+		"disparo":
+			Game.cambiar_disparo()
 
 
 func _draw() -> void:
@@ -96,6 +100,7 @@ func _controles() -> void:
 			"MIRA, RECARGA, GRANADA, SALTAR, AGACHAR",
 			"TOCA EL ARMA 1 O 2 DE LA BARRA PARA CAMBIAR",
 			"GARRA: AGREGA OTRO FUEGO ARRIBA A LA IZQUIERDA",
+			"AL SOLTAR: MANTÉN FUEGO PARA APUNTAR, SUELTA PARA DISPARAR",
 		]
 		for i in lineas.size():
 			Estilo.texto(self, lineas[i], Vector2(X, 140 + i * 15), Estilo.CREMA)

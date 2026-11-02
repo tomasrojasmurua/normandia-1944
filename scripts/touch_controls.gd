@@ -11,6 +11,10 @@ extends Control
 ## - Modo "GARRA" (se elige en el menú o en la pausa, Game.garra): agrega un
 ##   segundo FUEGO arriba a la izquierda para el índice izquierdo, así el
 ##   pulgar derecho queda libre para apuntar.
+## - Disparo "AL SOLTAR" (Game.disparo_soltar, se elige en el menú o la pausa):
+##   mantener FUEGO sube el arma a la mira (puedes seguir arrastrando para
+##   apuntar) y al soltar sale el tiro. Con armas automáticas, mantener FUEGO
+##   sube la mira y dispara en ráfaga mientras sigas presionando.
 
 @export var player_path: NodePath
 @export var stick_radius := 40.0
@@ -101,7 +105,10 @@ func _touch_down(index: int, pos: Vector2) -> void:
 		match btn:
 			"fire", "fire_left":
 				_player.touch_fire = true
-				_player.weapons.pull_trigger()
+				if Game.disparo_soltar:
+					_player.touch_hold_aim = true
+				else:
+					_player.weapons.pull_trigger()
 			"use": _player.recoger()
 			"aim": _player.touch_aim = not _player.touch_aim
 			"reload": _player.weapons.reload()
@@ -135,6 +142,11 @@ func _touch_up(index: int) -> void:
 		_pressed.erase(f["btn"])
 		if f["btn"] in ["fire", "fire_left"] and not _pressed.has("fire") and not _pressed.has("fire_left"):
 			_player.touch_fire = false
+			if _player.touch_hold_aim:
+				_player.touch_hold_aim = false
+				# Al soltar: un tiro (las automáticas ya dispararon mientras se mantenía)
+				if not _player.weapons.def().get("auto", false):
+					_player.weapons.pull_trigger()
 	_fingers.erase(index)
 
 

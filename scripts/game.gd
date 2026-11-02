@@ -25,6 +25,8 @@ var _mat_cache := {}
 const AJUSTES := "user://ajustes.cfg"
 ## Controles táctiles en modo GARRA (FUEGO extra arriba a la izquierda).
 var garra := false
+## Disparo táctil "al soltar": mantener FUEGO apunta por la mira, soltarlo dispara.
+var disparo_soltar := false
 
 ## Desde qué Z empieza el agua (lo fija el escenario). Los impactos ahí salpican.
 var sea_from_z := INF
@@ -39,6 +41,7 @@ func _ready() -> void:
 	var cfg := ConfigFile.new()
 	if cfg.load(AJUSTES) == OK:
 		garra = cfg.get_value("controles", "garra", false)
+		disparo_soltar = cfg.get_value("controles", "disparo_soltar", false)
 	_build_sounds()
 	for i in 10:
 		var p := AudioStreamPlayer.new()
@@ -61,6 +64,14 @@ func cambiar_garra() -> void:
 	var cfg := ConfigFile.new()
 	cfg.load(AJUSTES)
 	cfg.set_value("controles", "garra", garra)
+	cfg.save(AJUSTES)
+
+
+func cambiar_disparo() -> void:
+	disparo_soltar = not disparo_soltar
+	var cfg := ConfigFile.new()
+	cfg.load(AJUSTES)
+	cfg.set_value("controles", "disparo_soltar", disparo_soltar)
 	cfg.save(AJUSTES)
 
 

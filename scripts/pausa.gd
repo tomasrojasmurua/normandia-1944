@@ -43,7 +43,8 @@ func _botones() -> Array:
 	var lista := [["seguir", Rect2(x, 140, 220, 26), "CONTINUAR", true, ""]]
 	if _tactil:
 		lista.append(["garra", Rect2(x, 174, 220, 26), "MODO TÁCTIL", true, "GARRA" if Game.garra else "2 DEDOS"])
-	lista.append(["menu", Rect2(x, 208 if _tactil else 174, 220, 26), "SALIR AL MENÚ", true, ""])
+		lista.append(["disparo", Rect2(x, 208, 220, 26), "DISPARO", true, "AL SOLTAR" if Game.disparo_soltar else "AL TOCAR"])
+	lista.append(["menu", Rect2(x, 242 if _tactil else 174, 220, 26), "SALIR AL MENÚ", true, ""])
 	return lista
 
 
@@ -55,6 +56,8 @@ func _pulsado(id: String) -> void:
 			pausar(false)
 		"garra":
 			Game.cambiar_garra()
+		"disparo":
+			Game.cambiar_disparo()
 		"menu":
 			Game.ir_al_menu()
 
@@ -62,7 +65,7 @@ func _pulsado(id: String) -> void:
 func _draw() -> void:
 	if get_tree().paused:
 		draw_rect(Rect2(Vector2.ZERO, size), Color(Estilo.NEGRO, 0.6))
-		var panel := Rect2(size.x / 2.0 - 130, 90, 260, 160 if _tactil else 126)
+		var panel := Rect2(size.x / 2.0 - 130, 90, 260, 194 if _tactil else 126)
 		Estilo.marco(self, panel, "chapa")
 		Estilo.texto_c(self, "PAUSA", size.x / 2.0, 124, Estilo.AMBAR, Estilo.TAM_GRANDE)
 	_dibujar_botones()

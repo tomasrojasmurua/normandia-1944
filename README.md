@@ -18,7 +18,8 @@ FPS cooperativo retro de la Segunda Guerra Mundial, hecho en **Godot 4.7** y jug
 | Granada | Botón GRANADA | G |
 | Agacharse | Botón AGACHAR | C o Ctrl |
 | Saltar | Botón SALTAR | Barra espaciadora |
-| Modo de controles | Botón MODO arriba al centro: 2 DEDOS o GARRA (queda guardado) | — |
+| Modo de controles | En CONTROLES del menú o en la pausa: MODO TÁCTIL (2 DEDOS o GARRA) y DISPARO (AL TOCAR o AL SOLTAR). Quedan guardados | — |
+| Disparo AL SOLTAR | Mantén FUEGO: el arma sube a la mira (puedes seguir apuntando); suelta para disparar. Con automáticas, mantener = mira + ráfaga | — |
 
 Para jugar a pantalla completa en el celular: abre el link y usa **Compartir → Agregar a pantalla de inicio** (iPhone) o **⋮ → Instalar app** (Android).
 

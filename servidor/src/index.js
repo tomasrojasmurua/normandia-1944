@@ -78,7 +78,7 @@ export default {
     if (request.headers.get("Upgrade") !== "websocket") {
       return new Response("se esperaba un WebSocket", { status: 426 });
     }
-    const sala = env.SALAS.get(env.SALAS.idFromName(m[1]));
+    const sala = env.SALAS.get(env.SALAS.idFromName(m[1]), { locationHint: "sam" });
     return sala.fetch(request);
   },
 };

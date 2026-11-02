@@ -315,7 +315,7 @@ func warmup() -> void:
 
 
 ## Trazadora de bala. Reserva fija de 32 que se reciclan (ver play_at).
-func tracer(from: Vector3, to: Vector3, color := Color(1.0, 0.75, 0.3)) -> void:
+func tracer(from: Vector3, to: Vector3, color := Color(1.0, 0.75, 0.3), grosor := 1.0) -> void:
 	var length := from.distance_to(to)
 	if length < 0.5:
 		return
@@ -345,7 +345,7 @@ func tracer(from: Vector3, to: Vector3, color := Color(1.0, 0.75, 0.3)) -> void:
 	var dir := (to - from).normalized()
 	m.global_position = from
 	m.look_at(from + dir, Vector3.RIGHT if absf(dir.y) > 0.98 else Vector3.UP)
-	m.scale = Vector3(1, 1, largo)
+	m.scale = Vector3(grosor, grosor, largo)
 	m.visible = true
 	var tw := m.create_tween()
 	m.set_meta("tw", tw)

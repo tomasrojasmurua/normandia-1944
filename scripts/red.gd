@@ -13,6 +13,7 @@ class_name Red
 const SERVIDOR := "wss://normandy-1944.tomasrojasmurua.workers.dev"
 const ENVIOS_POR_SEGUNDO := 15.0
 const ATRASO := 0.12
+const NOMBRES := ["MURPHY", "DELUCA", "HAYES", "BRENNAN"]
 
 static var actual: Red
 
@@ -100,6 +101,10 @@ func _recibir(texto: String) -> void:
 		"hola":
 			mi_id = d["id"]
 			anfitrion = d["anfitrion"]
+			# Cada jugador con su propio soldado (y su cara), según el orden de llegada
+			var p := get_tree().get_first_node_in_group("player") as Player
+			if p:
+				p.nombre = NOMBRES[mini((d["otros"] as Array).size(), NOMBRES.size() - 1)]
 			Game.say("[SALA %s: %s]" % [Game.sala, "ERES EL ANFITRIÓN" if anfitrion else "CONECTADO"], Game.COLOR_GOOD)
 		"llena":
 			estado = "sala llena"
@@ -124,11 +129,14 @@ func _recibir(texto: String) -> void:
 			var e: Array = d["e"]
 			var desde := Vector3(f[0], f[1], f[2])
 			var hasta := Vector3(e[0], e[1], e[2])
-			Game.tracer(desde, hasta)
-			Game.play_at("rifle_far", desde, 0.0)
+			# La trazadora sale del fusil del soldado que se ve (no de sus ojos),
+			# más gruesa y con el disparo cercano: que se note quién dispara
 			var r: JugadorRemoto = remotos.get(str(d["id"]))
-			if r:
+			if r and is_instance_valid(r) and r.cuerpo and r.cuerpo.boca:
+				desde = r.cuerpo.boca.global_position
 				r.disparo()
+			Game.tracer(desde, hasta, Color(1.0, 0.85, 0.5), 2.5)
+			Game.play_at("rifle", desde, 2.0)
 
 
 func _quitar(id: String) -> void:

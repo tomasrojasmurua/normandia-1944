@@ -91,6 +91,13 @@ func _crear_marcas() -> void:
 		add_child(m)
 
 
+var _players_3d: Array = []
+var _next_3d := 0
+var _trazadoras: Array = []
+var _next_traz := 0
+var _emisores := {}           # tipo de estallido → [CPUParticles3D]
+
+
 func _process(delta: float) -> void:
 	if not get_tree().paused:
 		elapsed += delta
@@ -160,19 +167,33 @@ func play(sound: String, volume_db := 0.0, pitch := 1.0) -> void:
 	p.play()
 
 
+## Sonido en un punto del mundo. Usa una reserva fija de reproductores 3D que
+## se reciclan (antes se creaba y borraba uno por disparo: en el navegador del
+## celular eso cuesta y trababa el juego en los tiroteos).
 func play_at(sound: String, pos: Vector3, volume_db := 0.0) -> void:
 	if not _sounds.has(sound):
 		return
-	var p := AudioStreamPlayer3D.new()
+	if _players_3d.is_empty():
+		for i in 16:
+			var n := AudioStreamPlayer3D.new()
+			n.unit_size = 12.0
+			n.max_distance = 200.0
+			add_child(n)
+			_players_3d.append(n)
+	# El siguiente libre; si todos suenan, el más antiguo
+	var p: AudioStreamPlayer3D = _players_3d[_next_3d]
+	for i in _players_3d.size():
+		var c: AudioStreamPlayer3D = _players_3d[(_next_3d + i) % _players_3d.size()]
+		if not c.playing:
+			p = c
+			_next_3d = (_next_3d + i) % _players_3d.size()
+			break
+	_next_3d = (_next_3d + 1) % _players_3d.size()
 	p.stream = _sounds[sound]
 	p.volume_db = volume_db
-	p.unit_size = 12.0
-	p.max_distance = 200.0
 	p.pitch_scale = _rng.randf_range(0.92, 1.06)
-	_scene().add_child(p)
 	p.global_position = pos
 	p.play()
-	p.finished.connect(p.queue_free)
 
 
 func _build_sounds() -> void:
@@ -282,28 +303,45 @@ func warmup() -> void:
 	warming = false
 
 
+## Trazadora de bala. Reserva fija de 32 que se reciclan (ver play_at).
 func tracer(from: Vector3, to: Vector3, color := Color(1.0, 0.75, 0.3)) -> void:
 	var length := from.distance_to(to)
 	if length < 0.5:
 		return
-	var m := MeshInstance3D.new()
-	var box := BoxMesh.new()
-	box.size = Vector3(0.025, 0.025, minf(length, 6.0))
-	m.mesh = box
-	var mat := StandardMaterial3D.new()
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	if _trazadoras.is_empty():
+		var box := BoxMesh.new()
+		box.size = Vector3(0.025, 0.025, 1.0)
+		for i in 32:
+			var n := MeshInstance3D.new()
+			n.mesh = box
+			n.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			var mat := StandardMaterial3D.new()
+			mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+			mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+			n.material_override = mat
+			n.visible = false
+			add_child(n)
+			_trazadoras.append(n)
+	var m: MeshInstance3D = _trazadoras[_next_traz]
+	_next_traz = (_next_traz + 1) % _trazadoras.size()
+	if m.has_meta("tw"):
+		var viejo: Tween = m.get_meta("tw")
+		if viejo and viejo.is_valid():
+			viejo.kill()
+	var mat: StandardMaterial3D = m.material_override
 	mat.albedo_color = color
-	m.material_override = mat
-	_scene().add_child(m)
+	var largo := minf(length, 6.0)
 	var dir := (to - from).normalized()
 	m.global_position = from
 	m.look_at(from + dir, Vector3.RIGHT if absf(dir.y) > 0.98 else Vector3.UP)
+	m.scale = Vector3(1, 1, largo)
+	m.visible = true
 	var tw := m.create_tween()
+	m.set_meta("tw", tw)
 	var travel := minf(length / 250.0, 0.25)  # la trazadora "viaja" hasta el blanco
-	tw.tween_property(m, "global_position", to - dir * box.size.z * 0.5, travel)
+	tw.tween_property(m, "global_position", to - dir * largo * 0.5, travel)
 	tw.parallel().tween_property(mat, "albedo_color:a", 0.0, travel + 0.05)
-	tw.tween_callback(m.queue_free)
+	tw.tween_callback(func() -> void: m.visible = false)
 
 
 ## Explosión de granada: efecto visual, sonido y daño en un radio.
@@ -364,30 +402,46 @@ func _clear_path(from: Vector3, to: Vector3) -> bool:
 	return space.intersect_ray(q).is_empty()
 
 
+## Estallido de partículas (polvo, sangre, agua, humo). Cada tipo tiene su
+## reserva de emisores que se reciclan (ver play_at).
 func _burst(pos: Vector3, color: Color, amount: int, speed: float, life: float,
 		size: float, dir: Vector3, gravity_scale: float, spread := 55.0) -> void:
-	var p := CPUParticles3D.new()
-	p.one_shot = true
-	p.emitting = false
-	p.amount = amount
-	p.lifetime = life
-	p.explosiveness = 1.0
-	p.local_coords = false
-	var box := BoxMesh.new()
-	box.size = Vector3.ONE * size
-	box.material = _unshaded(color)
-	p.mesh = box
+	var clave := "%s|%d|%.2f|%.2f|%.2f|%.2f|%.1f" % [color.to_html(), amount, speed, life, size, gravity_scale, spread]
+	if not _emisores.has(clave):
+		_emisores[clave] = []
+	var lista: Array = _emisores[clave]
+	var p: CPUParticles3D = null
+	for e: CPUParticles3D in lista:
+		if not e.emitting:
+			p = e
+			break
+	if p == null:
+		if lista.size() < 12:
+			p = CPUParticles3D.new()
+			p.one_shot = true
+			p.emitting = false
+			p.amount = amount
+			p.lifetime = life
+			p.explosiveness = 1.0
+			p.local_coords = false
+			var box := BoxMesh.new()
+			box.size = Vector3.ONE * size
+			box.material = _unshaded(color)
+			p.mesh = box
+			p.spread = spread
+			p.initial_velocity_min = speed * 0.4
+			p.initial_velocity_max = speed
+			p.gravity = Vector3(0, -9.8 * gravity_scale, 0)
+			p.scale_amount_min = 0.5
+			p.scale_amount_max = 1.2
+			add_child(p)
+			lista.append(p)
+		else:
+			p = lista.pop_front()   # todos ocupados: se recicla el más antiguo
+			lista.append(p)
 	p.direction = dir
-	p.spread = spread
-	p.initial_velocity_min = speed * 0.4
-	p.initial_velocity_max = speed
-	p.gravity = Vector3(0, -9.8 * gravity_scale, 0)
-	p.scale_amount_min = 0.5
-	p.scale_amount_max = 1.2
-	_scene().add_child(p)
 	p.global_position = pos
-	p.emitting = true
-	get_tree().create_timer(life + 0.3).timeout.connect(p.queue_free)
+	p.restart()
 
 
 func _unshaded(color: Color) -> StandardMaterial3D:

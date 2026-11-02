@@ -122,6 +122,11 @@ func _draw() -> void:
 		Estilo.texto_c(self, "REINICIANDO...", s.x / 2, top / 2 + 18, Estilo.CREMA)
 
 	if Game.warming:   # pantalla de espera mientras se preparan los efectos
+		# Dibuja todas las letras una vez (tapadas por el negro): la fuente
+		# prepara cada letra la primera vez que se usa, y eso trababa un
+		# cuadro cuando aparecía un mensaje nuevo en medio del combate.
+		for tam in [Estilo.TAM, Estilo.TAM_GRANDE]:
+			Estilo.texto(self, "ABCDEFGHIJKLMNÑOPQRSTUVWXYZÁÉÍÓÚÜ0123456789[]:-.,!¡?¿+/|%()'", Vector2(0, 40), Estilo.CREMA, tam)
 		draw_rect(Rect2(Vector2.ZERO, s), Estilo.NEGRO)
 		Estilo.texto_c(self, "PREPARANDO LA PLAYA...", s.x / 2, s.y / 2, Estilo.AMBAR)
 		return

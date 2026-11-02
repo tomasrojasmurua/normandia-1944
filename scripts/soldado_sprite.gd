@@ -59,6 +59,8 @@ func _ready() -> void:
 	_set = todo[id]
 	_muertes = todo["muertes"]
 	_carpeta = _base + id + "/"
+	_precargar(_carpeta, _set)
+	_precargar(_base + "muertes/", _muertes)
 
 	_spr = Sprite3D.new()
 	_spr.billboard = BaseMaterial3D.BILLBOARD_FIXED_Y
@@ -172,6 +174,16 @@ func _actualizar(delta: float) -> void:
 		_spr.position = _sacudon
 	if muerto and k == int(info["cuadros"]) - 1:
 		set_process(false)      # ya cayó: queda quieto para siempre
+
+
+## Carga de una vez todas las imágenes de un juego de animaciones (al crear
+## el soldado, mientras la playa se prepara). Cargarlas recién al verlas por
+## primera vez trababa el juego en medio del combate: cada imagen nueva hay que
+## leerla y subirla a la tarjeta de video.
+static func _precargar(carpeta: String, anims: Dictionary) -> void:
+	for nombre in anims:
+		for d in 8:
+			_textura(carpeta + "%s_%d.png" % [nombre, d])
 
 
 static func _textura(ruta: String) -> Texture2D:

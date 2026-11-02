@@ -54,7 +54,6 @@ func _ready() -> void:
 	cuerpo = Soldado.new()
 	cuerpo.bando = "aleman"
 	cuerpo.arma = arma
-	cuerpo.cara = randi_range(1, 3)
 	add_child(cuerpo)
 	_crear_colisiones()
 	_buscar_cobertura.call_deferred()

@@ -703,101 +703,6 @@ def arpillera():
     img.save(RAIZ / "assets" / "texturas" / "arpillera.png")
 
 
-# ---------------------------------------------------------------------------
-# SOLDADOS: telas, cuero, cascos y caras (assets/soldados/). 32x32 repetibles,
-# salvo las caras (16x16, se ponen al frente de la cabeza).
-# ---------------------------------------------------------------------------
-SOLDADOS = RAIZ / "assets" / "soldados"
-
-
-def _tela(nombre, base, claro, oscuro, semilla, sarga=False, manchas=None):
-    img, px, rnd = _ruido_img(32, semilla, base, claro, oscuro, 0.08, 0.10)
-    for y in range(32):
-        for x in range(32):
-            c = tuple(list(px[x, y]) + [255])
-            if sarga and ((x + y) % 4 == 0 or (x - y) % 8 == 0 and y % 8 < 4):
-                c = mezcla(c, oscuro, 0.35)          # espiga (HBT) de los americanos
-            elif not sarga and (x * 3 + y) % 5 == 0:
-                c = mezcla(c, oscuro, 0.18)          # paño de lana
-            px[x, y] = c[:3]
-    for _ in range(manchas or 0):                    # barro y arena
-        cx, cy, r = rnd.randrange(32), rnd.randrange(32), rnd.randint(1, 3)
-        for yy in range(-r, r + 1):
-            for xx in range(-r, r + 1):
-                if xx * xx + yy * yy <= r * r and rnd.random() < 0.6:
-                    q = ((cx + xx) % 32, (cy + yy) % 32)
-                    px[q] = mezcla(tuple(list(px[q]) + [255]), rgb("arena_moj"), 0.45)[:3]
-    img.save(SOLDADOS / f"{nombre}.png")
-
-
-def _casco(nombre, base, red=False):
-    img, px, rnd = _ruido_img(32, 31 if red else 32, base, mezcla(base, rgb("crema"), 0.18),
-                              mezcla(base, rgb("negro"), 0.35), 0.06, 0.08)
-    for _ in range(14):                               # pintura saltada
-        x, y = rnd.randrange(32), rnd.randrange(32)
-        px[x, y] = mezcla(rgb("acero"), rgb("oxido"), rnd.random() * 0.5)[:3]
-    if red:                                           # red de camuflaje del casco M1
-        for y in range(32):
-            for x in range(32):
-                if (x + y) % 6 == 0 or (x - y) % 6 == 0:
-                    px[x, y] = mezcla(tuple(list(px[x, y]) + [255]), rgb("madera_osc"), 0.55)[:3]
-    img.save(SOLDADOS / f"{nombre}.png")
-
-
-def _cara(nombre, piel, semilla):
-    """Cara de 16x16 vista de frente: cejas, ojos en sombra, nariz, boca y barba de días."""
-    rnd = random.Random(semilla)
-    img = Image.new("RGB", (16, 16), piel[:3])
-    px = img.load()
-    sombra = mezcla(piel, rgb("piel_osc"), 0.6)
-    for y in range(16):
-        for x in range(16):
-            n = rnd.random()
-            if n < 0.12:
-                px[x, y] = mezcla(piel, rgb("piel_osc"), 0.3)[:3]
-    for x in range(16):                               # sombra del casco sobre la frente
-        px[x, 0] = px[x, 1] = sombra[:3]
-        px[x, 2] = mezcla(piel, rgb("piel_osc"), 0.35)[:3]
-    for x in (3, 4, 5, 10, 11, 12):                   # cejas
-        px[x, 4] = mezcla(rgb("madera_osc"), rgb("negro"), 0.4)[:3]
-    for x0 in (3, 10):                                # ojos
-        px[x0, 6] = px[x0 + 2, 6] = sombra[:3]
-        px[x0 + 1, 6] = rgb("negro")[:3]
-        px[x0 + 1, 5] = sombra[:3]
-    for y in range(6, 10):                            # nariz
-        px[8, y] = sombra[:3] if y < 9 else mezcla(piel, rgb("piel_osc"), 0.8)[:3]
-    px[7, 9] = mezcla(piel, rgb("piel_osc"), 0.5)[:3]
-    for x in range(6, 11):                            # boca
-        px[x, 12] = mezcla(rgb("piel_osc"), rgb("sangre"), 0.25)[:3]
-    for y in range(11, 16):                           # barba de días
-        for x in range(2, 14):
-            if rnd.random() < 0.35 and not (y == 12 and 6 <= x <= 10):
-                px[x, y] = mezcla(piel, rgb("negro"), 0.25)[:3]
-    for y in range(16):                               # bordes en sombra (volumen)
-        px[0, y] = px[15, y] = mezcla(tuple(list(px[0, y]) + [255]), rgb("piel_osc"), 0.5)[:3]
-    img.save(SOLDADOS / f"{nombre}.png")
-
-
-def texturas_soldados():
-    SOLDADOS.mkdir(parents=True, exist_ok=True)
-    # (el alemán ya no usa texturas propias: es el modelo 3D de assets/soldados/aleman)
-    od = (110, 104, 74, 255)                          # chaqueta M1941 (oliva claro)
-    _tela("tela_m41", od, mezcla(od, rgb("crema"), 0.15), mezcla(od, rgb("negro"), 0.3), 43, manchas=5)
-    hbt = (82, 88, 60, 255)                           # pantalón HBT oliva
-    _tela("tela_hbt", hbt, mezcla(hbt, rgb("crema"), 0.12), mezcla(hbt, rgb("negro"), 0.35), 44, sarga=True, manchas=7)
-    web = (150, 136, 98, 255)                         # cinchas de lona caqui
-    _tela("lona", web, mezcla(web, rgb("crema"), 0.2), mezcla(web, rgb("madera_osc"), 0.35), 45)
-    cuero = (34, 30, 26, 255)
-    _tela("cuero", cuero, (58, 50, 42, 255), (18, 16, 14, 255), 46)
-    _casco("casco_us", (78, 82, 52, 255), red=True)
-    _cara("cara_1", rgb("piel"), 51)
-    _cara("cara_2", mezcla(rgb("piel"), rgb("crema"), 0.2), 52)
-    _cara("cara_3", mezcla(rgb("piel"), rgb("piel_osc"), 0.25), 53)
-
-
-# ---------------------------------------------------------------------------
-# LÁMINA DE LA GUÍA DE ESTILO
-# ---------------------------------------------------------------------------
 def lamina(iconos, celda_g, celda_m):
     W, H = 320, 200
     img = Image.new("RGBA", (W, H), rgb("oliva_0"))
@@ -872,7 +777,6 @@ if __name__ == "__main__":
     retrato_provisional()
     ARMAS.mkdir(parents=True, exist_ok=True)
     arpillera()
-    texturas_soldados()
     paleta_png()
     lamina(iconos, cg, cm)
     print("listo:", cg, cm)

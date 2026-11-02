@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://nurtevqjilrs"
-path="res://.godot/imported/tela_hbt.png-ec64e51b6d6d78cb5af76b31ee763255.ctex"
+uid="uid://xl1ql82mb83x"
+path="res://.godot/imported/atlas.png-44dd1cc8e2e9b601fab5c5721ac96667.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/soldados/tela_hbt.png"
-dest_files=["res://.godot/imported/tela_hbt.png-ec64e51b6d6d78cb5af76b31ee763255.ctex"]
+source_file="res://assets/armas/3d/atlas.png"
+dest_files=["res://.godot/imported/atlas.png-44dd1cc8e2e9b601fab5c5721ac96667.ctex"]
 
 [params]
 

@@ -17,7 +17,6 @@ func _ready() -> void:
 	cuerpo = Soldado.new()
 	cuerpo.bando = "aliado"
 	cuerpo.arma = arma
-	cuerpo.cara = randi_range(1, 3)
 	add_child(cuerpo)
 	cuerpo.pose = "agachado"
 	_t = randf_range(1.0, 4.0)

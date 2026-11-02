@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://b1ui6xao4q623"
-path="res://.godot/imported/casco_us.png-fe9211e976dd28dde99475dd46ebc605.ctex"
+uid="uid://dvl7v0b3yjd3m"
+path="res://.godot/imported/textura.png-32fd231595e0e22bce66fc78a2bcf5c9.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/soldados/casco_us.png"
-dest_files=["res://.godot/imported/casco_us.png-fe9211e976dd28dde99475dd46ebc605.ctex"]
+source_file="res://assets/soldados/americano/textura.png"
+dest_files=["res://.godot/imported/textura.png-32fd231595e0e22bce66fc78a2bcf5c9.ctex"]
 
 [params]
 

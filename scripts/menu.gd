@@ -101,6 +101,8 @@ func _controles() -> void:
 			"TOCA EL ARMA 1 O 2 DE LA BARRA PARA CAMBIAR",
 			"GARRA: AGREGA OTRO FUEGO ARRIBA A LA IZQUIERDA",
 			"AL SOLTAR: MANTÉN FUEGO PARA APUNTAR, SUELTA PARA DISPARAR",
+			"BOTONES DE LA BARRA, A LA IZQUIERDA: ÓRDENES",
+			"A LA ESCUADRA (SÍGANME, AVANCEN, ALTO)",
 		]
 		for i in lineas.size():
 			Estilo.texto(self, lineas[i], Vector2(X, 140 + i * 15), Estilo.CREMA)
@@ -110,6 +112,7 @@ func _controles() -> void:
 			["CLIC IZQUIERDO", "DISPARAR"], ["CLIC DERECHO", "MIRAR POR LA MIRA"],
 			["R", "RECARGAR"], ["G", "GRANADA"], ["ESPACIO", "SALTAR"],
 			["C / CTRL", "AGACHARSE"], ["E", "RECOGER ARMA"], ["1 / 2 / Q", "CAMBIAR DE ARMA"],
+			["Z / X / V", "ESCUADRA: SÍGANME / AVANCEN / ALTO"],
 			["ESC", "PAUSA"],
 		]
 		for i in teclas.size():

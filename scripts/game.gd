@@ -264,6 +264,11 @@ func explode(pos: Vector3, radius: float, damage: float) -> void:
 		var d := pos.distance_to(chest)
 		if d < radius and _clear_path(pos, chest):
 			e.hit(damage * (1.0 - d / radius), false, chest, (chest - pos).normalized())
+	for a in get_tree().get_nodes_in_group("aliados"):
+		var c: Vector3 = a.global_position + Vector3(0, 1.0, 0)
+		var da := pos.distance_to(c)
+		if da < radius and _clear_path(pos, c):
+			a.take_damage(damage * 0.8 * (1.0 - da / radius), pos)
 	var player := get_tree().get_first_node_in_group("player")
 	if player:
 		var center: Vector3 = player.global_position + Vector3(0, 1.0, 0)

@@ -131,7 +131,8 @@ func _draw() -> void:
 	Estilo.marco(self, Rect2(0, top, s.x, BAR_H), "lisa")
 	var right_w := 486.0
 	var x := s.x - right_w
-	_draw_messages(Rect2(3, top + 3, x - 6, BAR_H - 6))
+	_draw_messages(Vector2(4, top - 4))
+	_draw_escuadra(Rect2(3, top + 2, x - 6, BAR_H - 4))
 	_draw_portrait(Rect2(x, top + 2, 60, BAR_H - 4))
 	_draw_status(Rect2(x + 62, top + 2, 76, BAR_H - 4))
 	_draw_grenades(Rect2(x + 140, top + 2, 67, BAR_H - 4))
@@ -313,14 +314,112 @@ func _draw_hit_indicator(c: Vector2, angle: float, alpha: float) -> void:
 	draw_arc(c, 46, a - 0.35, a + 0.35, 8, Color(Estilo.ROJO, 0.85 * alpha), 3.0)
 
 
-func _draw_messages(r: Rect2) -> void:
-	Estilo.marco(self, r, "hundido")
-	var y := r.position.y + 11
+## Mensajes encima de la barra, a la izquierda (el más nuevo abajo).
+func _draw_messages(abajo: Vector2) -> void:
+	var y := abajo.y - (_messages.size() - 1) * 10
 	for m in _messages:
 		var col: Color = m[1]
 		col.a = clampf(7.0 - m[2], 0.0, 1.0)
-		Estilo.texto(self, m[0], Vector2(r.position.x + 4, y), col, Estilo.TAM, r.size.x - 6)
+		var sombra := Color(0, 0, 0, col.a * 0.8)
+		Estilo.texto(self, m[0], Vector2(abajo.x + 1, y + 1), sombra)
+		Estilo.texto(self, m[0], Vector2(abajo.x, y), col)
 		y += 10
+
+
+# --- Escuadra: retratos de los compañeros y las tres órdenes (como los
+# botones » → ‖ de Hamburger Hill). Se tocan con el dedo o con Z / X / V.
+const ORDENES := ["seguir", "avanzar", "mantener"]
+var _orden_rects: Array[Rect2] = []
+var _retratos_escuadra := {}
+
+
+func orden_at(pos: Vector2) -> String:
+	for i in _orden_rects.size():
+		if _orden_rects[i].grow(2).has_point(pos):
+			return ORDENES[i]
+	return ""
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	for i in 3:
+		if event.is_action_pressed(["order_follow", "order_advance", "order_hold"][i]):
+			Aliado.dar_orden(ORDENES[i])
+
+
+func _retrato_de(nombre: String) -> Texture2D:
+	var clave := nombre.to_lower()
+	if not _retratos_escuadra.has(clave):
+		var ruta := "res://assets/ui/retratos/retrato_%s.png" % clave
+		_retratos_escuadra[clave] = load(ruta) if ResourceLoader.exists(ruta) else Estilo.RETRATO_PROVISIONAL
+	return _retratos_escuadra[clave]
+
+
+func _draw_escuadra(r: Rect2) -> void:
+	var aliados: Array[Aliado] = []
+	for n in get_tree().current_scene.get_children():
+		if n is Aliado:
+			aliados.append(n)
+	for i in 3:
+		var col := Rect2(r.position.x + i * 42, r.position.y, 41, r.size.y)
+		Estilo.marco(self, col, "chapa")
+		if i >= aliados.size():
+			continue
+		var a := aliados[i]
+		_nombre_angosto(a.nombre, col.position.x + col.size.x / 2, col.position.y + 9,
+			Estilo.ROJO if a.dead else Estilo.CREMA, col.size.x - 6)
+		var face := Rect2(col.position + Vector2(1, 11), Vector2(39, 35))
+		Estilo.marco(self, face, "hundido")
+		var hp := clampf(a.health / a.max_health, 0.0, 1.0)
+		var tinte := Color.WHITE.lerp(Color(1.0, 0.35, 0.3), (1.0 - hp) * 0.9)
+		if a.dead:
+			tinte = Color(0.35, 0.35, 0.35)
+		draw_texture(_retrato_de(a.nombre), face.position + Vector2(1, 1), tinte)
+		if a.dead:   # una cruz roja sobre el retrato
+			var c := face.get_center()
+			draw_line(c + Vector2(-8, -8), c + Vector2(8, 8), Estilo.ROJO, 2.0)
+			draw_line(c + Vector2(8, -8), c + Vector2(-8, 8), Estilo.ROJO, 2.0)
+		elif a.moviendo:
+			_flecha(face.position + Vector2(face.size.x - 7, face.size.y - 6))
+	# Órdenes
+	_orden_rects.clear()
+	var x0 := r.position.x + 3 * 42
+	var alto := floorf(r.size.y / 3.0)
+	for i in 3:
+		var b := Rect2(x0, r.position.y + i * alto, r.end.x - x0, alto - 1)
+		_orden_rects.append(b)
+		var activa: bool = Aliado.orden == ORDENES[i]
+		Estilo.marco(self, b, "hundido" if activa else "chapa")
+		var c := b.get_center().floor() + Vector2(0.5, 0.5)
+		var col := Estilo.AMBAR_CLARO if activa else Estilo.OLIVA_5
+		match i:
+			0:   # » síganme
+				for dx in [-3, 2]:
+					draw_polyline([c + Vector2(dx - 2, -3), c + Vector2(dx + 1, 0), c + Vector2(dx - 2, 3)], col, 1.0)
+			1:   # → avancen
+				draw_line(c + Vector2(-5, 0), c + Vector2(4, 0), col, 1.0)
+				draw_polyline([c + Vector2(1, -3), c + Vector2(4, 0), c + Vector2(1, 3)], col, 1.0)
+			2:   # ‖ alto
+				draw_rect(Rect2(c + Vector2(-3, -3), Vector2(2, 7)), col)
+				draw_rect(Rect2(c + Vector2(1, -3), Vector2(2, 7)), col)
+
+
+## Nombre centrado; si no cabe, junta las letras un píxel.
+func _nombre_angosto(t: String, cx: float, y: float, col: Color, ancho: float) -> void:
+	if Estilo.ancho_texto(t) <= ancho:
+		Estilo.texto_c(self, t, cx, y, col)
+		return
+	var paso := 5.0
+	var x := floorf(cx - (t.length() * paso - 1.0) / 2.0)
+	for ch in t:
+		Estilo.texto(self, ch, Vector2(x, y), col)
+		x += paso
+
+
+## Flechita ámbar: el compañero va corriendo a otra posición.
+func _flecha(c: Vector2) -> void:
+	draw_rect(Rect2(c + Vector2(-3, -1), Vector2(5, 2)), Estilo.NEGRO)
+	draw_polyline([c + Vector2(-3, 0), c + Vector2(2, 0)], Estilo.AMBAR_CLARO, 1.0)
+	draw_polyline([c + Vector2(0, -2), c + Vector2(2, 0), c + Vector2(0, 2)], Estilo.AMBAR_CLARO, 1.0)
 
 
 func _draw_portrait(r: Rect2) -> void:

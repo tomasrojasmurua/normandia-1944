@@ -121,6 +121,9 @@ func _touch_down(index: int, pos: Vector2) -> void:
 			var slot: int = _hud.slot_at(pos)
 			if slot >= 0:
 				_player.weapons.select(slot)
+			var orden: String = _hud.orden_at(pos)
+			if orden != "":
+				Aliado.dar_orden(orden)
 		return
 	if pos.x < size.x * 0.5:
 		if not _has_role("move"):

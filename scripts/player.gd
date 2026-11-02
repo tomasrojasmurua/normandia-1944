@@ -57,6 +57,7 @@ var _throw_pending := false
 
 func _ready() -> void:
 	add_to_group("player")
+	add_to_group("americanos")
 	collision_layer = 2          # capa 2: jugador
 	collision_mask = 1 | 4       # choca con escenario (1) y enemigos (3)
 	health = max_health
@@ -155,6 +156,22 @@ func throw_grenade() -> void:
 	g.linear_velocity = fwd * 13.0 + Vector3.UP * 3.5 + velocity * 0.5
 	g.angular_velocity = Vector3(randf_range(-8, 8), randf_range(-8, 8), randf_range(-8, 8))
 	Game.say("[GRANADA!]")
+
+
+## Para los soldados de IA: dónde apuntar y cuánto cuesta pegarte.
+func pos_cabeza() -> Vector3:
+	return head.global_position
+
+
+func factor_blanco() -> float:
+	var f := 1.0
+	if crouching:
+		f *= 0.6
+	if sprinting:
+		f *= 0.6
+	elif Vector2(velocity.x, velocity.z).length() > 2.0:
+		f *= 0.75   # moverse también ayuda
+	return f
 
 
 func take_damage(amount: float, from_pos: Vector3) -> void:

@@ -100,16 +100,19 @@ arma = "kar98k"
 transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 2, 3.45, -41)
 script = ExtResource("5_enemy")
 arma = "mg42"
+rol = "fijo"
 
 [node name="Enemy6" type="CharacterBody3D" parent="Enemies"]
 transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, -14, 0, -25.2)
 script = ExtResource("5_enemy")
 arma = "kar98k"
+rol = "flanqueador"
 
 [node name="Enemy7" type="CharacterBody3D" parent="Enemies"]
 transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 13, 0, -21.2)
 script = ExtResource("5_enemy")
 arma = "mp40"
+rol = "flanqueador"
 
 [node name="UI" type="CanvasLayer" parent="."]
 

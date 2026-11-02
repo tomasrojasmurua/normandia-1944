@@ -47,6 +47,8 @@ func _ready() -> void:
 	_burlap = _material_tex("res://assets/texturas/arpillera.png", 0.45)
 	_grass = textured("pasto_duna", 2.5, Color(0.85, 0.85, 0.8))
 	_wood = textured("madera", 2.0)
+	Coberturas.limpiar()
+	Aliado.orden = "seguir"
 	_dress_ground_and_sea()
 	Game.sea_from_z = 10.0   # el mar empieza en z = 10 (igual que z_orilla en los shaders)
 
@@ -55,6 +57,7 @@ func _ready() -> void:
 	for i in hedgehog_count:
 		var pos := Vector3(rng.randf_range(-area.x / 2, area.x / 2), 0, rng.randf_range(-area.y, -4))
 		_add_hedgehog(pos, rng.randf() * TAU)
+		Coberturas.agregar_erizo(pos)
 
 	# Búnker de concreto con tronera (franja oscura) hacia el mar
 	_add_box(Vector3(0, 1.5, -42), Vector3(14, 3, 5), _concrete)
@@ -67,7 +70,8 @@ func _ready() -> void:
 	_sandbag_wall(Vector3(-14, 0, -24), 3.0, 6, 2, 8.0, rng)
 	_sandbag_wall(Vector3(13, 0, -20), 3.0, 6, 2, -10.0, rng)
 	_sandbag_wall(Vector3(2, 3.45, -39.6), 3.0, 3, 1, 0.0, rng)   # parapeto en el techo
-	_build_bags()
+	# (los parapetos nuevos van al final, con su propio azar, para no mover
+	# los postes y cajas de siempre)
 
 	# Postes de madera clavados en la arena (obstáculos de playa)
 	for i in 10:
@@ -84,13 +88,38 @@ func _ready() -> void:
 		_add_crate(cajas[arma_id], arma_id, rng)
 	ArmaSuelta.soltar(self, Vector3(8.4, 0.05, -39.0), "luger", -1, -1)
 
-	# Compañeros americanos cubriéndose en la playa
-	for c in [[Vector3(-9, 0, -3), "thompson"], [Vector3(11, 0, -6), "garand"], [Vector3(-20, 0, -9), "bar"]]:
+	# Más parapetos alemanes: flancos (para contraatacar) y a los lados del
+	# búnker (para replegarse)
+	var rng2 := RandomNumberGenerator.new()
+	rng2.seed = seed_value + 44
+	_sandbag_wall(Vector3(-24, 0, -31), 4.0, 6, 2, 15.0, rng2)
+	_sandbag_wall(Vector3(23, 0, -29), 4.0, 6, 2, -15.0, rng2)
+	_sandbag_wall(Vector3(-11.5, 0, -41), 4.0, 6, 2, 0.0, rng2)
+	_sandbag_wall(Vector3(11.5, 0, -41), 4.0, 6, 2, 0.0, rng2)
+	_sandbag_wall(Vector3(0, 0, -29), 3.0, 6, 2, 0.0, rng2)
+	_build_bags()
+
+	# La escuadra: los otros tres del cooperativo (por ahora con IA)
+	for c in [[Vector3(-9, 0, -3), "thompson", "DELUCA"], [Vector3(11, 0, -6), "garand", "HAYES"],
+			[Vector3(-6, 0, 3), "bar", "BRENNAN"]]:
 		var a := Aliado.new()
 		a.arma = c[1]
-		a.objetivo = Vector3(c[0].x * 0.3, 2.0, -40)
-		add_child(a)
-		a.global_position = c[0]
+		a.nombre = c[2]
+		a.name = c[2].capitalize()
+		get_parent().add_child.call_deferred(a)
+		a.position = c[0]
+
+	# Mapa de caminos para la IA, con todo lo de arriba ya puesto
+	_hornear_navegacion.call_deferred()
+
+
+func _exit_tree() -> void:
+	Navegacion.olvidar()
+	Coberturas.limpiar()
+
+
+func _hornear_navegacion() -> void:
+	Navegacion.hornear(get_parent(), AABB(Vector3(-45, -2, -75), Vector3(90, 26, 88)))
 
 
 ## Suelo (arena mojada → seca → guijarros → pasto) y mar con espuma.
@@ -205,6 +234,7 @@ func _sandbag_wall(center: Vector3, length: float, courses: int, rows: int, yaw_
 	var body := StaticBody3D.new()
 	body.transform = Transform3D(wall, center + Vector3(0, courses * bag_h * 0.92 / 2.0, 0))
 	add_child(body)
+	Coberturas.agregar_muro(center, length, yaw_deg, rows * bag_d, courses * bag_h * 0.92)
 	var col := CollisionShape3D.new()
 	var shape := BoxShape3D.new()
 	shape.size = Vector3(length, courses * bag_h * 0.92, rows * bag_d)

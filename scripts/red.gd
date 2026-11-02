@@ -10,7 +10,7 @@ class_name Red
 
 ## Dirección del servidor (la da Cloudflare al instalarlo). Para pruebas
 ## locales se puede cambiar con la variable de entorno SERVIDOR_RED.
-const SERVIDOR := "wss://normandy-1944.CAMBIAR.workers.dev"
+const SERVIDOR := "wss://normandy-1944.tomasrojasmurua.workers.dev"
 const ENVIOS_POR_SEGUNDO := 15.0
 const ATRASO := 0.12
 

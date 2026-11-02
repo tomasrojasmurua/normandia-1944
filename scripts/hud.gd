@@ -359,56 +359,72 @@ func _draw_escuadra(r: Rect2) -> void:
 	for n in get_tree().current_scene.get_children():
 		if n is Aliado:
 			aliados.append(n)
+	# Las tres órdenes van lado a lado, a todo el alto de la barra (antes eran
+	# tres franjas finitas). En pantallas angostas los retratos se recortan
+	# para que cada botón tenga al menos ~24 px de ancho.
+	var paso := 42.0
+	if r.size.x - 3 * paso < 3 * 32:
+		paso = maxf(26.0, floorf((r.size.x - 3 * 24) / 3.0))
 	for i in 3:
-		var col := Rect2(r.position.x + i * 42, r.position.y, 41, r.size.y)
+		var col := Rect2(r.position.x + i * paso, r.position.y, paso - 1, r.size.y)
 		Estilo.marco(self, col, "chapa")
 		if i >= aliados.size():
 			continue
 		var a := aliados[i]
 		_nombre_angosto(a.nombre, col.position.x + col.size.x / 2, col.position.y + 9,
 			Estilo.ROJO if a.dead else Estilo.CREMA, col.size.x - 6)
-		var face := Rect2(col.position + Vector2(1, 11), Vector2(39, 35))
+		var face := Rect2(col.position + Vector2(1, 11), Vector2(col.size.x - 2, 35))
 		Estilo.marco(self, face, "hundido")
 		var hp := clampf(a.health / a.max_health, 0.0, 1.0)
 		var tinte := Color.WHITE.lerp(Color(1.0, 0.35, 0.3), (1.0 - hp) * 0.9)
 		if a.dead:
 			tinte = Color(0.35, 0.35, 0.35)
-		draw_texture(_retrato_de(a.nombre), face.position + Vector2(1, 1), tinte)
+		var tex := _retrato_de(a.nombre)
+		var ancho := minf(tex.get_width(), face.size.x - 2)
+		var fuente := Rect2((tex.get_width() - ancho) / 2.0, 0, ancho, tex.get_height())
+		draw_texture_rect_region(tex, Rect2(face.position + Vector2(1, 1), fuente.size), fuente, tinte)
 		if a.dead:   # una cruz roja sobre el retrato
 			var c := face.get_center()
 			draw_line(c + Vector2(-8, -8), c + Vector2(8, 8), Estilo.ROJO, 2.0)
 			draw_line(c + Vector2(8, -8), c + Vector2(-8, 8), Estilo.ROJO, 2.0)
 		elif a.moviendo:
 			_flecha(face.position + Vector2(face.size.x - 7, face.size.y - 6))
-	# Órdenes
+	# Órdenes: » síganme, → avancen, ‖ alto
 	_orden_rects.clear()
-	var x0 := r.position.x + 3 * 42
-	var alto := floorf(r.size.y / 3.0)
+	var x0 := r.position.x + 3 * paso
+	var ancho_b := floorf((r.end.x - x0) / 3.0)
 	for i in 3:
-		var b := Rect2(x0, r.position.y + i * alto, r.end.x - x0, alto - 1)
+		var b := Rect2(x0 + i * ancho_b, r.position.y, ancho_b - 1, r.size.y)
 		_orden_rects.append(b)
 		var activa: bool = Aliado.orden == ORDENES[i]
 		Estilo.marco(self, b, "hundido" if activa else "chapa")
+		if activa:
+			draw_rect(b.grow(-3), Estilo.AMBAR, false, 1.0)
 		var c := b.get_center().floor() + Vector2(0.5, 0.5)
 		var col := Estilo.AMBAR_CLARO if activa else Estilo.OLIVA_5
+		var k := clampf((b.size.x - 8.0) / 20.0, 0.6, 1.0)   # dibujo más chico si el botón es angosto
+		var g := 2.0 if k > 0.8 else 1.0
 		match i:
-			0:   # » síganme
-				for dx in [-3, 2]:
-					draw_polyline([c + Vector2(dx - 2, -3), c + Vector2(dx + 1, 0), c + Vector2(dx - 2, 3)], col, 1.0)
-			1:   # → avancen
-				draw_line(c + Vector2(-5, 0), c + Vector2(4, 0), col, 1.0)
-				draw_polyline([c + Vector2(1, -3), c + Vector2(4, 0), c + Vector2(1, 3)], col, 1.0)
-			2:   # ‖ alto
-				draw_rect(Rect2(c + Vector2(-3, -3), Vector2(2, 7)), col)
-				draw_rect(Rect2(c + Vector2(1, -3), Vector2(2, 7)), col)
+			0:
+				for dx in [-5, 3]:
+					draw_polyline([c + Vector2(dx - 3, -6) * k, c + Vector2(dx + 3, 0) * k, c + Vector2(dx - 3, 6) * k], col, g)
+			1:
+				draw_line(c + Vector2(-8, 0) * k, c + Vector2(7, 0) * k, col, g)
+				draw_polyline([c + Vector2(1, -6) * k, c + Vector2(7, 0) * k, c + Vector2(1, 6) * k], col, g)
+			2:
+				draw_rect(Rect2(c + Vector2(-5, -6) * k, Vector2(3, 13) * k), col)
+				draw_rect(Rect2(c + Vector2(2, -6) * k, Vector2(3, 13) * k), col)
 
 
-## Nombre centrado; si no cabe, junta las letras un píxel.
+## Nombre centrado; si no cabe, junta las letras un píxel (y si aun así no
+## cabe, lo corta).
 func _nombre_angosto(t: String, cx: float, y: float, col: Color, ancho: float) -> void:
 	if Estilo.ancho_texto(t) <= ancho:
 		Estilo.texto_c(self, t, cx, y, col)
 		return
 	var paso := 5.0
+	if t.length() * paso - 1.0 > ancho:   # ni así cabe: se corta (DELUCA → DELU)
+		t = t.substr(0, int((ancho + 1.0) / paso))
 	var x := floorf(cx - (t.length() * paso - 1.0) / 2.0)
 	for ch in t:
 		Estilo.texto(self, ch, Vector2(x, y), col)

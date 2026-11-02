@@ -371,10 +371,8 @@ func _retrato_de(nombre: String) -> Texture2D:
 
 
 func _draw_escuadra(r: Rect2) -> void:
-	var aliados: Array[Aliado] = []
-	for n in get_tree().current_scene.get_children():
-		if n is Aliado:
-			aliados.append(n)
+	# Los tres puestos de la escuadra del jugador (un refuerzo ocupa el puesto de un caído)
+	var aliados: Array = Escuadras.ranuras_jugador()
 	# Las tres órdenes van lado a lado, a todo el alto de la barra (antes eran
 	# tres franjas finitas). En pantallas angostas los retratos se recortan
 	# para que cada botón tenga al menos ~24 px de ancho.
@@ -384,9 +382,9 @@ func _draw_escuadra(r: Rect2) -> void:
 	for i in 3:
 		var col := Rect2(r.position.x + i * paso, r.position.y, paso - 1, r.size.y)
 		Estilo.marco(self, col, "chapa")
-		if i >= aliados.size():
+		if i >= aliados.size() or aliados[i] == null or not is_instance_valid(aliados[i]):
 			continue
-		var a := aliados[i]
+		var a: Aliado = aliados[i]
 		_nombre_angosto(a.nombre, col.position.x + col.size.x / 2, col.position.y + 9,
 			Estilo.ROJO if a.dead else Estilo.CREMA, col.size.x - 6)
 		var face := Rect2(col.position + Vector2(1, 11), Vector2(col.size.x - 2, 35))

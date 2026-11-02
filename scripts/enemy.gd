@@ -292,7 +292,7 @@ func _intentar_granada(dist: float) -> bool:
 # ================================================================ recibir
 
 ## Recibe un impacto (bala o explosión).
-func hit(amount: float, headshot: bool, pos: Vector3, dir: Vector3) -> void:
+func hit(amount: float, headshot: bool, pos: Vector3, dir: Vector3, por_jugador := true) -> void:
 	if dead:
 		return
 	health -= amount * (2.0 if headshot else 1.0)
@@ -303,10 +303,10 @@ func hit(amount: float, headshot: bool, pos: Vector3, dir: Vector3) -> void:
 	if amenaza.distance_to(global_position) > 60.0 or not _sees:
 		amenaza = global_position - dir * 20.0     # sabe más o menos de dónde vino
 	if health <= 0.0:
-		_die(dir, headshot)
+		_die(dir, headshot, por_jugador)
 
 
-func _die(dir: Vector3, headshot: bool) -> void:
+func _die(dir: Vector3, headshot: bool, por_jugador := true) -> void:
 	dead = true
 	_rafaga = 0
 	moviendo = false
@@ -314,7 +314,8 @@ func _die(dir: Vector3, headshot: bool) -> void:
 	remove_from_group("enemies")
 	collision_layer = 0
 	collision_mask = 0
-	Game.say("[ENEMIGO ABATIDO]" if not headshot else "[ABATIDO - TIRO A LA CABEZA]")
+	if por_jugador:   # los que abaten las escuadras con IA no se anuncian (serían demasiados)
+		Game.say("[ENEMIGO ABATIDO]" if not headshot else "[ABATIDO - TIRO A LA CABEZA]")
 	if get_tree().get_nodes_in_group("enemies").is_empty():
 		Game.say("[ZONA DESPEJADA]", Game.COLOR_GOOD)
 	cuerpo.andar = ""

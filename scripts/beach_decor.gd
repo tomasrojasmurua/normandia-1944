@@ -8,6 +8,7 @@ extends Node3D
 @export var hedgehog_count := 18
 @export var area := Vector2(60, 30)
 @export var seed_value := 1944
+const ALEMANES_EXTRA := 13
 
 const TEX := "res://assets/texturas/textura_%s.png"
 
@@ -48,7 +49,6 @@ func _ready() -> void:
 	_grass = textured("pasto_duna", 2.5, Color(0.85, 0.85, 0.8))
 	_wood = textured("madera", 2.0)
 	Coberturas.limpiar()
-	Aliado.orden = "seguir"
 	_dress_ground_and_sea()
 	Game.sea_from_z = 10.0   # el mar empieza en z = 10 (igual que z_orilla en los shaders)
 
@@ -111,22 +111,15 @@ func _ready() -> void:
 	_sandbag_wall(Vector3(-11.5, 0, -41), 4.0, 6, 2, 0.0, rng2)
 	_sandbag_wall(Vector3(11.5, 0, -41), 4.0, 6, 2, 0.0, rng2)
 	_sandbag_wall(Vector3(0, 0, -29), 3.0, 6, 2, 0.0, rng2)
-	if Game.prueba_carga:   # más trincheras al pie del acantilado para 30 alemanes
-		for x in [-36.0, -26.0, -18.0, 18.0, 26.0, 36.0, -6.0, 6.0]:
-			_sandbag_wall(Vector3(x, 0, -48.0 + absf(x) * 0.05), 5.0, 6, 2, 0.0, rng2)
-		for x in [-34.0, -14.0, 14.0, 34.0]:
-			_sandbag_wall(Vector3(x, 0, -36.0), 4.0, 6, 2, 0.0, rng2)
+	# Trincheras al pie del acantilado y a media playa para más alemanes
+	for x in [-36.0, -26.0, -18.0, 18.0, 26.0, 36.0, -6.0, 6.0]:
+		_sandbag_wall(Vector3(x, 0, -48.0 + absf(x) * 0.05), 5.0, 6, 2, 0.0, rng2)
+	for x in [-34.0, -14.0, 14.0, 34.0]:
+		_sandbag_wall(Vector3(x, 0, -36.0), 4.0, 6, 2, 0.0, rng2)
 	_build_bags()
 
-	# La escuadra: los otros tres del cooperativo (por ahora con IA)
-	for c in [[Vector3(-9, 0, -3), "thompson", "DELUCA"], [Vector3(11, 0, -6), "garand", "HAYES"],
-			[Vector3(-6, 0, 3), "bar", "BRENNAN"]]:
-		var a := Aliado.new()
-		a.arma = c[1]
-		a.nombre = c[2]
-		a.name = c[2].capitalize()
-		get_parent().add_child.call_deferred(a)
-		a.position = c[0]
+	# Las cuatro escuadras americanas (la del jugador y tres con sargento IA)
+	get_parent().add_child.call_deferred(Escuadras.new())
 
 	# Mapa de caminos para la IA, con todo lo de arriba ya puesto
 	_hornear_navegacion.call_deferred()
@@ -142,6 +135,13 @@ func _exit_tree() -> void:
 
 func _hornear_navegacion() -> void:
 	Navegacion.hornear(get_parent(), AABB(Vector3(-45, -2, -75), Vector3(90, 26, 88)))
+	if not Game.prueba_carga:
+		# Defensa alemana: los 7 de la escena + 13 en las trincheras (20 en total)
+		var rng := RandomNumberGenerator.new()
+		rng.seed = seed_value + 99
+		var usados: Array = []
+		for i in ALEMANES_EXTRA:
+			PruebaCarga.nuevo_aleman(get_parent(), rng, usados)
 
 
 ## Suelo (arena mojada → seca → guijarros → pasto) y mar con espuma.

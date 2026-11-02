@@ -1,8 +1,10 @@
 extends Combatiente
 class_name Aliado
-## Compañero de la escuadra (DeLuca, Hayes, Brennan). Obedece la orden de la
-## escuadra (`Aliado.orden`, la cambia el jugador desde el HUD):
-## - "seguir":   se mantiene cerca del jugador, en una cobertura que lo tape.
+## Soldado americano con IA, de una de las cuatro escuadras (escuadras.gd).
+## Obedece la orden de su escuadra (la 0 es la del jugador: `Aliado.orden`, la
+## cambia el jugador desde el HUD; las otras las maneja su sargento):
+## - "seguir":   se mantiene cerca de su jefe (el jugador o su sargento), en
+##               una cobertura que lo tape.
 ## - "avanzar":  salta de cobertura en cobertura hacia los alemanes, esperando
 ##               unos segundos en cada una (avanzan escalonados, no todos juntos).
 ## - "mantener": se queda donde está (solo cambia si lo flanquean).
@@ -11,11 +13,13 @@ class_name Aliado
 ## En el cooperativo, los otros jugadores ocuparán estos lugares.
 
 @export var nombre := "HAYES"
+@export var escuadra := 0          # 0 = la del jugador
+@export var es_lider := false      # sargento con IA de una escuadra 1–3
 
 const ALCANCE := 60.0
 const BUNKER := Vector3(0, 0, -42)
 
-static var orden := "seguir"
+static var orden := "seguir"      # orden de la escuadra del jugador
 
 var max_health := 100.0
 var _player: Player
@@ -35,9 +39,11 @@ static func dar_orden(o: String) -> void:
 	orden = o
 	Game.say({"seguir": "[ESCUADRA: SÍGANME]", "avanzar": "[ESCUADRA: AVANCEN]",
 		"mantener": "[ESCUADRA: MANTENGAN POSICIÓN]"}.get(o, ""), Game.COLOR_GOOD)
-	# Que reaccionen enseguida (cada uno un poco desfasado)
+	# Que reaccionen enseguida (cada uno un poco desfasado); solo los del jugador
 	var i := 0
 	for a in Engine.get_main_loop().get_nodes_in_group("aliados"):
+		if a.escuadra != 0:
+			continue
 		a._pensar_t = 0.2 + i * 0.35
 		a._espera_hasta = 0.0
 		i += 1
@@ -143,13 +149,18 @@ func _pensar() -> void:
 	for e in get_tree().get_nodes_in_group("enemies"):
 		_alemanes.append(e.global_position)
 	var flanqueado := not cobertura.is_empty() and Coberturas.protege(cobertura, amenaza) < 0.2
-	match orden:
+	var jefe: Node3D = Escuadras.lider_de(self)
+	var o := Escuadras.orden_de(self)
+	if o == "seguir" and jefe == null:
+		o = "avanzar"      # su sargento cayó y todavía no asciende otro
+	var sec := Escuadras.sector(escuadra)
+	match o:
 		"mantener":
 			if flanqueado:
 				_ir(_buscar(func(p: Dictionary, viaje: float) -> float:
 					return -INF if viaje > 8.0 else -viaje))
 		"seguir":
-			var jugador := _player.global_position
+			var jugador := jefe.global_position
 			var lejos := global_position.distance_to(jugador)
 			if lejos > 10.0 or cobertura.is_empty() or flanqueado:
 				if not _ir(_buscar(func(p: Dictionary, viaje: float) -> float:
@@ -157,17 +168,24 @@ func _pensar() -> void:
 						if dj < 2.0 or dj > 9.0:
 							return -INF
 						return -dj * 0.3 - viaje * 0.1)) and lejos > 10.0:
-					_ir_suelto(jugador)
+					_ir_suelto(jefe)
 		"avanzar":
 			if Game.elapsed < _espera_hasta and not flanqueado:
 				return
 			var mio := global_position.distance_to(amenaza)
+			var propio := escuadra != 0   # las escuadras con IA se quedan en su sector
 			if not _ir(_buscar(func(p: Dictionary, viaje: float) -> float:
 					var avance := mio - amenaza.distance_to(p["pos"])
 					if viaje < 2.5 or viaje > 14.0 or avance < 2.5:
 						return -INF
-					return avance * 0.4 - viaje * 0.15)):
+					var fuera := 0.0
+					if propio:
+						var px: float = p["pos"].x
+						fuera = maxf(sec.x - px, 0.0) + maxf(px - sec.y, 0.0)
+					return avance * 0.4 - viaje * 0.15 - fuera * 0.6)):
 				_espera_hasta = Game.elapsed + 3.0   # no hay dónde: espera y vuelve a mirar
+				if propio and mio > 16.0 and randf() < 0.5:
+					_avance_suelto(sec)   # sin coberturas cerca: corre unos metros al descubierto
 
 
 ## Mejor cobertura que lo tape de la amenaza; `extra(p, viaje)` agrega su criterio.
@@ -193,10 +211,20 @@ func _ir(p: Dictionary) -> bool:
 	return ir_a(p)
 
 
-## Sin coberturas cerca: va a un lado del jugador, aunque quede al descubierto.
-func _ir_suelto(jugador: Vector3) -> void:
-	var lado := _player.global_basis.x * (-3.0 + 3.0 * (_indice % 3)) + _player.global_basis.z * 2.5
-	ir_a({"pos": Navegacion.cerca_de(jugador + lado)})
+## Sin coberturas cerca: va a un lado de su jefe, aunque quede al descubierto.
+func _ir_suelto(jefe: Node3D) -> void:
+	var lado := jefe.global_basis.x * (-3.0 + 3.0 * (_indice % 3)) + jefe.global_basis.z * 2.5
+	ir_a({"pos": Navegacion.cerca_de(jefe.global_position + lado)})
+
+
+## Avanza unos metros hacia los alemanes dentro de su sector, aunque no haya
+## dónde cubrirse (en la playa abierta no siempre hay un erizo cerca).
+func _avance_suelto(sec: Vector2) -> void:
+	var dir := amenaza - global_position
+	dir.y = 0.0
+	var meta := global_position + dir.normalized() * randf_range(6.0, 10.0)
+	meta.x = clampf(meta.x, sec.x, sec.y)
+	ir_a({"pos": Navegacion.cerca_de(meta)})
 
 
 func _al_llegar() -> void:
@@ -216,7 +244,7 @@ func _disparar() -> void:
 	if tiro_ia(objetivo, chance, -6.0):
 		var pecho: Vector3 = objetivo.global_position + Vector3(0, 1.1, 0)
 		var dir: Vector3 = (pecho - cuerpo.boca.global_position).normalized()
-		objetivo.hit(Armas.datos(arma)["damage"], randf() < 0.1, pecho, dir)
+		objetivo.hit(Armas.datos(arma)["damage"], randf() < 0.1, pecho, dir, false)
 
 
 func take_damage(amount: float, from_pos: Vector3) -> void:
@@ -240,7 +268,8 @@ func _morir(dir: Vector3) -> void:
 	remove_from_group("aliados")
 	collision_layer = 0
 	collision_mask = 0
-	Game.say("[%s CAÍDO]" % nombre, Game.COLOR_BAD)
+	if escuadra == 0:    # de las otras escuadras no se avisa (serían demasiados mensajes)
+		Game.say("[%s CAÍDO]" % nombre, Game.COLOR_BAD)
 	cuerpo.andar = ""
 	cuerpo.morir(dir, false)
 	_soltar_arma(dir)

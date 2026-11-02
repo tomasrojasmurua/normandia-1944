@@ -2,7 +2,7 @@ extends Node
 class_name PruebaCarga
 ## Prueba de carga (menú principal → PRUEBA DE CARGA): llena la playa como
 ## quedaría con 4 jugadores, para medir en el celular si aguanta.
-## - 16 americanos: el jugador + 15 con IA (4 escuadras de 4), que avanzan.
+## - 16 americanos: el jugador + 15 con IA (las 4 escuadras de escuadras.gd).
 ## - 30 alemanes en las trincheras y sacos de arena.
 ## - Artillería cayendo por la playa cada 1–2,5 s (solo efecto y sonido).
 ## - Cuando muere alguien, llega otro: alemanes desde atrás, americanos desde
@@ -10,9 +10,7 @@ class_name PruebaCarga
 ## - El jugador no muere (para poder medir tranquilo).
 ## El medidor de arriba a la izquierda muestra cuántos soldados hay vivos.
 
-const AMERICANOS := 15      # además del jugador
 const ALEMANES := 30
-const ARMAS_US := ["garand", "garand", "thompson", "bar", "carbine"]
 
 var _t_refuerzo := 0.0
 var _t_artilleria := 2.0
@@ -33,7 +31,7 @@ func _process(delta: float) -> void:
 		return
 	if not _listo:
 		_listo = true
-		Aliado.orden = "avanzar"
+		Aliado.dar_orden("avanzar")
 	_t_refuerzo -= delta
 	if _t_refuerzo <= 0.0:
 		_t_refuerzo = 1.5
@@ -50,35 +48,39 @@ func _reponer() -> void:
 	var alemanes := get_tree().get_nodes_in_group("enemies").size()
 	var americanos := get_tree().get_nodes_in_group("aliados").size()
 	Game.carga_texto = "SOLDADOS %d US + %d AL" % [americanos + 1, alemanes]
+	var usados: Array = []
 	for i in mini(3, ALEMANES - alemanes):
-		var e := Enemy.new()
-		e.arma = Armas.botin_aleman(_rng)
-		e.rol = "flanqueador" if _rng.randf() < 0.2 else "defensor"
-		e.granadas = 1 if _rng.randf() < 0.3 else 0
-		var pos := _lugar_aleman()
-		var enemigos := main.get_node_or_null("Enemies")
-		(enemigos if enemigos else main).add_child(e)
-		e.global_position = pos
-		e.rotation.y = PI    # mirando al mar
-	for i in mini(3, AMERICANOS - americanos):
-		var a := Aliado.new()
-		a.arma = ARMAS_US[_rng.randi() % ARMAS_US.size()]
-		a.nombre = "SOLDADO"
-		main.add_child(a)
-		a.global_position = Navegacion.cerca_de(Vector3(_rng.randf_range(-35, 35), 0, _rng.randf_range(4, 9)))
+		nuevo_aleman(main, _rng, usados)
+	# Los americanos los repone escuadras.gd (refuerzos ilimitados en esta prueba)
+
+
+## Un alemán nuevo en una cobertura libre del lado alemán.
+static func nuevo_aleman(main: Node, rng: RandomNumberGenerator, usados: Array) -> Enemy:
+	var e := Enemy.new()
+	e.arma = Armas.botin_aleman(rng)
+	e.rol = "flanqueador" if rng.randf() < 0.2 else "defensor"
+	e.granadas = 1 if rng.randf() < 0.3 else 0
+	var pos := lugar_aleman(rng, usados)
+	usados.append(pos)
+	var enemigos := main.get_node_or_null("Enemies")
+	(enemigos if enemigos else main).add_child(e)
+	e.global_position = pos
+	e.rotation.y = PI    # mirando al mar
+	return e
 
 
 ## Un punto de cobertura libre del lado alemán que proteja hacia el mar.
-func _lugar_aleman() -> Vector3:
+static func lugar_aleman(rng: RandomNumberGenerator, usados: Array) -> Vector3:
 	var libres: Array = []
 	for c in Coberturas.puntos:
 		var pos: Vector3 = c["pos"]
 		var n: Vector3 = c["n"]
-		if pos.z < -20.0 and n.z > 0.5 and not c["parcial"] and (c["ocupado"] == null or not is_instance_valid(c["ocupado"])):
+		if pos.z < -20.0 and n.z > 0.5 and not c["parcial"] and not pos in usados \
+				and (c["ocupado"] == null or not is_instance_valid(c["ocupado"])):
 			libres.append(pos)
 	if libres.is_empty():
-		return Navegacion.cerca_de(Vector3(_rng.randf_range(-35, 35), 0, -46))
-	return libres[_rng.randi() % libres.size()]
+		return Navegacion.cerca_de(Vector3(rng.randf_range(-35, 35), 0, -46))
+	return libres[rng.randi() % libres.size()]
 
 
 ## Explosión de artillería en la playa, lejos del jugador (solo efecto).

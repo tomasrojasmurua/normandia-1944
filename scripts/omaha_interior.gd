@@ -241,7 +241,22 @@ static func _pueblo(d: Node3D, rng: RandomNumberGenerator) -> void:
 		_modelo(d, "casa", Vector3(c[0], ARRIBA, c[1]), c[2], 9.0)
 	_modelo(d, "camion", Vector3(9.0, ARRIBA, -158.0), 110.0, 6.0)
 	_modelo(d, "canon", Vector3(-6.0, ARRIBA, -170.0), 90.0, 5.5)
-	# Escombros sueltos en las calles
+	# Trincheras alemanas por donde llega el contraataque (antes venían al
+	# descubierto) y parapetos alrededor del cruce para sus defensores
+	var trincheras := [
+		# Línea del fondo, delante del bosque (z −186…−191), en zigzag
+		[-34.0, -188.0, 6.0, 8.0], [-24.0, -190.5, 5.0, -12.0], [-12.0, -187.5, 6.0, 5.0],
+		[0.0, -190.0, 5.0, -6.0], [12.0, -187.0, 6.0, 10.0], [24.0, -189.5, 5.0, -8.0], [34.0, -187.5, 6.0, 4.0],
+		# Escalones intermedios para avanzar de cobertura en cobertura
+		[-18.0, -178.0, 4.0, 0.0], [20.0, -179.0, 4.0, -5.0], [-6.0, -183.0, 3.0, 15.0],
+		# Flancos (los que llegan por los costados)
+		[-42.0, -166.0, 5.0, 75.0], [-40.0, -176.0, 4.0, 60.0], [42.0, -165.0, 5.0, -75.0], [40.0, -176.0, 4.0, -60.0],
+		# Alrededor del cruce (los que lo defienden al principio de la fase)
+		[-6.0, -148.5, 3.0, 0.0], [6.5, -156.0, 3.0, 0.0], [-7.5, -155.5, 2.5, 90.0], [7.0, -147.0, 2.5, 90.0],
+	]
+	for t in trincheras:
+		d._sandbag_wall(Vector3(t[0], ARRIBA, t[1]), t[2], 6, 2, t[3], rng)
+		# Escombros sueltos en las calles
 	for e in [[4.0, -147.0], [-5.0, -157.0], [21.0, -151.0], [-21.0, -153.5], [2.0, -167.0]]:
 		_modelo(d, "escombros", Vector3(e[0], ARRIBA, e[1]), rng.randf_range(0, 360), 2.6)
 

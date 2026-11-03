@@ -27,6 +27,8 @@ const SEG_TOMAR := 8.0
 const SEG_NIDO := 5.0
 const RITMO_IA := 0.4          # la IA sola avanza a este ritmo
 const SEG_PERDER := 25.0       # alemanes en el lugar a defender sin americanos
+const DIST_APOYO := 45.0       # con un jugador a menos de esto, la IA toma los lugares a ritmo completo
+const RADIO_ALEMANES := 9.0    # un alemán vivo a menos de esto impide tomar el lugar
 
 static var LISTA: Array = []
 static var hecho: Array = []
@@ -166,6 +168,49 @@ static func foco(esc: int) -> int:
 	return mejor
 
 
+## ¿Hay un alemán vivo junto a este lugar? (impide tomarlo)
+static func alemanes_cerca(pos: Vector3) -> bool:
+	for e in Engine.get_main_loop().get_nodes_in_group("enemies"):
+		if not e.get("dead") and e.global_position.distance_to(pos) < RADIO_ALEMANES:
+			return true
+	return false
+
+
+## El objetivo que el jugador tiene más cerca (activo, sin cumplir, a menos de
+## `radio` m), sea de su escuadra o no: así se puede cumplir en cualquier orden.
+static func cercano(pos: Vector3, radio := 22.0) -> int:
+	var mejor := -1
+	var mejor_d := radio
+	for i in LISTA.size():
+		if hecho[i] or LISTA[i]["fase"] != fase() or not activo(i):
+			continue
+		var d: float = (LISTA[i]["pos"] as Vector3).distance_to(pos)
+		if d < mejor_d:
+			mejor_d = d
+			mejor = i
+	return mejor
+
+
+## Un lugar que los compañeros pueden asegurar detrás del jugador: objetivo
+## "tomar" o un nido de MG42 ya sin tirador, a menos de DIST_APOYO del jugador
+## y sin alemanes alrededor. -1 si no hay.
+static func asegurable(jugador: Vector3) -> int:
+	if actual == null:
+		return -1
+	for i in LISTA.size():
+		if hecho[i] or LISTA[i]["fase"] != fase() or not activo(i):
+			continue
+		var o: Dictionary = LISTA[i]
+		if o["tipo"] == "mg" and not actual._sin_tirador.has(i):
+			continue
+		if o["tipo"] != "tomar" and o["tipo"] != "mg":
+			continue
+		var p: Vector3 = o["pos"]
+		if p.distance_to(jugador) < DIST_APOYO and not alemanes_cerca(p):
+			return i
+	return -1
+
+
 static func _centro_carril(esc: int) -> float:
 	var s: Array = Misiones.dato("sectores")
 	var v: Vector2 = s[clampi(esc, 0, s.size() - 1)]
@@ -173,6 +218,11 @@ static func _centro_carril(esc: int) -> float:
 
 
 static func foco_mio() -> int:
+	var p := Engine.get_main_loop().get_first_node_in_group("player") as Node3D
+	if p:
+		var c := cercano(p.global_position)
+		if c >= 0:
+			return c
 	return foco(mio())
 
 
@@ -341,18 +391,23 @@ func _alejar_ia(centro: Vector3) -> void:
 ## más lento.
 func _tomar(i: int, delta: float, segundos: float, radio: float) -> void:
 	var pos: Vector3 = LISTA[i]["pos"]
-	for e in get_tree().get_nodes_in_group("enemies"):
-		if e.global_position.distance_to(pos) < 9.0:
-			progreso[i] = maxf(progreso[i] - delta * 0.25, 0.0)
-			return
+	if alemanes_cerca(pos):
+		progreso[i] = maxf(progreso[i] - delta * 0.25, 0.0)
+		return
 	var ritmo := 0.0
 	for j in _jugadores():
 		if j.global_position.distance_to(pos) < radio:
 			ritmo = 1.0
 	if ritmo == 0.0:
+		# Si un jugador anda cerca (adelante, en primera línea), sus compañeros
+		# aseguran el lugar a ritmo completo; si no, la IA sola va más lenta.
+		var apoyo := RITMO_IA
+		for j in _jugadores():
+			if j.global_position.distance_to(pos) < DIST_APOYO:
+				apoyo = 1.0
 		for a in get_tree().get_nodes_in_group("americanos"):
 			if not a.dead and a.global_position.distance_to(pos) < radio:
-				ritmo = RITMO_IA
+				ritmo = apoyo
 				break
 	progreso[i] += delta / segundos * ritmo
 
@@ -499,6 +554,10 @@ static func texto() -> String:
 		txt = "APOYA: %s (%d/%d)" % [o["n"], c.x, c.y]
 	if not activo(f):
 		txt = "ESPERA: %s" % LISTA[o["tras_i"]]["n"]
+	if (o["tipo"] == "tomar" or (o["tipo"] == "mg" and actual._sin_tirador.has(f))) and alemanes_cerca(o["pos"]):
+		var p := Engine.get_main_loop().get_first_node_in_group("player") as Node3D
+		if p and p.global_position.distance_to(o["pos"]) < 22.0:
+			txt = "%s: QUEDAN ALEMANES CERCA" % o["corto"]
 	if o["tipo"] == "carga" and progreso[f] > 1.0:
 		txt = "¡CARGA PUESTA! ALÉJATE: %d S" % ceili(progreso[f] - 1.0)
 	if o["tipo"] == "defender" and perdiendo > 0.0:

@@ -42,6 +42,15 @@ var warming := false
 var _warmed := false
 
 
+# Sangre en el suelo y caídos (ver mancha() y cuerpo_caido())
+const MAX_CAIDOS := 26
+var _manchas: Array = []
+var _charcos: Array = []
+var _creciendo: Array = []
+var _caidos: Array = []
+var _mat_sangre: Array = []
+
+
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	_rng.seed = 1944
@@ -110,6 +119,13 @@ var carga_texto := ""         # para el medidor en la prueba de carga
 func _process(delta: float) -> void:
 	if not get_tree().paused:
 		elapsed += delta
+		# Los charcos crecen despacio
+		for m in _creciendo.duplicate():
+			var t: float = minf(float(m.get_meta("t", 1.0)) + delta / 7.0, 1.0)
+			m.set_meta("t", t)
+			m.scale = Vector3.ONE * float(m.get_meta("tam", 1.0)) * (0.25 + 0.75 * sqrt(t))
+			if t >= 1.0:
+				_creciendo.erase(m)
 	for f in _fogonazos:
 		if f.visible and Time.get_ticks_msec() >= int(f.get_meta("hasta", 0)) \
 				and Engine.get_frames_drawn() >= int(f.get_meta("cuadro", 0)):
@@ -118,6 +134,11 @@ func _process(delta: float) -> void:
 
 ## Se llama al empezar una misión (y al reiniciar tras morir).
 func reset_mission() -> void:
+	_crear_sangre()
+	for m in _manchas + _charcos:
+		m.visible = false
+	_creciendo.clear()
+	_caidos.clear()
 	elapsed = 0.0
 	bajas = 0
 	caidos = 0
@@ -329,8 +350,94 @@ func _make(sound: String, seconds: float, brightness: float) -> AudioStreamWAV:
 
 # ---------------------------------------------------------------- efectos
 
-func blood(pos: Vector3) -> void:
-	_burst(pos, Color(0.55, 0.04, 0.03), 14, 2.5, 0.6, 0.06, Vector3.UP, 1.0)
+## Sangre al recibir un tiro: chorro hacia donde va la bala, gotas oscuras y
+## una mancha en el suelo detrás (si hay suelo cerca).
+func blood(pos: Vector3, dir := Vector3.ZERO) -> void:
+	var d := (dir + Vector3(0, 0.35, 0)).normalized() if dir != Vector3.ZERO else Vector3.UP
+	_burst(pos, Color(0.55, 0.04, 0.03), 18, 3.2, 0.7, 0.07, d, 1.0, 40.0)
+	_burst(pos, Color(0.32, 0.02, 0.02), 10, 1.6, 0.9, 0.05, Vector3.UP, 1.2)
+	if dir != Vector3.ZERO:
+		var atras := Vector3(dir.x, 0, dir.z).normalized() * randf_range(0.8, 1.8)
+		mancha(pos + atras, 0.7 + randf() * 0.6, false)
+
+
+## Mancha de sangre en el suelo (reserva fija que se recicla). `charco`: crece
+## despacio debajo de un caído.
+func mancha(pos: Vector3, tam: float, charco: bool) -> void:
+	var esc := _scene()
+	if esc == null or not esc is Node3D or _manchas.is_empty():
+		return
+	var espacio := (esc as Node3D).get_world_3d().direct_space_state
+	var q := PhysicsRayQueryParameters3D.create(pos + Vector3(0, 1.0, 0), pos - Vector3(0, 3.0, 0), 1)
+	var r := espacio.intersect_ray(q)
+	if r.is_empty():
+		return
+	var lista: Array = _charcos if charco else _manchas
+	var m: MeshInstance3D = lista.pop_front()
+	lista.append(m)
+	var n: Vector3 = r["normal"]
+	var b := Basis.looking_at(-n, Vector3.FORWARD if absf(n.y) < 0.9 else Vector3.RIGHT)
+	b = b.rotated(n, randf() * TAU)
+	m.global_transform = Transform3D(b, r["position"] + n * (0.03 + randf() * 0.02))
+	m.material_override = _mat_sangre[randi() % _mat_sangre.size()]
+	m.visible = true
+	m.set_meta("tam", tam)
+	m.set_meta("t", 0.0 if charco else 1.0)
+	m.scale = Vector3.ONE * (tam * 0.25 if charco else tam)
+	if charco:
+		_creciendo.append(m)
+
+
+## Un soldado cayó: charco debajo y, si ya hay muchos caídos, el más viejo se
+## esconde (no se borra: otros guiones pueden tener la referencia).
+func cuerpo_caido(c: Node3D) -> void:
+	mancha(c.global_position + Vector3(randf_range(-0.3, 0.3), 0.1, randf_range(-0.3, 0.3)),
+		randf_range(1.1, 1.6), true)
+	_caidos.append(c)
+	while _caidos.size() > MAX_CAIDOS:
+		var viejo = _caidos.pop_front()
+		if is_instance_valid(viejo):
+			viejo.visible = false
+			viejo.process_mode = Node.PROCESS_MODE_DISABLED
+
+
+func _crear_sangre() -> void:
+	if not _manchas.is_empty():
+		return
+	for k in 4:
+		var img := Image.create(32, 32, false, Image.FORMAT_RGBA8)
+		var rng := RandomNumberGenerator.new()
+		rng.seed = 77 + k
+		var gotas := [[Vector2(16, 16), rng.randf_range(7.0, 10.0)]]
+		for g in 9:
+			var ang := rng.randf() * TAU
+			var dist := rng.randf_range(6.0, 14.0)
+			gotas.append([Vector2(16, 16) + Vector2(cos(ang), sin(ang)) * dist, rng.randf_range(1.0, 3.5)])
+		for y in 32:
+			for x in 32:
+				var dentro := 0.0
+				for g in gotas:
+					dentro = maxf(dentro, 1.0 - Vector2(x, y).distance_to(g[0]) / g[1])
+				if dentro > 0.0:
+					var osc := 0.75 + 0.25 * dentro
+					img.set_pixel(x, y, Color(0.38 * osc, 0.03, 0.02, 1.0) if dentro > 0.25 else Color(0.25, 0.02, 0.02, 1.0))
+		var mat := StandardMaterial3D.new()
+		mat.albedo_texture = ImageTexture.create_from_image(img)
+		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
+		mat.alpha_scissor_threshold = 0.5
+		mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+		mat.roughness = 0.35
+		mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+		_mat_sangre.append(mat)
+	var quad := QuadMesh.new()
+	quad.size = Vector2.ONE
+	for i in 48 + 24:
+		var m := MeshInstance3D.new()
+		m.mesh = quad
+		m.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		m.visible = false
+		add_child(m)
+		(_manchas if i < 48 else _charcos).append(m)
 
 
 func dust(pos: Vector3, normal := Vector3.UP) -> void:

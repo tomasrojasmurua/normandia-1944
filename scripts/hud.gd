@@ -14,6 +14,8 @@ var _retrato: Texture2D
 var _retrato_herido: Texture2D
 
 var _player: Player
+var _sangre: Array = []        # salpicaduras en la pantalla: [centro, radios[], alfa]
+var _flash_antes := 0.0
 var _messages: Array = []   # [texto, color, tiempo]
 var _slot_rects: Array[Rect2] = []
 
@@ -107,6 +109,7 @@ func _draw() -> void:
 	# --- Efectos sobre la vista
 	if _player.damage_flash > 0.0:
 		draw_rect(Rect2(Vector2.ZERO, s), Color(0.7, 0.0, 0.0, _player.damage_flash * 0.3))
+	_draw_sangre(s, top)
 	if _player.supresion > 0.02 and not _player.dead:
 		_draw_supresion(s, _player.supresion)
 	if _player.hit_indicator > 0.0 and not _player.dead:
@@ -670,3 +673,35 @@ func _draw_slots(r: Rect2) -> void:
 				Estilo.CREMA if selected else Estilo.OLIVA_4)
 		if selected:
 			draw_rect(Rect2(inner.position.x + 3, inner.end.y - 4, inner.size.x - 6, 2), Estilo.AMBAR)
+
+
+## Sangre en la pantalla al recibir un tiro: salpicaduras hacia los bordes que
+## se van secando (más grandes con poca vida).
+func _draw_sangre(s: Vector2, top: float) -> void:
+	if _player.damage_flash > _flash_antes + 0.3:
+		var n := 2 + int((1.0 - clampf(_player.health / 100.0, 0.0, 1.0)) * 4.0)
+		for k in n:
+			var lado := randi() % 4
+			var c := Vector2(randf_range(20, s.x - 20), randf_range(20, top - 20))
+			match lado:
+				0: c.x = randf_range(0, 70)
+				1: c.x = s.x - randf_range(0, 70)
+				2: c.y = randf_range(0, 50)
+				_: c.y = top - randf_range(0, 40)
+			var gotas: Array = []
+			for g in randi_range(5, 9):
+				gotas.append([Vector2(randf_range(-22, 22), randf_range(-16, 16)), randf_range(3.0, 11.0)])
+			_sangre.append([c, gotas, 1.0])
+		while _sangre.size() > 14:
+			_sangre.pop_front()
+	_flash_antes = _player.damage_flash
+	var dt := get_process_delta_time()
+	for m in _sangre.duplicate():
+		m[2] -= dt / 3.5
+		if m[2] <= 0.0:
+			_sangre.erase(m)
+			continue
+		var a := minf(m[2] * 1.4, 0.85)
+		for g in m[1]:
+			draw_circle((m[0] + g[0]).floor(), g[1], Color(0.36, 0.01, 0.01, a))
+			draw_circle((m[0] + g[0] * 0.92).floor(), g[1] * 0.55, Color(0.5, 0.03, 0.02, a))

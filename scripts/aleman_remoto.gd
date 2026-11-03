@@ -88,7 +88,7 @@ func disparo() -> void:
 func hit(amount: float, headshot: bool, pos: Vector3, dir: Vector3, _por_jugador := true) -> void:
 	if dead:
 		return
-	Game.blood(pos)
+	Game.blood(pos, dir)
 	cuerpo.impacto(dir)
 	Red.golpe(rid, amount, headshot, pos, dir)
 

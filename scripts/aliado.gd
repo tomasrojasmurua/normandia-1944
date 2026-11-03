@@ -238,6 +238,16 @@ func _pensar() -> void:
 				_ir(_buscar(func(p: Dictionary, viaje: float) -> float:
 					return -INF if viaje > 8.0 else -viaje))
 		"seguir":
+			# Primera línea: si el jugador dejó atrás un lugar sin tomar (y sin
+			# alemanes), dos de sus compañeros van a asegurarlo
+			if escuadra == Escuadras.mi_escuadra and _indice % 3 != 2 and jefe is Player:
+				var obj := Objetivos.asegurable(jefe.global_position)
+				if obj >= 0:
+					var meta: Vector3 = Objetivos.LISTA[obj]["pos"]
+					if global_position.distance_to(meta) > 4.0:
+						var lado := Vector3(-2.5 if _indice % 3 == 0 else 2.5, 0, 1.5)
+						ir_a({"pos": Navegacion.cerca_de(meta + lado)})
+					return
 			var jugador := jefe.global_position
 			var lejos := global_position.distance_to(jugador)
 			if lejos > 10.0 or cobertura.is_empty() or flanqueado:
@@ -333,7 +343,7 @@ func take_damage(amount: float, from_pos: Vector3) -> void:
 	_ultimo_dano = Game.elapsed
 	var dir := (global_position - from_pos).normalized()
 	cuerpo.impacto(dir)
-	Game.blood(global_position + Vector3(0, 1.1, 0))
+	Game.blood(global_position + Vector3(0, 1.1, 0), dir)
 	if health <= 0.0:
 		_morir(dir)
 
@@ -351,6 +361,7 @@ func _morir(dir: Vector3) -> void:
 		Game.say("[%s CAÍDO]" % nombre, Game.COLOR_BAD)
 	cuerpo.andar = ""
 	cuerpo.morir(dir, false)
+	Game.cuerpo_caido(self)
 	_soltar_arma(dir)
 	Game.caidos += 1
 	Red.murio(self, dir, false)

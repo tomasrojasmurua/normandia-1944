@@ -63,7 +63,11 @@ func _ready() -> void:
 	# el mar. Las cajas de siempre quedan invisibles: son las que chocan y
 	# sostienen a la MG42 del techo.
 	_add_box(Vector3(0, 1.5, -42), Vector3(14, 3, 5), _concrete).get_child(0).visible = false
-	_add_box(Vector3(0, 3.2, -42), Vector3(15, 0.5, 6), _concrete).get_child(0).visible = false  # techo
+	# Techo: a la altura del techo plano del modelo (3,42 m entre z −43,8 y −40,4;
+	# hacia los bordes el modelo baja y antes se caminaba flotando)
+	_add_box(Vector3(0, 3.17, -42.1), Vector3(14.4, 0.5, 3.4), _concrete).get_child(0).visible = false
+	# Rampa de tablones por detrás (lado de tierra) para subir al techo
+	_add_box(Vector3(5.6, 1.62, -46.6), Vector3(1.8, 0.25, 6.0), _wood, Vector3(35, 0, 0))
 	for x in [-3.6, 3.6]:
 		Ambiente.modelo(self, "bunker", Vector3(x, 0, -42), 90.0, Vector3(3.2, 2.85, 3.8), false)
 
@@ -72,7 +76,7 @@ func _ready() -> void:
 	_sandbag_wall(Vector3(5, 0, -36), 6.0, 6, 2, 0.0, rng)
 	_sandbag_wall(Vector3(-14, 0, -24), 3.0, 6, 2, 8.0, rng)
 	_sandbag_wall(Vector3(13, 0, -20), 3.0, 6, 2, -10.0, rng)
-	_sandbag_wall(Vector3(2, 3.45, -39.6), 3.0, 3, 1, 0.0, rng)   # parapeto en el techo
+	_sandbag_wall(Vector3(2, 3.42, -40.7), 3.0, 3, 1, 0.0, rng)   # parapeto en el techo
 	# (los parapetos nuevos van al final, con su propio azar, para no mover
 	# los postes y cajas de siempre)
 

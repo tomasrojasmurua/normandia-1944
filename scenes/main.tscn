@@ -97,7 +97,7 @@ script = ExtResource("5_enemy")
 arma = "kar98k"
 
 [node name="Enemy5" type="CharacterBody3D" parent="Enemies"]
-transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 2, 3.45, -41)
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 2, 3.45, -41.6)
 script = ExtResource("5_enemy")
 arma = "mg42"
 rol = "fijo"

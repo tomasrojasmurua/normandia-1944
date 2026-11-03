@@ -348,7 +348,7 @@ func hit(amount: float, headshot: bool, pos: Vector3, dir: Vector3, por_jugador 
 	if dead:
 		return
 	health -= amount * (2.0 if headshot else 1.0)
-	Game.blood(pos)
+	Game.blood(pos, dir)
 	cuerpo.impacto(dir)
 	_ultimo_dano = Game.elapsed
 	_alert = maxf(_alert, reaction_time * 0.5)  # se pone alerta al recibir fuego
@@ -372,6 +372,7 @@ func _die(dir: Vector3, headshot: bool, por_jugador := true) -> void:
 		Red.anunciar("[ZONA DESPEJADA]", Game.COLOR_GOOD)
 	cuerpo.andar = ""
 	cuerpo.morir(dir, headshot)
+	Game.cuerpo_caido(self)
 	_soltar_arma(dir)
 	Red.murio(self, dir, headshot)
 	Game.bajas += 1

@@ -8,8 +8,8 @@ class_name Campana
 ##   para después se refuerza (más alemanes). La etapa termina al ganarlas todas.
 ## - Recursos: SUMINISTROS (reclutar, entran según las zonas tomadas) y APOYO
 ##   DEL MANDO (si llega a 0, te relevan y la campaña termina).
-## - Las misiones que todavía no están construidas aparecen "EN PREPARACIÓN":
-##   las puede cumplir "otra unidad" (menos premio) para que la campaña siga.
+## - Las misiones que todavía no están construidas aparecen "EN PREPARACIÓN"
+##   y no se pueden jugar todavía: todas las misiones las hace el jugador.
 ## - Entre misiones sale el diario THE NORMANDY DISPATCH (en español).
 ## Se guarda junto a la compañía en user://campana.cfg. Solo jugando solo.
 
@@ -78,7 +78,7 @@ const MESES := ["", "JUNIO", "JULIO", "AGOSTO"]
 static var suministros := SUMINISTROS_INICIO
 static var apoyo := APOYO_INICIO
 static var dia := 5                       # 5 de junio: la flota zarpa
-static var hechas: Array = []             # ids cumplidas (jugadas u "otra unidad")
+static var hechas: Array = []             # ids cumplidas
 static var refuerzo := {}                 # id -> veces que se dejó para después
 static var turnos := 0
 static var estado := "en_curso"           # "en_curso", "relevado", "victoria"
@@ -86,6 +86,7 @@ static var diario: Array = []             # ediciones sin leer
 static var ultimo_diario: Dictionary = {}
 static var presion := ""                  # id de una zona propia bajo presión (decisión pendiente)
 static var prologo := false               # ¿ya se vio la cinemática del prólogo?
+static var tutorial := false              # ¿ya explicó el coronel el mapa?
 static var _cargada := false
 
 # --- La misión en curso
@@ -118,13 +119,14 @@ static func cargar() -> void:
 	ultimo_diario = cfg.get_value("campana", "ultimo_diario", {})
 	presion = cfg.get_value("campana", "presion", "")
 	prologo = cfg.get_value("campana", "prologo", false)
+	tutorial = cfg.get_value("campana", "tutorial", false)
 
 
 static func guardar() -> void:
 	var cfg := ConfigFile.new()
 	cfg.load(ARCHIVO)
 	for k in ["suministros", "apoyo", "dia", "hechas", "refuerzo", "turnos", "estado", "diario",
-			"ultimo_diario", "presion", "prologo"]:
+			"ultimo_diario", "presion", "prologo", "tutorial"]:
 		cfg.set_value("campana", k, _valor(k))
 	cfg.save(ARCHIVO)
 
@@ -141,6 +143,7 @@ static func _valor(k: String) -> Variant:
 		"diario": return diario
 		"ultimo_diario": return ultimo_diario
 		"prologo": return prologo
+		"tutorial": return tutorial
 		_: return presion
 
 
@@ -283,25 +286,7 @@ static func cerrar_mision(resultado: int) -> void:
 		apoyo -= APOYO_PERDER
 	apoyo -= APOYO_POR_MUERTO * muertos.size()
 	_fin_de_turno()
-	_edicion(m, resultado > 0, false, muertos, Compania.ultimos_heridos, apoyo - antes)
-	_revisar_final()
-	guardar()
-
-
-## Una misión que todavía no está construida: la cumple otra unidad.
-static func otra_unidad(id: String) -> void:
-	var m := mision(id)
-	if m.is_empty() or hecha(id):
-		return
-	_ofrecidas = ofrecidas().map(func(x: Dictionary) -> String: return x["id"])
-	hechas.append(id)
-	suministros += int(m["premio"]) / 2
-	apoyo -= APOYO_OTRA_UNIDAD
-	_dejadas(id)
-	dia = maxi(dia, int(m["dia"]))
-	Compania.descanso()
-	_fin_de_turno()
-	_edicion(m, true, true, [], [], -APOYO_OTRA_UNIDAD)
+	_edicion(m, resultado > 0, muertos, Compania.ultimos_heridos, apoyo - antes)
 	_revisar_final()
 	guardar()
 
@@ -407,17 +392,13 @@ const TITULARES := {
 }
 
 
-static func _edicion(m: Dictionary, gano: bool, otra: bool, muertos: Array, heridos: Array, dif_apoyo: int) -> void:
+static func _edicion(m: Dictionary, gano: bool, muertos: Array, heridos: Array, dif_apoyo: int) -> void:
 	var e := {"fecha": fecha_mision(m) if gano else fecha_texto(dia), "foto": m["id"], "apoyo": dif_apoyo}
 	if gano:
 		var t: Array = TITULARES.get(m["id"], [[m["n"]], []])
 		e["titular"] = t[0]
 		e["bajada"] = t[1]
-		if otra:
-			e["cuerpo"] = ["OTRA UNIDAD SE ENCARGÓ DEL OBJETIVO.", "LA COMPAÑÍA DEL SARGENTO MURPHY",
-				"QUEDÓ EN RESERVA."]
-		else:
-			e["cuerpo"] = ["LA COMPAÑÍA DEL SARGENTO MURPHY", "CUMPLIÓ SU MISIÓN: " + m["n"] + "."]
+		e["cuerpo"] = ["LA COMPAÑÍA DEL SARGENTO MURPHY", "CUMPLIÓ SU MISIÓN: " + m["n"] + "."]
 	else:
 		e["titular"] = ["REVÉS EN", m["n"]]
 		e["bajada"] = ["LA COMPAÑÍA SE RETIRA", "EL OBJETIVO SIGUE EN MANOS ALEMANAS"]

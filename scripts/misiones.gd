@@ -139,7 +139,8 @@ const DATOS := {
 				"ancla": Vector3(0, 14, -168),
 				"refuerzos_us": 4,
 				"llegada": [Vector3(4, 14, -106), 14.0],
-				"alemanes": [[[-45.0, 45.0, -182.0, -136.0], 9]],
+				# Defensores del cruce: un grupo pegado al cruce y el resto en el pueblo
+				"alemanes": [[[-14.0, 14.0, -162.0, -143.0], 6], [[-45.0, 45.0, -182.0, -136.0], 9]],
 				"objetivos": [
 					{"id": "cruce", "n": "TOMAR EL CRUCE DE VIERVILLE", "corto": "CRUCE",
 						"pos": Vector3(0, 14, -152), "tipo": "tomar", "seg": 12.0, "radio": 9.0,

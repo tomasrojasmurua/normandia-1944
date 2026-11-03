@@ -59,11 +59,27 @@ const NOMBRES_IMG := [["CANAL DE LA MANCHA", Vector2(0.62, 0.12), Vector2.ZERO, 
 	["BAHÍA DEL SENA", Vector2(0.70, 0.31), Vector2.ZERO, true],
 	["VALOGNES", Vector2(0.339, 0.271), Vector2(-24, -6), false],
 	["BAYEUX", Vector2(0.945, 0.590), Vector2(-44, 14), false]]
+## La primera vez en el mapa, el coronel explica cada cosa. [qué se ilumina, texto]
+const TUTORIAL := [
+	["", "BIENVENIDO A NORMANDÍA, SARGENTO. DESDE ESTE CUARTEL VAMOS A LLEVAR LA CAMPAÑA, DEL 6 DE JUNIO HASTA FINES DE JULIO. LE EXPLICO CÓMO FUNCIONA."],
+	["mapa", "ESTE ES EL SECTOR AMERICANO. LAS MARCAS ROJAS SON POSICIONES ALEMANAS Y LOS PUNTITOS, CUÁN FUERTES SON. LAS VERDES YA SON NUESTRAS. LA QUE PARPADEA ES SU PRÓXIMA ORDEN."],
+	["fecha", "ARRIBA VA LA FECHA. CADA MISIÓN OCURRE EN SU DÍA DE LA HISTORIA: AL ELEGIRLA, EL CALENDARIO SALTA HASTA AHÍ."],
+	["suministros", "LOS SUMINISTROS SIRVEN PARA RECLUTAR HOMBRES. CADA MISIÓN CUMPLIDA TRAE UN PREMIO, Y LAS ZONAS TOMADAS MANDAN MÁS EN CADA TURNO."],
+	["apoyo", "ESTO ES EL APOYO DEL MANDO: LA CONFIANZA QUE NOS TIENEN. SUBE CON CADA VICTORIA Y BAJA CON LAS DERROTAS, LAS BAJAS Y LA DEMORA. SI LLEGA A CERO, LO RELEVAN."],
+	["cartas", "AQUÍ LE DOY MIS ÓRDENES. A VECES LE OFRECERÉ DOS MISIONES: ELIJA EL ORDEN, PERO LA QUE DEJE PARA DESPUÉS SE REFUERZA. TODAS HAY QUE HACERLAS."],
+	["ir", "CON ESTE BOTÓN ELIGE A LOS TRES HOMBRES QUE LO ACOMPAÑAN Y SALE AL COMBATE."],
+	["descansar", "SI LA COMPAÑÍA ESTÁ MUY GOLPEADA, PUEDE DESCANSAR: LOS HERIDOS SANAN, PERO EL MANDO SE IMPACIENTA Y LOS ALEMANES SE REFUERZAN."],
+	["compania", "EN LA COMPAÑÍA VE A SUS HOMBRES Y RECLUTA REEMPLAZOS CON SUMINISTROS. LOS QUE MUEREN NO VUELVEN, SARGENTO."],
+	["diario", "Y EN EL DIARIO PUEDE VOLVER A LEER LAS NOTICIAS DEL FRENTE."],
+	["", "ESO ES TODO. TRAIGA A SUS HOMBRES DE VUELTA. BUENA SUERTE, SARGENTO."],
+]
 const PAPEL := Color("#d8d0b0")
 const TINTA := Color("#1d1b14")
 const CLIMA_ICONO := {"NOCHE": "LUNA", "TORMENTA": "LLUVIA"}
 
 var pantalla := "mapa"      # "mapa" o "compania"
+var _paso_tuto := 0
+var _ignorar_modal := false
 var _sel := ""              # misión elegida en el panel
 var _info := ""
 var _t := 0.0
@@ -148,10 +164,14 @@ func _lugar(m: Dictionary) -> Vector2:
 
 
 func _modal() -> String:
+	if _ignorar_modal:
+		return ""
 	if _releer and not Campana.ultimo_diario.is_empty():
 		return "diario"
 	if not Campana.siguiente_edicion().is_empty():
 		return "diario"
+	if not Campana.tutorial and Campana.estado == "en_curso":
+		return "tutorial"
 	if Campana.presion != "" and Campana.estado == "en_curso":
 		return "presion"
 	return ""
@@ -163,6 +183,8 @@ func _botones() -> Array:
 	var m := _modal()
 	if m == "diario":
 		return [["leer", Rect2(Vector2.ZERO, size), "", true, ""]]
+	if m == "tutorial":
+		return [["tuto", Rect2(Vector2.ZERO, size), "", true, ""]]
 	if m == "presion":
 		var c := size / 2.0
 		return [
@@ -198,8 +220,10 @@ func _botones() -> Array:
 			if Campana.construida(_sel):
 				l.append(["ir", Rect2(x, h - 94, w, 26), "IR A LA MISIÓN", true, ""])
 			else:
-				l.append(["otra", Rect2(x, h - 94, w, 26), "OTRA UNIDAD SE ENCARGA", true, "EN PREPARACIÓN"])
-		l.append(["descansar", Rect2(x, h - 62, mitad, 26), "DESCANSAR", true, ""])
+				l.append(["prep", Rect2(x, h - 94, w, 26), "MISIÓN EN PREPARACIÓN", false, "PRONTO"])
+		# Descansar solo tiene sentido si hay una misión que se pueda jugar
+		var jugable := o.any(func(m: Dictionary) -> bool: return Campana.construida(m["id"]))
+		l.append(["descansar", Rect2(x, h - 62, mitad, 26), "DESCANSAR", jugable, ""])
 	l.append(["compania", Rect2(x + mitad + 6, h - 62, mitad, 26), "COMPAÑÍA", true, ""])
 	l.append(["diario", Rect2(x, h - 32, mitad, 26), "DIARIO", not Campana.ultimo_diario.is_empty(), ""])
 	l.append(["menu", Rect2(x + mitad + 6, h - 32, mitad, 26), "MENÚ", true, ""])
@@ -240,6 +264,11 @@ func _pulsado(id: String) -> void:
 			else:
 				Campana.leida()
 				_elegir_por_defecto()
+		"tuto":
+			_paso_tuto += 1
+			if _paso_tuto >= TUTORIAL.size():
+				Campana.tutorial = true
+				Campana.guardar()
 		"pagar":
 			Campana.resolver_presion(true)
 		"aguantar":
@@ -247,9 +276,6 @@ func _pulsado(id: String) -> void:
 		"ir":
 			Campana.elegir(_sel)
 			Game.ir_a_previa()
-		"otra":
-			Campana.otra_unidad(_sel)
-			_elegir_por_defecto()
 		"descansar":
 			Campana.descansar()
 			_elegir_por_defecto()
@@ -359,6 +385,8 @@ func _dibujar_capa() -> void:
 			_diario(ci, Campana.ultimo_diario if _releer else Campana.siguiente_edicion())
 		"presion":
 			_presion(ci)
+		"tutorial":
+			_tutorial(ci)
 
 
 func _barra(ci: CanvasItem) -> void:
@@ -477,7 +505,7 @@ func _carta(ci: CanvasItem, m: Dictionary, r: Rect2) -> void:
 	Estilo.texto(ci, "FUERZA", Vector2(x, r.position.y + 41), Color(Estilo.CREMA, 0.6))
 	for i in Campana.fuerza(m["id"]):
 		ci.draw_rect(Rect2(x + 46 + i * 6, r.position.y + 34, 4, 4), Estilo.ROJO)
-	var premio := "+%d SUM." % (m["premio"] if Campana.construida(m["id"]) else m["premio"] / 2)
+	var premio := "+%d SUM." % m["premio"]
 	Estilo.texto(ci, premio, Vector2(x + 84, r.position.y + 41), Estilo.VERDE_LED)
 	var nota := ""
 	if not Campana.construida(m["id"]):
@@ -516,9 +544,13 @@ func _panel_compania(ci: CanvasItem, tx: float, ancho: float) -> void:
 
 
 func _botones_panel(ci: CanvasItem) -> void:
-	for b in _botones():
+	# Los botones del panel se ven siempre (también detrás del diario o del coronel)
+	_ignorar_modal = true
+	var lista := _botones()
+	_ignorar_modal = false
+	for b in lista:
 		var id: String = b[0]
-		if id.begins_with("z:") or id.begins_with("m:") or id == "leer":
+		if id.begins_with("z:") or id.begins_with("m:") or id == "leer" or id == "tuto":
 			continue
 		var estado := "normal"
 		if not b[3]:
@@ -699,3 +731,65 @@ func _envolver(t: String, ancho: float) -> Array:
 	if actual != "":
 		lineas.append(actual)
 	return lineas
+
+
+# ---------------------------------------------------------------- tutorial
+
+## Lo que ilumina cada paso del tutorial.
+func _rect_tuto(clave: String) -> Rect2:
+	match clave:
+		"mapa": return _rect_mapa()
+		"fecha": return Rect2(6, 5, 144, 22)
+		"suministros": return Rect2(154, 5, 128, 22)
+		"apoyo": return Rect2(284, 5, 176, 22)
+		"cartas":
+			var n := maxi(Campana.ofrecidas().size(), 1)
+			return Rect2(_rect_carta(0).position, Vector2(_rect_carta(0).size.x, n * 54 - 4)).grow(3)
+		"":
+			return Rect2()
+	_ignorar_modal = true
+	var r := Rect2()
+	for b in _botones():
+		if b[0] == clave or (clave == "ir" and b[0] == "prep"):
+			r = (b[1] as Rect2).grow(3)
+	_ignorar_modal = false
+	return r
+
+
+func _tutorial(ci: CanvasItem) -> void:
+	var paso: Array = TUTORIAL[clampi(_paso_tuto, 0, TUTORIAL.size() - 1)]
+	var luz := _rect_tuto(paso[0])
+	var sombra := Color(Estilo.NEGRO, 0.72)
+	if luz.size == Vector2.ZERO:
+		ci.draw_rect(Rect2(Vector2.ZERO, size), sombra)
+	else:
+		ci.draw_rect(Rect2(0, 0, size.x, luz.position.y), sombra)
+		ci.draw_rect(Rect2(0, luz.end.y, size.x, size.y - luz.end.y), sombra)
+		ci.draw_rect(Rect2(0, luz.position.y, luz.position.x, luz.size.y), sombra)
+		ci.draw_rect(Rect2(luz.end.x, luz.position.y, size.x - luz.end.x, luz.size.y), sombra)
+		var a := 0.6 + 0.4 * sin(_t * 5.0)
+		ci.draw_rect(luz, Color(Estilo.AMBAR_CLARO, a), false, 2.0)
+	# El coronel, en el lado contrario a lo que se ilumina
+	var w := 300.0
+	var h := 112.0
+	var x := 16.0
+	if luz.size != Vector2.ZERO and luz.get_center().x < size.x / 2.0:
+		x = size.x - w - 16.0
+	var y := (size.y - h) / 2.0
+	if luz.size != Vector2.ZERO and luz.size.y < 60.0:
+		y = luz.end.y + 14.0 if luz.get_center().y < size.y / 2.0 else luz.position.y - h - 14.0
+	if luz.size == Vector2.ZERO:
+		x = (size.x - w) / 2.0
+	var r := Rect2(x, y, w, h)
+	Estilo.marco(ci, r, "chapa")
+	var cara := Rect2(r.position + Vector2(8, 10), Vector2(64, 56))
+	Estilo.marco(ci, cara, "hundido")
+	ci.draw_texture_rect(_retrato("coronel"), cara.grow(-2), false)
+	Estilo.texto(ci, "CORONEL", Vector2(r.position.x + 80, r.position.y + 20), Estilo.AMBAR_CLARO)
+	var ly := r.position.y + 34
+	for l in _envolver(paso[1], w - 90).slice(0, 6):
+		Estilo.texto(ci, l, Vector2(r.position.x + 80, ly), Estilo.CREMA)
+		ly += 12
+	var pie := "TOCA PARA SEGUIR  %d/%d" % [_paso_tuto + 1, TUTORIAL.size()]
+	Estilo.texto(ci, pie, Vector2(r.end.x - 10 - Estilo.ancho_texto(pie), r.end.y - 8),
+		Color(Estilo.AMBAR, 0.5 + 0.4 * sin(_t * 4.0)))

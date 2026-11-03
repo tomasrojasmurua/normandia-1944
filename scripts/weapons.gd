@@ -300,7 +300,7 @@ func _fire() -> void:
 	if hit.is_empty():
 		return
 	var target: Object = hit["collider"]
-	if target is Enemy:
+	if target is Enemy or target is AlemanRemoto:
 		target.hit(w["damage"], int(hit["shape"]) == 1, hit["position"], dir)
 		hit_marker = 1.0
 		Game.play("hit", -4.0)

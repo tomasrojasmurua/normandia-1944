@@ -14,11 +14,17 @@ var _tactil := DisplayServer.is_touchscreen_available()
 
 func _ready() -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	if Red.actual:   # volvió de una partida cooperativa: se sale de la sala
+		Red.actual.queue_free()
+	Game.modo_red = false
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 
 
 func _process(_delta: float) -> void:
 	queue_redraw()
+	# Esperando al servidor: al saber si eres el anfitrión, empieza la misión
+	if pantalla == "conectando" and Red.actual and Red.actual.mi_id != "":
+		Game.empezar_mision()
 
 
 func _botones() -> Array:
@@ -47,6 +53,8 @@ func _botones() -> Array:
 				["unirse", Rect2(X, y0 + paso, ANCHO, ALTO), "UNIRSE A UNA SALA", true, ""],
 				["volver", Rect2(X, size.y - 44, 120, ALTO), "VOLVER", true, ""],
 			]
+		"conectando":
+			return [["salir_sala", Rect2(X, size.y - 44, 120, ALTO), "VOLVER", true, ""]]
 		"unirse":
 			# Teclado de números para escribir el código de la sala
 			var lista := []
@@ -91,6 +99,10 @@ func _pulsado(id: String) -> void:
 			pantalla = id
 		"volver":
 			pantalla = "inicio"
+		"salir_sala":
+			if Red.actual:
+				Red.actual.queue_free()
+			pantalla = "coop"
 		"garra":
 			Game.cambiar_garra()
 		"disparo":
@@ -119,6 +131,8 @@ func _draw() -> void:
 			_coop()
 		"unirse":
 			_unirse()
+		"conectando":
+			_conectando()
 	_dibujar_botones()
 	Estilo.texto(self, "V%s" % ProjectSettings.get_setting("application/config/version"),
 		Vector2(s.x - 44, s.y - 8), Color(Estilo.CREMA, 0.4))
@@ -127,13 +141,24 @@ func _draw() -> void:
 func _entrar_sala(codigo: String) -> void:
 	Game.prueba_carga = false
 	Game.modo_red = true
-	Game.sala = codigo
-	Game.empezar_mision()
+	Red.conectar(get_tree(), codigo)
+	pantalla = "conectando"
+
+
+func _conectando() -> void:
+	Estilo.texto(self, "SALA %s" % Game.sala, Vector2(X, 66), Estilo.CREMA, 33)
+	var e := Red.actual.estado if Red.actual else "sin conexión"
+	var txt := "CONECTANDO CON EL SERVIDOR..."
+	if e == "sala llena":
+		txt = "LA SALA ESTÁ LLENA (MÁXIMO 4)."
+	elif e == "sin conexión":
+		txt = "NO SE PUDO CONECTAR. REVISA INTERNET Y PRUEBA DE NUEVO."
+	Estilo.texto(self, txt, Vector2(X, 96), Estilo.AMBAR_CLARO)
 
 
 func _coop() -> void:
 	Estilo.texto(self, "COOPERATIVO", Vector2(X, 66), Estilo.CREMA, 33)
-	Estilo.texto(self, "PRUEBA DE RED: HASTA 4 JUGADORES EN LA PLAYA, SIN ENEMIGOS.", Vector2(X, 96), Estilo.AMBAR_CLARO)
+	Estilo.texto(self, "PRUEBA: HASTA 4 JUGADORES CONTRA LA DEFENSA ALEMANA.", Vector2(X, 96), Estilo.AMBAR_CLARO)
 	Estilo.texto(self, "UNO CREA LA SALA Y LES DICTA EL CÓDIGO A LOS DEMÁS.", Vector2(X, 110), Estilo.CREMA)
 
 

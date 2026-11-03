@@ -29,9 +29,10 @@ export class Sala {
       return new Response(null, { status: 101, webSocket: cliente });
     }
     const id = crypto.randomUUID().slice(0, 4);
-    servidor.serializeAttachment({ id });
+    const esAnfitrion = conectados.length === 0;
+    servidor.serializeAttachment({ id, anfitrion: esAnfitrion });
     const otros = conectados.map((w) => (w.deserializeAttachment() || {}).id).filter(Boolean);
-    servidor.send(JSON.stringify({ t: "hola", id, otros, anfitrion: otros.length === 0 }));
+    servidor.send(JSON.stringify({ t: "hola", id, otros, anfitrion: esAnfitrion }));
     this.difundir(servidor, { t: "entra", id });
     return new Response(null, { status: 101, webSocket: cliente });
   }
@@ -50,7 +51,7 @@ export class Sala {
 
   webSocketClose(ws) {
     const datos = ws.deserializeAttachment();
-    if (datos && datos.id) this.difundir(ws, { t: "sale", id: datos.id });
+    if (datos && datos.id) this.difundir(ws, { t: "sale", id: datos.id, anfitrion: !!datos.anfitrion });
   }
 
   webSocketError(ws) {

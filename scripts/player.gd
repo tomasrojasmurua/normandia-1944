@@ -221,6 +221,12 @@ func _die() -> void:
 	if not is_inside_tree():
 		return
 	_dejar_cuerpo(donde)
+	if Game.modo_red:   # cooperativo: vuelves como refuerzo desde la orilla
+		Game.say("[REFUERZO EN 5 S]", Game.COLOR_INFO)
+		await get_tree().create_timer(5.0).timeout
+		if is_inside_tree():
+			_reaparecer()
+		return
 	var relevo := Escuadras.relevo_jugador()
 	if relevo == null:
 		Game.say("[TU ESCUADRA FUE ANIQUILADA]", Game.COLOR_BAD)
@@ -253,6 +259,27 @@ func _tomar_lugar(a: Aliado) -> void:
 	a.queue_free()
 	dead = false
 	Game.say("[AHORA ERES %s]" % nombre, Game.COLOR_GOOD)
+
+
+## Cooperativo: vuelve a la orilla con vida y munición llenas.
+func _reaparecer() -> void:
+	var inicio: Vector3 = get_meta("inicio", global_position)
+	global_position = inicio + Vector3(randf_range(-6.0, 6.0), 0.5, 0)
+	rotation.y = 0.0
+	head.rotation = Vector3.ZERO
+	head.position.y = STAND_HEAD
+	_set_crouch(false)
+	velocity = Vector3.ZERO
+	var d := Armas.datos(weapons.id())
+	weapons.equip(weapons.id(), int(d["mag"]), int(d["mag"]) * 3)
+	weapons.visible = true
+	health = max_health
+	_since_hit = 0.0
+	damage_flash = 0.0
+	hit_indicator = 0.0
+	grenades = maxi(grenades, 2)
+	dead = false
+	Game.say("[DE VUELTA AL COMBATE]", Game.COLOR_GOOD)
 
 
 ## Tu cuerpo queda en la arena (un soldado de sprites, ya caído).

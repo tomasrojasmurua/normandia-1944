@@ -356,10 +356,14 @@ func tracer(from: Vector3, to: Vector3, color := Color(1.0, 0.75, 0.3), grosor :
 
 
 ## Explosión de granada: efecto visual, sonido y daño en un radio.
-func explode(pos: Vector3, radius: float, damage: float) -> void:
+## `desde_red` = la explosión pasó en otro celular del cooperativo: aquí solo
+## se ve y se calcula el daño a mi jugador (a los alemanes ya se lo hizo allá).
+func explode(pos: Vector3, radius: float, damage: float, desde_red := false) -> void:
 	play_at("explosion", pos, 6.0)
 	_explosion_fx(pos)
-	for e in get_tree().get_nodes_in_group("enemies"):
+	if not desde_red and Red.activo():
+		Red.explosion(pos, radius, damage)
+	for e in get_tree().get_nodes_in_group("enemies") if not desde_red else []:
 		var chest: Vector3 = e.global_position + Vector3(0, 1.0, 0)
 		var d := pos.distance_to(chest)
 		if d < radius and _clear_path(pos, chest):

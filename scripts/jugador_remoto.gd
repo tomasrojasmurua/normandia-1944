@@ -6,7 +6,9 @@ class_name JugadorRemoto
 ## que interpolar: así se ve suave aunque lleguen solo 15 por segundo y con
 ## distintos retrasos.
 
+var id := ""
 var arma := "garand"
+var dead := false             # (para la IA alemana del anfitrión)
 var cuerpo: SoldadoSprite
 var _cartel: Label3D
 var _fotos: Array = []        # [tiempo local de llegada, pos, giro, agachado, velocidad, muerto]
@@ -14,6 +16,8 @@ var _muerto := false
 
 
 func _ready() -> void:
+	# En el anfitrión, los alemanes también le disparan a los demás jugadores
+	add_to_group("americanos")
 	cuerpo = SoldadoSprite.new()
 	cuerpo.bando = "aliado"
 	cuerpo.arma = arma
@@ -42,6 +46,26 @@ func recibir(d: Dictionary) -> void:
 		global_position = _fotos[0][1]
 
 
+## Lo que pide la IA alemana (como a cualquier americano).
+func pos_cabeza() -> Vector3:
+	return cuerpo.pos_cabeza() if cuerpo else global_position + Vector3(0, 1.6, 0)
+
+
+func factor_blanco() -> float:
+	var f := 1.0
+	if _fotos.size() > 0 and float(_fotos[-1][4]) > 0.6:
+		f *= 0.7       # corriendo
+	elif cuerpo and cuerpo.pose == "agachado":
+		f *= 0.6
+	return f
+
+
+## Un alemán (de este celular, el anfitrión) le pegó: el daño va a su celular.
+func take_damage(amount: float, from_pos: Vector3, _es_bala := true) -> void:
+	if not dead:
+		Red.dano(id, amount, from_pos)
+
+
 func disparo() -> void:
 	if cuerpo:
 		cuerpo.disparo()
@@ -67,13 +91,15 @@ func _process(_delta: float) -> void:
 	if muerto and not _muerto:
 		cuerpo.morir(-global_basis.z, false)
 	elif not muerto and _muerto:
-		# tomó el lugar de otro compañero: cuerpo nuevo
-		cuerpo.queue_free()
+		# volvió como refuerzo: su cuerpo queda en la arena y aparece uno nuevo
+		cuerpo.reparent(get_parent())
+		_fotos = [_fotos[-1]]
 		cuerpo = SoldadoSprite.new()
 		cuerpo.bando = "aliado"
 		cuerpo.arma = arma
 		add_child(cuerpo)
 	_muerto = muerto
+	dead = muerto
 	if not _muerto:
 		var v: float = b[4]
 		cuerpo.pose = "agachado" if b[3] else "pie"

@@ -119,14 +119,21 @@ func _ready() -> void:
 	_build_bags()
 
 	if Game.modo_red:
-		# Prototipo del cooperativo: solo los jugadores en la playa (sin IA)
-		var enemigos := get_parent().get_node_or_null("Enemies")
-		if enemigos:
-			enemigos.queue_free()
-		get_parent().add_child.call_deferred(Red.new())
-		var p := get_parent().get_node_or_null("Player") as Node3D
+		# Cooperativo: los alemanes de verdad solo existen en el anfitrión;
+		# los invitados ven títeres (AlemanRemoto) que manda el anfitrión.
+		# Sin escuadras con IA por ahora: solo los jugadores contra la defensa.
+		if not _soy_anfitrion():
+			var enemigos := get_parent().get_node_or_null("Enemies")
+			if enemigos:
+				enemigos.queue_free()
+		else:
+			get_parent().add_child.call_deferred(Defensa.new())
+		var p := get_parent().get_node_or_null("Player") as Player
 		if p:   # que no aparezcan todos en el mismo lugar
 			p.position.x += randf_range(-8.0, 8.0)
+			p.set_meta("inicio", p.position)
+			if Red.actual:
+				p.nombre = Red.actual.mi_nombre
 	else:
 		# Las cuatro escuadras americanas (la del jugador y tres con sargento IA)
 		get_parent().add_child.call_deferred(Escuadras.new())
@@ -141,6 +148,10 @@ func _ready() -> void:
 		get_parent().add_child.call_deferred(pc)
 
 
+func _soy_anfitrion() -> bool:
+	return Red.actual != null and Red.actual.anfitrion
+
+
 func _exit_tree() -> void:
 	Navegacion.olvidar()
 	Coberturas.limpiar()
@@ -148,7 +159,7 @@ func _exit_tree() -> void:
 
 func _hornear_navegacion() -> void:
 	Navegacion.hornear(get_parent(), AABB(Vector3(-45, -2, -75), Vector3(90, 26, 88)))
-	if not Game.prueba_carga and not Game.modo_red:
+	if not Game.prueba_carga and (not Game.modo_red or _soy_anfitrion()):
 		# Defensa alemana: los 7 de la escena + 13 en las trincheras (20 en total)
 		var rng := RandomNumberGenerator.new()
 		rng.seed = seed_value + 99

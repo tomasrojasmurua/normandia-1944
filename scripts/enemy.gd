@@ -79,9 +79,11 @@ func _physics_process(delta: float) -> void:
 		_los_timer = 0.3
 		var antes := objetivo
 		objetivo = elegir_objetivo("americanos", sight_range)
-		# Que no te disparen más de 4 a la vez: el resto busca otro blanco
-		if objetivo == _player and antes != _player and _tiradores_al_jugador() >= 4:
-			objetivo = elegir_objetivo("americanos", sight_range, null, _player)
+		# Que no le disparen más de 4 a la vez a un jugador (3 en el cooperativo,
+		# donde no hay escuadras con IA que repartan el fuego): el resto busca otro
+		if (objetivo is Player or objetivo is JugadorRemoto) and objetivo != antes \
+				and _tiradores_a(objetivo) >= (3 if Game.modo_red else 4):
+			objetivo = elegir_objetivo("americanos", sight_range, null, objetivo)
 		if objetivo != antes:
 			_blanco_desde = Game.elapsed
 		_sees = objetivo != null
@@ -136,10 +138,10 @@ func _physics_process(delta: float) -> void:
 		cuerpo.pose = "rodilla" if _asomado > 0.0 or _rafaga > 0 else "agachado"
 
 
-func _tiradores_al_jugador() -> int:
+func _tiradores_a(blanco: Node) -> int:
 	var n := 0
 	for e in get_tree().get_nodes_in_group("enemies"):
-		if e != self and e.objetivo == _player:
+		if e != self and e.objetivo == blanco:
 			n += 1
 	return n
 
@@ -188,7 +190,7 @@ func _pensar() -> void:
 func _avisar(texto: String, color: Color) -> void:
 	if Game.elapsed - _ultimo_aviso > 8.0:
 		_ultimo_aviso = Game.elapsed
-		Game.say(texto, color)
+		Red.anunciar(texto, color)
 
 
 func _ir(p: Dictionary) -> bool:
@@ -304,7 +306,7 @@ func _intentar_granada(dist: float) -> bool:
 	g.linear_velocity = v
 	g.angular_velocity = Vector3(randf_range(-8, 8), randf_range(-3, 3), randf_range(-8, 8))
 	Game.play_at("throw", desde, 0.0)
-	Game.say("[¡GRANADA!]", Game.COLOR_BAD)
+	Red.anunciar("[¡GRANADA!]", Game.COLOR_BAD)
 	return true
 
 
@@ -336,7 +338,8 @@ func _die(dir: Vector3, headshot: bool, por_jugador := true) -> void:
 	if por_jugador:   # los que abaten las escuadras con IA no se anuncian (serían demasiados)
 		Game.say("[ENEMIGO ABATIDO]" if not headshot else "[ABATIDO - TIRO A LA CABEZA]")
 	if get_tree().get_nodes_in_group("enemies").is_empty() and (Defensa.restantes <= 0 or Game.prueba_carga):
-		Game.say("[ZONA DESPEJADA]", Game.COLOR_GOOD)
+		Red.anunciar("[ZONA DESPEJADA]", Game.COLOR_GOOD)
 	cuerpo.andar = ""
 	cuerpo.morir(dir, headshot)
 	_soltar_arma(dir)
+	Red.aleman_muerto(self, dir, headshot)

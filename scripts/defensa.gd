@@ -21,7 +21,7 @@ var _nidos_listos := false
 
 func _ready() -> void:
 	_rng.randomize()
-	restantes = REFUERZOS
+	restantes = REFUERZOS if not Game.modo_red else REFUERZOS / 2   # cooperativo: sin escuadras IA
 
 
 func _process(delta: float) -> void:
@@ -44,7 +44,7 @@ func _process(delta: float) -> void:
 			var e := PruebaCarga.nuevo_aleman(get_parent(), _rng, usados)
 			if e.global_position.z > -36.0:   # que lleguen desde atrás
 				e.global_position = Navegacion.cerca_de(Vector3(e.global_position.x, 0, -47))
-		Game.say("[REFUERZOS ALEMANES]", Game.COLOR_BAD)
+		Red.anunciar("[REFUERZOS ALEMANES]", Game.COLOR_BAD)
 
 
 func _aleman(pos: Vector3, arma: String, rol: String) -> void:
@@ -77,13 +77,14 @@ func _mortero() -> void:
 	if blancos.is_empty():
 		return
 	var b: Node3D = blancos[_rng.randi() % blancos.size()]
-	if b is Player and _rng.randf() < 0.6:   # al jugador lo eligen menos
+	if (b is Player or b is JugadorRemoto) and _rng.randf() < 0.6:   # al jugador lo eligen menos
 		b = blancos[_rng.randi() % blancos.size()]
-	var lejos := _rng.randf_range(5.0, 9.0) if b is Player else _rng.randf_range(1.5, 7.0)
+	var lejos := _rng.randf_range(5.0, 9.0) if (b is Player or b is JugadorRemoto) else _rng.randf_range(1.5, 7.0)
 	var ang := _rng.randf() * TAU
 	var pos := b.global_position + Vector3(cos(ang), 0, sin(ang)) * lejos
 	pos.y = 0.1
 	Game.play_at("silbido", pos, 2.0)
+	Red.silbido(pos)
 	await get_tree().create_timer(1.3).timeout
 	if is_inside_tree():
 		Game.explode(pos, 6.0, 150.0)

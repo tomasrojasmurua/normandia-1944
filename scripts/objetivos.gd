@@ -119,6 +119,13 @@ static func activo(i: int) -> bool:
 	return t < 0 or hecho[t]
 
 
+## Segundos que le quedan a una carga encendida (0 si no hay ninguna).
+static func mecha(i: int) -> float:
+	if i < 0 or i >= LISTA.size() or hecho[i] or LISTA[i]["tipo"] != "carga":
+		return 0.0
+	return maxf(progreso[i] - 1.0, 0.0)
+
+
 ## Los objetivos de la fase en curso: [cumplidos, total].
 static func cuenta_fase() -> Vector2i:
 	var f := fase()
@@ -282,6 +289,7 @@ func _carga(i: int, delta: float) -> void:
 	var o: Dictionary = LISTA[i]
 	if _mecha.has(i):   # carga puesta: explota sola, hay que alejarse
 		_mecha[i] -= delta
+		progreso[i] = 1.0 + maxf(_mecha[i], 0.01)   # >1 = mecha encendida (así lo ven también los invitados)
 		if _mecha[i] < 0.0:
 			_mecha.erase(i)
 			Game.explode(o.get("boom", o["pos"]), 9.0, 400.0)
@@ -297,8 +305,8 @@ func _carga(i: int, delta: float) -> void:
 	else:
 		progreso[i] = maxf(progreso[i] - delta * 0.1, 0.0)
 	if progreso[i] >= 1.0:
-		progreso[i] = 0.999
 		_mecha[i] = float(o.get("mecha", 6.0))
+		progreso[i] = 1.0 + _mecha[i]
 		Red.anunciar("[CARGA PUESTA: ¡ALÉJENSE! %d S]" % int(_mecha[i]), Game.COLOR_BAD)
 
 
@@ -465,6 +473,8 @@ static func texto() -> String:
 		txt = "APOYA: %s (%d/%d)" % [o["n"], c.x, c.y]
 	if not activo(f):
 		txt = "ESPERA: %s" % LISTA[o["tras_i"]]["n"]
+	if o["tipo"] == "carga" and progreso[f] > 1.0:
+		txt = "¡CARGA PUESTA! ALÉJATE: %d S" % ceili(progreso[f] - 1.0)
 	if o["tipo"] == "defender" and perdiendo > 0.0:
 		txt = "¡RECUPERA EL CRUCE! %d S" % int(SEG_PERDER - perdiendo)
 	return txt

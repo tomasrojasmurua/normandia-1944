@@ -185,9 +185,11 @@ static func _setos(d: Node3D, rng: RandomNumberGenerator) -> void:
 			var centro := Vector3((a + b) / 2.0, ARRIBA + 0.55, z)
 			d._add_box(centro, Vector3(largo, 1.1, 1.8), tierra)
 			Coberturas.agregar_muro(Vector3(centro.x, ARRIBA, z), largo, 0.0, 1.8, 1.1)
+			# El seto tapa la vista; donde falta (1 de cada 3) se puede tirar por encima del talud
 			var x := a + 1.5
 			while x < b - 1.0:
-				setos.append([Vector3(x, ARRIBA + 1.05, z + rng.randf_range(-0.2, 0.2)), rng.randf_range(0.55, 0.7)])
+				if rng.randf() > 0.33:
+					setos.append([Vector3(x, ARRIBA + 1.05, z + rng.randf_range(-0.2, 0.2)), rng.randf_range(0.55, 0.7)])
 				x += rng.randf_range(3.2, 4.2)
 	# Un par de carros y pilas de heno como cobertura en los campos
 	for c in [[6.0, -105.0], [-24.0, -120.0], [30.0, -121.0], [-6.0, -138.0]]:

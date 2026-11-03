@@ -82,7 +82,7 @@ func pos_cabeza() -> Vector3:
 
 ## ¿Hay línea de vista limpia (solo cuenta el escenario) entre dos puntos?
 func linea_libre(desde: Vector3, hasta: Vector3) -> bool:
-	var q := PhysicsRayQueryParameters3D.create(desde, hasta, 1)
+	var q := PhysicsRayQueryParameters3D.create(desde, hasta, 1 | 128)   # 128 = vegetación: tapa la vista
 	return get_world_3d().direct_space_state.intersect_ray(q).is_empty()
 
 
@@ -254,6 +254,7 @@ func tiro_ia(blanco: Node3D, prob: float, sonido_db: float) -> bool:
 		Game.tracer(from, end)
 	Red.tiro_ia(self, from, end)   # en el cooperativo: que lo vean los invitados
 	cuerpo.disparo()
+	Game.fogonazo(from, self is Enemy)
 	return acierta
 
 

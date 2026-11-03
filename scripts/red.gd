@@ -415,6 +415,7 @@ func _suceso(ev: Array, de: String) -> void:
 				Game.tracer(desde, hasta, Color(1.0, 0.8, 0.45))
 			else:
 				Game.tracer(desde, hasta)
+			Game.fogonazo(desde, not aliado)
 			var sonido := "pistol" if arma in ["mp40", "luger", "stg44", "thompson", "colt"] else "rifle_far"
 			Game.play_at(sonido, desde, -6.0 if aliado else 2.0)
 			# ¿un tiro alemán pasó cerca de mi cabeza? (supresión)

@@ -150,7 +150,23 @@ func _draw() -> void:
 		var color := Estilo.ROJO if Objetivos.perdiendo > 0.0 else (Estilo.AMBAR_CLARO if propio else Estilo.VERDE_LED)
 		Estilo.texto(self, Objetivos.texto(), Vector2(4, oy), color)
 		var pr: float = Objetivos.progreso[foco] if foco >= 0 else 0.0
-		if pr > 0.0 and pr < 1.0:
+		# Carga encendida: aviso grande si estás cerca (la explosión mata)
+		for i in Objetivos.LISTA.size():
+			var m := Objetivos.mecha(i)
+			if m > 0.0:
+				var d: float = _player.global_position.distance_to(Objetivos.LISTA[i]["pos"])
+				if d < 14.0:
+					var parpadeo := 1.0 if fmod(m, 0.5) > 0.2 else 0.45
+					Estilo.texto_c(self, "¡CARGA PUESTA! ¡ALÉJATE! %d" % ceili(m), s.x / 2, s.y * 0.42,
+						Color(Estilo.ROJO, parpadeo), Estilo.TAM_GRANDE)
+				if ceili(m) != _mecha_vista:
+					_mecha_vista = ceili(m)
+					Game.play("click", 4.0 if d < 14.0 else -6.0, 1.6)
+		if pr > 1.0:
+			var falta := clampf((pr - 1.0) / 6.0, 0.0, 1.0)
+			draw_rect(Rect2(4, oy + 4, 120, 5), Color(Estilo.NEGRO, 0.7))
+			draw_rect(Rect2(5, oy + 5, 118 * falta, 3), Estilo.ROJO)
+		elif pr > 0.0 and pr < 1.0:
 			draw_rect(Rect2(4, oy + 4, 120, 5), Color(Estilo.NEGRO, 0.7))
 			draw_rect(Rect2(5, oy + 5, 118 * pr, 3), Estilo.AMBAR)
 
@@ -387,7 +403,8 @@ var _orden_rects: Array[Rect2] = []
 var _retratos_escuadra := {}
 
 
-var _retrato_rects: Array = []     # [Rect2, Aliado] de cada puesto de la escuadra
+var _retrato_rects: Array = []
+var _mecha_vista := -1     # [Rect2, Aliado] de cada puesto de la escuadra
 
 
 ## ¿Tocó el retrato del de radio? (pide morteros donde mira el jugador)

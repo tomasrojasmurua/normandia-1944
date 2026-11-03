@@ -33,6 +33,12 @@ static func crear(padre: Node3D, rng: RandomNumberGenerator) -> void:
 # ================================================================ plantas
 
 ## Malla múltiple de una imagen que siempre mira a la cámara (girando en Y).
+## Los setos y el pasto alto tapan la vista: cada uno lleva una caja invisible
+## en la capa 8 (128), que solo la usan los rayos de "¿lo veo?" de la IA
+## (las balas y los soldados la atraviesan; el mapa de caminos no la ve).
+const TAPAN := ["seto", "pasto", "arbol_1", "arbol_2", "arbol_3"]
+
+
 static func _plantas(padre: Node3D, nombre: String, lugares: Array) -> void:
 	if lugares.is_empty():
 		return
@@ -62,6 +68,24 @@ static func _plantas(padre: Node3D, nombre: String, lugares: Array) -> void:
 	mi.multimesh = mm
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	padre.add_child(mi)
+	if nombre in TAPAN:
+		var cuerpo := StaticBody3D.new()
+		cuerpo.collision_layer = 128
+		cuerpo.collision_mask = 0
+		padre.add_child(cuerpo)
+		for l in lugares:
+			var e: float = l[1]
+			var col := CollisionShape3D.new()
+			var forma := BoxShape3D.new()
+			# un poco más chica que el dibujo (los bordes de la imagen son ralos);
+			# de los árboles solo tapa el tronco y las ramas bajas
+			if nombre.begins_with("arbol"):
+				forma.size = Vector3(0.9 * e, 4.0 * e, 0.9 * e)
+			else:
+				forma.size = Vector3(quad.size.x * e * 0.75, (quad.size.y - 0.15) * e * 0.95, 0.7)
+			col.shape = forma
+			col.position = l[0] + Vector3(0, forma.size.y / 2.0, 0)
+			cuerpo.add_child(col)
 
 
 static func _vegetacion(padre: Node3D, rng: RandomNumberGenerator) -> void:

@@ -110,6 +110,10 @@ var carga_texto := ""         # para el medidor en la prueba de carga
 func _process(delta: float) -> void:
 	if not get_tree().paused:
 		elapsed += delta
+	for f in _fogonazos:
+		if f.visible and Time.get_ticks_msec() >= int(f.get_meta("hasta", 0)) \
+				and Engine.get_frames_drawn() >= int(f.get_meta("cuadro", 0)):
+			f.visible = false
 
 
 ## Se llama al empezar una misión (y al reiniciar tras morir).
@@ -406,6 +410,62 @@ func explode(pos: Vector3, radius: float, damage: float, desde_red := false) -> 
 			player.take_damage(damage * 0.8 * (1.0 - d / radius), pos, false)
 		if d < 30.0:
 			player.shake(1.2 * (1.0 - d / 30.0))
+
+
+## Fogonazo de un disparo de la IA que se ve de lejos: una estrella de
+## tamaño fijo en pantalla (siempre ~10 px, esté a 5 o a 80 m) y una
+## bocanada de humo. Así se ve de dónde vienen los tiros. Los alemanes, más
+## grande y blanco amarillento; los compañeros, más chico y anaranjado.
+var _fogonazos: Array = []
+var _next_fogonazo := 0
+var _tex_fogonazo: ImageTexture
+
+
+func fogonazo(pos: Vector3, aleman: bool) -> void:
+	if _fogonazos.is_empty():
+		_tex_fogonazo = _estrella()
+		for i in 24:
+			var s := Sprite3D.new()
+			s.texture = _tex_fogonazo
+			s.fixed_size = true
+			s.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+			s.shaded = false
+			s.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+			s.alpha_cut = SpriteBase3D.ALPHA_CUT_DISABLED
+			s.render_priority = 10
+			s.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			s.visible = false
+			add_child(s)
+			_fogonazos.append(s)
+	var f: Sprite3D = _fogonazos[_next_fogonazo]
+	_next_fogonazo = (_next_fogonazo + 1) % _fogonazos.size()
+	f.global_position = pos
+	f.pixel_size = (0.007 if aleman else 0.0042) * randf_range(0.85, 1.15)
+	f.modulate = Color(1.0, 0.9, 0.5) if aleman else Color(1.0, 0.7, 0.35)
+	f.rotation.z = randf() * TAU
+	f.visible = true
+	# Se apaga a los 0,07 s, pero no antes de 2 cuadros dibujados (en un
+	# celular lento, un temporizador lo apagaría antes de que se llegue a ver)
+	f.set_meta("hasta", Time.get_ticks_msec() + 70)
+	f.set_meta("cuadro", Engine.get_frames_drawn() + 2)
+	if aleman:
+		_burst(pos, Color(0.6, 0.6, 0.58), 1, 0.4, 0.9, 0.22, Vector3.UP, -0.04)
+
+
+## Estrella de 4 puntas de 15x15 (el fogonazo).
+func _estrella() -> ImageTexture:
+	var img := Image.create(15, 15, false, Image.FORMAT_RGBA8)
+	img.fill(Color(0, 0, 0, 0))
+	for i in 15:
+		var d := absi(i - 7)
+		var a := clampf(1.0 - d / 7.5, 0.0, 1.0)
+		img.set_pixel(i, 7, Color(1, 1, 1, a))
+		img.set_pixel(7, i, Color(1, 1, 1, a))
+	for y in range(5, 10):
+		for x in range(5, 10):
+			if absi(x - 7) + absi(y - 7) <= 2:
+				img.set_pixel(x, y, Color.WHITE)
+	return ImageTexture.create_from_image(img)
 
 
 ## Lo visual de la explosión: bola de fuego, humo y tierra (o agua).

@@ -243,8 +243,7 @@ static func _pueblo(d: Node3D, rng: RandomNumberGenerator) -> void:
 	_modelo(d, "canon", Vector3(-6.0, ARRIBA, -170.0), 90.0, 5.5)
 	# Escombros sueltos en las calles
 	for e in [[4.0, -147.0], [-5.0, -157.0], [21.0, -151.0], [-21.0, -153.5], [2.0, -167.0]]:
-		d._add_box(Vector3(e[0], ARRIBA + 0.4, e[1]), Vector3(2.2, 0.8, 1.2), piedra, Vector3(0, rng.randf_range(-40, 40), 0))
-		Coberturas.agregar_muro(Vector3(e[0], ARRIBA, e[1]), 2.2, 0.0, 1.2, 0.8)
+		_modelo(d, "escombros", Vector3(e[0], ARRIBA, e[1]), rng.randf_range(0, 360), 2.6)
 
 
 ## Un modelo de Meshy a su tamaño real (`largo` = su lado más largo, en metros),
@@ -293,9 +292,15 @@ static func _casa_kit(d: Node3D, centro: Vector3, ancho: float, fondo: float, ma
 			var tipo := "muro_puerta" if i == puerta else ("muro_roto" if rng.randf() < 0.35 else "muro_ventana")
 			var x := (i - (n - 1) / 2.0) * w
 			_pieza(d, tipo, centro + paredes[k][0] + b * Vector3(x, 0, 0), w, giro)
-	# Escombros adentro
-	d._add_box(centro + Vector3(rng.randf_range(-1.5, 1.5), 0.35, rng.randf_range(-1.5, 1.5)),
-		Vector3(1.8, 0.7, 1.2), mat, Vector3(0, rng.randf_range(0, 90), 0))
+	# Escombros adentro (Meshy) y, en 2 de cada 3 casas, el techo quemado encima
+	_modelo(d, "escombros", centro + Vector3(rng.randf_range(-1.5, 1.5), 0, rng.randf_range(-1.0, 1.0)),
+		rng.randf_range(0, 360), 2.2)
+	if rng.randf() < 0.66:
+		var t: AABB = (load("res://assets/decorado/techo_quemado.res") as Mesh).get_aabb()
+		var esc := Vector3((ancho + 0.6) / t.size.x, 2.6 / t.size.y, (fondo + 0.6) / t.size.z)
+		if not _kit.has("techo_quemado"):
+			_kit["techo_quemado"] = []
+		_kit["techo_quemado"].append(Transform3D(Basis.from_scale(esc), centro + Vector3(0, 3.3, 0)))
 
 
 static func _pieza(d: Node3D, tipo: String, base: Vector3, ancho: float, giro: float) -> void:
@@ -330,7 +335,8 @@ static func _armar_kit(d: Node3D) -> void:
 			mm.set_instance_transform(i, _kit[tipo][i])
 		var mi := MultiMeshInstance3D.new()
 		mi.multimesh = mm
-		mi.material_override = material_piedra()
+		# las paredes, con la piedra; el techo quemado, con su propio color (madera)
+		mi.material_override = Ambiente.material_modelo() if tipo == "techo_quemado" else material_piedra()
 		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		d.add_child(mi)
 	_kit.clear()

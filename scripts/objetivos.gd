@@ -63,6 +63,30 @@ static func mio() -> int:
 	return clampi(Escuadras.mi_escuadra, 0, 3)
 
 
+## El objetivo en que debe estar una escuadra: el suyo si falta; si ya lo
+## cumplió, el pendiente más cercano al suyo (va a apoyar a los demás).
+## -1 si no queda ninguno.
+static func foco(esc: int) -> int:
+	esc = clampi(esc, 0, 3)
+	if LISTA.size() < 4:
+		return esc
+	if not hecho[esc]:
+		return esc
+	var mejor := -1
+	var mejor_d := INF
+	for i in 4:
+		if not hecho[i]:
+			var d: float = LISTA[esc]["pos"].distance_to(LISTA[i]["pos"])
+			if d < mejor_d:
+				mejor_d = d
+				mejor = i
+	return mejor
+
+
+static func foco_mio() -> int:
+	return foco(mio())
+
+
 static func cumplidos() -> int:
 	return hecho.count(true)
 
@@ -71,7 +95,7 @@ func _process(delta: float) -> void:
 	for i in 4:
 		var m: Label3D = _marcas[i]
 		m.visible = not hecho[i] and terminado == 0
-		m.modulate = Estilo.AMBAR_CLARO if i == mio() else Color(Estilo.CREMA, 0.45)
+		m.modulate = Estilo.AMBAR_CLARO if i == foco_mio() else Color(Estilo.CREMA, 0.45)
 	if not manda() or terminado != 0 or not Navegacion.listo:
 		return
 	for i in 4:
@@ -207,5 +231,8 @@ static func texto() -> String:
 		return ""
 	var i := mio()
 	if hecho[i]:
-		return "OBJETIVO CUMPLIDO - APOYA A LOS DEMÁS (%d/4)" % cumplidos()
+		var f := foco(i)
+		if f < 0:
+			return "OBJETIVOS CUMPLIDOS (%d/4)" % cumplidos()
+		return "FALTA: %s - VE A APOYAR (%d/4)" % [LISTA[f]["n"], cumplidos()]
 	return "OBJETIVO: %s (%d/4)" % [LISTA[i]["n"], cumplidos()]

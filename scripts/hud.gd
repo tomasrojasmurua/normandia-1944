@@ -145,7 +145,7 @@ func _draw() -> void:
 		var oy := 57.0 if Game.modo_red else 43.0
 		var mio := Objetivos.mio()
 		Estilo.texto(self, Objetivos.texto(), Vector2(4, oy), Estilo.AMBAR_CLARO if not Objetivos.hecho[mio] else Estilo.VERDE_LED)
-		var pr: float = Objetivos.progreso[mio]
+		var pr: float = Objetivos.progreso[maxi(Objetivos.foco_mio(), 0)]
 		if pr > 0.0 and pr < 1.0:
 			draw_rect(Rect2(4, oy + 4, 120, 5), Color(Estilo.NEGRO, 0.7))
 			draw_rect(Rect2(5, oy + 5, 118 * pr, 3), Estilo.AMBAR)

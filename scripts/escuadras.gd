@@ -131,8 +131,15 @@ static func lider_de(a: Aliado) -> Node3D:
 	return l if l and is_instance_valid(l) and not l.dead else null
 
 
+## El carril donde avanza la escuadra: el suyo, o el del objetivo que falta
+## si ya cumplió el suyo (así no se queda parada mientras otro frente se traba).
 static func sector(esc: int) -> Vector2:
-	return SECTORES[clampi(esc, 0, 3)]
+	esc = clampi(esc, 0, 3)
+	if Objetivos.actual and Objetivos.terminado == 0:
+		var f := Objetivos.foco(esc)
+		if f >= 0:
+			return SECTORES[f]
+	return SECTORES[esc]
 
 
 ## ¿Esta escuadra la manda un jugador del cooperativo (que no soy yo)?

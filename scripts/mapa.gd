@@ -46,6 +46,19 @@ const ETIQUETA := {
 	"cherbourg": ["CHERBOURG", Vector2(-30, 22)], "colina192": ["COLINA 192", Vector2(10, -6)],
 	"saintlo": ["SAINT-LÔ", Vector2(-20, -10)], "cobra": ["COBRA", Vector2(-40, 18)],
 }
+## Lo mismo para la imagen del mapa (assets/campana/mapa.png).
+const ETIQUETA_IMG := {
+	"omaha": ["OMAHA", Vector2(-14, 22)], "planeador": ["STE-MÈRE-ÉGLISE", Vector2(-30, -12)],
+	"pointe": ["POINTE DU HOC", Vector2(-30, -12)], "lafiere": ["LA FIÈRE", Vector2(-64, 4)],
+	"carentan": ["CARENTAN", Vector2(-24, 22)], "tormenta": ["MONTEBOURG", Vector2(-82, 4)],
+	"cherbourg": ["CHERBOURG", Vector2(-30, 22)], "colina192": ["COLINA 192", Vector2(14, 4)],
+	"saintlo": ["SAINT-LÔ", Vector2(14, 4)], "cobra": ["COBRA", Vector2(-48, 4)],
+}
+## Nombres fijos sobre la imagen: [texto, lugar 0..1, desplazamiento, ¿mar?]
+const NOMBRES_IMG := [["CANAL DE LA MANCHA", Vector2(0.62, 0.12), Vector2.ZERO, true],
+	["BAHÍA DEL SENA", Vector2(0.70, 0.31), Vector2.ZERO, true],
+	["VALOGNES", Vector2(0.339, 0.271), Vector2(-24, -6), false],
+	["BAYEUX", Vector2(0.945, 0.590), Vector2(-44, 14), false]]
 const PAPEL := Color("#d8d0b0")
 const TINTA := Color("#1d1b14")
 const CLIMA_ICONO := {"NOCHE": "LUNA", "TORMENTA": "LLUVIA"}
@@ -67,6 +80,12 @@ func _ready() -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	Campana.cargar()
+	# Campaña nueva: primero el prólogo (y luego vuelve aquí, al primer diario)
+	if not Campana.prologo and Campana.turnos == 0:
+		Campana.prologo = true
+		Campana.guardar()
+		Game.ver_cinematica.call_deferred("prologo", "mapa")
+		return
 	var ruta := "res://assets/campana/mapa.png"
 	_mapa_img = load(ruta) if ResourceLoader.exists(ruta) else null
 	_fondo = Control.new()
@@ -82,6 +101,8 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
+	if _capa == null:
+		return
 	_t += delta
 	_confirmar_nueva = maxf(_confirmar_nueva - delta, 0.0)
 	_capa.queue_redraw()
@@ -115,6 +136,15 @@ func _p(lonlat: Vector2) -> Vector2:
 	var r := _rect_mapa()
 	return Vector2(r.position.x + (lonlat.x - LON0) * _k(),
 		r.position.y + (LAT_ARRIBA - lonlat.y) * _k() / COS_LAT).round()
+
+
+## Dónde va la marca de una misión: en la imagen del mapa si existe, si no en
+## el dibujo provisional (longitud/latitud).
+func _lugar(m: Dictionary) -> Vector2:
+	if _mapa_img and m.has("img"):
+		var r := _rect_mapa()
+		return (r.position + m["img"] * r.size).round()
+	return _p(m["pos"])
 
 
 func _modal() -> String:
@@ -157,7 +187,7 @@ func _botones() -> Array:
 		return l
 	# Pantalla del mapa: las misiones del mapa se pueden tocar
 	for mi in Campana.LISTA:
-		l.append(["z:" + mi["id"], Rect2(_p(mi["pos"]) - Vector2(13, 9), Vector2(26, 18)), "", true, ""])
+		l.append(["z:" + mi["id"], Rect2(_lugar(mi) - Vector2(13, 9), Vector2(26, 18)), "", true, ""])
 	if Campana.estado != "en_curso":
 		l.append(["nueva", Rect2(x, h - 94, w, 26), "NUEVA CAMPAÑA", true, "¿SEGURO? TOCA OTRA VEZ" if _confirmar_nueva > 0.0 else ""])
 	else:
@@ -234,10 +264,10 @@ func _pulsado(id: String) -> void:
 		"nueva":
 			if _confirmar_nueva > 0.0:
 				Campana.nueva()
-				_confirmar_nueva = 0.0
-				pantalla = "mapa"
-				_sel = ""
-				_elegir_por_defecto()
+				Campana.prologo = true
+				Campana.guardar()
+				Game.ver_cinematica("prologo", "mapa")
+				return
 			else:
 				_confirmar_nueva = 3.0
 
@@ -255,6 +285,14 @@ func _dibujar_fondo() -> void:
 	Estilo.marco(ci, r.grow(2), "hundido")
 	if _mapa_img:
 		ci.draw_texture_rect(_mapa_img, r, false)
+		ci.draw_rect(r, Color(Estilo.NEGRO, 0.18))     # un poco más oscuro: que se lean las marcas
+		for n in NOMBRES_IMG:
+			var q: Vector2 = r.position + n[1] * r.size + n[2]
+			if n[3]:
+				Estilo.texto_c(ci, n[0], q.x, q.y, Color("#9fb6c4"))
+			else:
+				ci.draw_rect(Rect2(r.position + n[1] * r.size - Vector2(1, 1), Vector2(3, 3)), Color(Estilo.CREMA, 0.6))
+				Estilo.texto(ci, n[0], q, Color(Estilo.CREMA, 0.6))
 		return
 	ci.draw_rect(r, Color("#22313a"))
 	# Olas: rayitas horizontales en el mar
@@ -350,7 +388,7 @@ func _marcas(ci: CanvasItem) -> void:
 	var ofrecidas := _ids_ofrecidas()
 	var etapa := Campana.etapa()
 	for m in Campana.LISTA:
-		var c := _p(m["pos"])
+		var c := _lugar(m)
 		var hecha := Campana.hecha(m["id"])
 		var ofrecida := ofrecidas.has(m["id"])
 		var futura: bool = not hecha and m["etapa"] > etapa
@@ -368,7 +406,7 @@ func _marcas(ci: CanvasItem) -> void:
 		for i in n:
 			ci.draw_rect(Rect2(Vector2(x0 + i * 4, c.y - 1).floor(), Vector2(3, 3)),
 				Estilo.VERDE_LED if hecha else Color(Estilo.CREMA, 0.5 if futura else 1.0))
-		var et: Array = ETIQUETA.get(m["id"], [m["n"], Vector2(-20, 20)])
+		var et: Array = (ETIQUETA_IMG if _mapa_img else ETIQUETA).get(m["id"], [m["n"], Vector2(-20, 20)])
 		var col := Estilo.VERDE_LED if hecha else (Estilo.AMBAR_CLARO if ofrecida else Color(Estilo.CREMA, 0.45 if futura else 0.8))
 		Estilo.texto(ci, et[0], c + et[1], col)
 		if m["id"] == _sel and pantalla == "mapa":

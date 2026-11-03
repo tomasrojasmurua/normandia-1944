@@ -34,39 +34,40 @@ const ETAPAS := ["DÍA D", "LA CABEZA DE PLAYA", "LA TORMENTA Y EL PUERTO", "LOS
 ## Las misiones de la campaña, en el orden de la historia.
 ##   etapa      0–4 (la etapa I va en orden fijo)
 ##   dia        días desde el 31 de mayo (6 = 6 de junio; 42 = 12 de julio)
-##   pos        longitud, latitud (para el mapa)
+##   pos        longitud, latitud (para el mapa dibujado con código)
+##   img        lugar en la imagen del mapa (assets/campana/mapa.png), de 0 a 1
 ##   fuerza     fuerza alemana de partida (1–3); sube si la dejas para después
 ##   premio     suministros al cumplirla
 ##   valor      suministros que da cada turno una vez tomada (playas y puertos, más)
 const LISTA := [
-	{"id": "omaha", "n": "PLAYA OMAHA", "sub": "DESEMBARCO", "etapa": 0, "dia": 6, "pos": Vector2(-0.90, 49.37),
+	{"id": "omaha", "img": Vector2(0.750, 0.474), "n": "PLAYA OMAHA", "sub": "DESEMBARCO", "etapa": 0, "dia": 6, "pos": Vector2(-0.90, 49.37),
 		"fuerza": 3, "premio": 200, "valor": 60, "clima": "NUBLADO", "hora": "06:30",
 		"resumen": "VOLAR EL BÚNKER, SUBIR EL ACANTILADO Y TOMAR VIERVILLE."},
-	{"id": "planeador", "n": "SAINTE-MÈRE-ÉGLISE", "sub": "PLANEADOR", "etapa": 0, "dia": 7, "fecha": "NOCHE DEL 6 AL 7 DE JUNIO",
+	{"id": "planeador", "img": Vector2(0.461, 0.396), "n": "SAINTE-MÈRE-ÉGLISE", "sub": "PLANEADOR", "etapa": 0, "dia": 7, "fecha": "NOCHE DEL 6 AL 7 DE JUNIO",
 		"pos": Vector2(-1.32, 49.41), "fuerza": 2, "premio": 150, "valor": 20, "clima": "NOCHE", "hora": "23:00",
 		"resumen": "EL PLANEADOR SE ESTRELLA ENTRE SETOS. REÚNA A LOS PARACAIDISTAS."},
-	{"id": "pointe", "n": "POINTE DU HOC", "sub": "RELEVAR A LOS RANGERS", "etapa": 1, "dia": 8, "pos": Vector2(-0.99, 49.40),
+	{"id": "pointe", "img": Vector2(0.660, 0.431), "n": "POINTE DU HOC", "sub": "RELEVAR A LOS RANGERS", "etapa": 1, "dia": 8, "pos": Vector2(-0.99, 49.40),
 		"fuerza": 2, "premio": 150, "valor": 20, "clima": "NUBLADO", "hora": "08:00",
 		"resumen": "LOS RANGERS LLEVAN DOS DÍAS AISLADOS EN EL ACANTILADO."},
-	{"id": "lafiere", "n": "PUENTE DE LA FIÈRE", "sub": "LA CALZADA", "etapa": 1, "dia": 9, "pos": Vector2(-1.37, 49.39),
+	{"id": "lafiere", "img": Vector2(0.396, 0.482), "n": "PUENTE DE LA FIÈRE", "sub": "LA CALZADA", "etapa": 1, "dia": 9, "pos": Vector2(-1.37, 49.39),
 		"fuerza": 2, "premio": 150, "valor": 30, "clima": "NUBLADO", "hora": "10:30",
 		"resumen": "CRUZAR LA CALZADA SOBRE EL PANTANO DEL MERDERET."},
-	{"id": "carentan", "n": "CARENTAN", "sub": "UNIR LAS PLAYAS", "etapa": 1, "dia": 12, "pos": Vector2(-1.25, 49.30),
+	{"id": "carentan", "img": Vector2(0.476, 0.504), "n": "CARENTAN", "sub": "UNIR LAS PLAYAS", "etapa": 1, "dia": 12, "pos": Vector2(-1.25, 49.30),
 		"fuerza": 3, "premio": 200, "valor": 40, "clima": "DESPEJADO", "hora": "05:00",
 		"resumen": "TOMAR CARENTAN PARA UNIR UTAH Y OMAHA."},
-	{"id": "tormenta", "n": "SETOS DE MONTEBOURG", "sub": "BAJO LA TORMENTA", "etapa": 2, "dia": 20, "pos": Vector2(-1.38, 49.49),
+	{"id": "tormenta", "img": Vector2(0.415, 0.287), "n": "SETOS DE MONTEBOURG", "sub": "BAJO LA TORMENTA", "etapa": 2, "dia": 20, "pos": Vector2(-1.38, 49.49),
 		"fuerza": 2, "premio": 150, "valor": 20, "clima": "TORMENTA", "hora": "07:00",
 		"resumen": "AVANZAR ENTRE SETOS SIN APOYO AÉREO."},
-	{"id": "cherbourg", "n": "CHERBOURG", "sub": "EL PUERTO", "etapa": 2, "dia": 26, "pos": Vector2(-1.62, 49.63),
+	{"id": "cherbourg", "img": Vector2(0.257, 0.142), "n": "CHERBOURG", "sub": "EL PUERTO", "etapa": 2, "dia": 26, "pos": Vector2(-1.62, 49.63),
 		"fuerza": 3, "premio": 250, "valor": 100, "clima": "NUBLADO", "hora": "09:00",
 		"resumen": "TOMAR LOS FUERTES Y EL PUERTO ANTES DE QUE LO DESTRUYAN."},
-	{"id": "colina192", "n": "COLINA 192", "sub": "LOS SETOS", "etapa": 3, "dia": 42, "pos": Vector2(-0.97, 49.15),
+	{"id": "colina192", "img": Vector2(0.702, 0.706), "n": "COLINA 192", "sub": "LOS SETOS", "etapa": 3, "dia": 42, "pos": Vector2(-0.97, 49.15),
 		"fuerza": 3, "premio": 200, "valor": 30, "clima": "DESPEJADO", "hora": "06:00",
 		"resumen": "LA COLINA VIGILA TODO EL VALLE HASTA SAINT-LÔ."},
-	{"id": "saintlo", "n": "SAINT-LÔ", "sub": "LA CIUDAD EN RUINAS", "etapa": 3, "dia": 48, "pos": Vector2(-1.09, 49.115),
+	{"id": "saintlo", "img": Vector2(0.582, 0.815), "n": "SAINT-LÔ", "sub": "LA CIUDAD EN RUINAS", "etapa": 3, "dia": 48, "pos": Vector2(-1.09, 49.115),
 		"fuerza": 3, "premio": 250, "valor": 50, "clima": "NUBLADO", "hora": "06:30",
 		"resumen": "ENTRAR A SAINT-LÔ Y LIMPIARLA CASA POR CASA."},
-	{"id": "cobra", "n": "OPERACIÓN COBRA", "sub": "LA RUPTURA", "etapa": 4, "dia": 55, "pos": Vector2(-1.19, 49.085),
+	{"id": "cobra", "img": Vector2(0.486, 0.793), "n": "OPERACIÓN COBRA", "sub": "LA RUPTURA", "etapa": 4, "dia": 55, "pos": Vector2(-1.19, 49.085),
 		"fuerza": 3, "premio": 300, "valor": 0, "clima": "DESPEJADO", "hora": "11:00",
 		"resumen": "DESPUÉS DEL BOMBARDEO, ROMPER EL FRENTE ALEMÁN."},
 ]
@@ -84,6 +85,7 @@ static var estado := "en_curso"           # "en_curso", "relevado", "victoria"
 static var diario: Array = []             # ediciones sin leer
 static var ultimo_diario: Dictionary = {}
 static var presion := ""                  # id de una zona propia bajo presión (decisión pendiente)
+static var prologo := false               # ¿ya se vio la cinemática del prólogo?
 static var _cargada := false
 
 # --- La misión en curso
@@ -115,13 +117,14 @@ static func cargar() -> void:
 	diario = cfg.get_value("campana", "diario", [])
 	ultimo_diario = cfg.get_value("campana", "ultimo_diario", {})
 	presion = cfg.get_value("campana", "presion", "")
+	prologo = cfg.get_value("campana", "prologo", false)
 
 
 static func guardar() -> void:
 	var cfg := ConfigFile.new()
 	cfg.load(ARCHIVO)
 	for k in ["suministros", "apoyo", "dia", "hechas", "refuerzo", "turnos", "estado", "diario",
-			"ultimo_diario", "presion"]:
+			"ultimo_diario", "presion", "prologo"]:
 		cfg.set_value("campana", k, _valor(k))
 	cfg.save(ARCHIVO)
 
@@ -137,6 +140,7 @@ static func _valor(k: String) -> Variant:
 		"estado": return estado
 		"diario": return diario
 		"ultimo_diario": return ultimo_diario
+		"prologo": return prologo
 		_: return presion
 
 
@@ -149,6 +153,7 @@ static func _estado_inicial() -> void:
 	turnos = 0
 	estado = "en_curso"
 	presion = ""
+	prologo = false
 	ultimo_diario = {}
 	diario = [{
 		"fecha": fecha_texto(5),

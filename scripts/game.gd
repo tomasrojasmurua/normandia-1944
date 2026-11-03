@@ -156,6 +156,15 @@ func ir_al_menu() -> void:
 	get_tree().change_scene_to_file("res://scenes/menu.tscn")
 
 
+## Cinemática (prólogo o antes de una misión). `despues`: "mision" o "mapa".
+func ver_cinematica(id: String, despues: String) -> void:
+	Cinematica.actual = id
+	Cinematica.despues = despues
+	get_tree().paused = false
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	get_tree().change_scene_to_file("res://scenes/cinematica.tscn")
+
+
 ## Mapa de la campaña (jugando solo): el coronel, las misiones y el diario.
 func ir_al_mapa() -> void:
 	_cerrar_compania()
@@ -179,10 +188,14 @@ func _cerrar_compania() -> void:
 		Campana.cerrar_mision(0)
 
 
-func empezar_mision(id := "") -> void:
+func empezar_mision(id := "", sin_cinematica := false) -> void:
 	_cerrar_compania()
 	if id != "" and Misiones.existe(id):
 		mision = id
+	# Jugando solo, antes de la misión va su cinemática (que después vuelve aquí)
+	if not sin_cinematica and not modo_red and not prueba_carga and Cinematica.tiene(mision):
+		ver_cinematica(mision, "mision")
+		return
 	Compania.empezar_mision()
 	if Compania.activa():
 		Campana.cargar()

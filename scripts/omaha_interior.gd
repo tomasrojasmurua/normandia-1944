@@ -201,7 +201,7 @@ static func _setos(d: Node3D, rng: RandomNumberGenerator) -> void:
 ## Vierville: casas de piedra en ruinas alrededor del cruce (0, -152), la
 ## iglesia con su torre (se ve desde lejos) y los caminos.
 static func _pueblo(d: Node3D, rng: RandomNumberGenerator) -> void:
-	var piedra: StandardMaterial3D = DECOR.textured("concreto", 2.2, Color(0.95, 0.88, 0.74))
+	var piedra: StandardMaterial3D = DECOR.textured("piedra", 2.6)
 	var camino: StandardMaterial3D = DECOR.textured("guijarros", 2.5, Color(0.72, 0.64, 0.52))
 	# Caminos (solo se ven: no chocan)
 	Game.box(d, Vector3(4.0, 0.04, 120.0), Vector3(0, ARRIBA + 0.02, -145.0), camino)

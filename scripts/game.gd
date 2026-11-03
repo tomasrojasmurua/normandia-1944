@@ -146,14 +146,31 @@ func cambiar_disparo() -> void:
 
 ## Ir al menú principal / empezar la misión.
 func ir_al_menu() -> void:
+	_cerrar_compania()
 	get_tree().paused = false
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	get_tree().change_scene_to_file("res://scenes/menu.tscn")
 
 
+## Pantalla previa a la misión (jugando solo): elegir a los hombres.
+func ir_a_previa() -> void:
+	_cerrar_compania()
+	get_tree().paused = false
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	get_tree().change_scene_to_file("res://scenes/previa.tscn")
+
+
+## Si se deja una misión a medias (menú, reiniciar), sus caídos cuentan igual.
+func _cerrar_compania() -> void:
+	if Compania.en_mision:
+		Compania.cerrar_mision(0, Escuadras.reemplazos_vivos())
+
+
 func empezar_mision(id := "") -> void:
+	_cerrar_compania()
 	if id != "" and Misiones.existe(id):
 		mision = id
+	Compania.empezar_mision()
 	start_minutes = Misiones.dato("hora")
 	get_tree().paused = false
 	get_tree().change_scene_to_file(Misiones.dato("escena"))

@@ -387,6 +387,18 @@ var _orden_rects: Array[Rect2] = []
 var _retratos_escuadra := {}
 
 
+var _retrato_rects: Array = []     # [Rect2, Aliado] de cada puesto de la escuadra
+
+
+## ¿Tocó el retrato del de radio? (pide morteros donde mira el jugador)
+func apoyo_at(pos: Vector2) -> bool:
+	for x in _retrato_rects:
+		var a = x[1]
+		if (x[0] as Rect2).has_point(pos) and is_instance_valid(a) and not a.dead and a is Aliado and a.esp == "radio":
+			return true
+	return false
+
+
 func orden_at(pos: Vector2) -> String:
 	for i in _orden_rects.size():
 		if _orden_rects[i].grow(2).has_point(pos):
@@ -398,6 +410,8 @@ func _unhandled_input(event: InputEvent) -> void:
 	for i in 3:
 		if event.is_action_pressed(["order_follow", "order_advance", "order_hold"][i]):
 			Aliado.dar_orden(ORDENES[i])
+	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_B:
+		Escuadras.pedir_artilleria()
 
 
 func _retrato_de(nombre: String) -> Texture2D:
@@ -411,6 +425,7 @@ func _retrato_de(nombre: String) -> Texture2D:
 func _draw_escuadra(r: Rect2) -> void:
 	# Los tres puestos de la escuadra del jugador (un refuerzo ocupa el puesto de un caído)
 	var aliados: Array = Escuadras.ranuras_jugador()
+	_retrato_rects.clear()
 	# Las tres órdenes van lado a lado, a todo el alto de la barra (antes eran
 	# tres franjas finitas). En pantallas angostas los retratos se recortan
 	# para que cada botón tenga al menos ~24 px de ancho.
@@ -423,6 +438,7 @@ func _draw_escuadra(r: Rect2) -> void:
 		if i >= aliados.size() or aliados[i] == null or not is_instance_valid(aliados[i]):
 			continue
 		var a = aliados[i]    # Aliado (o su títere, en un invitado del cooperativo)
+		_retrato_rects.append([col, a])
 		_nombre_angosto(a.nombre, col.position.x + col.size.x / 2, col.position.y + 9,
 			Estilo.ROJO if a.dead else Estilo.CREMA, col.size.x - 6)
 		var face := Rect2(col.position + Vector2(1, 11), Vector2(col.size.x - 2, 35))
@@ -441,6 +457,15 @@ func _draw_escuadra(r: Rect2) -> void:
 			draw_line(c + Vector2(8, -8), c + Vector2(-8, 8), Estilo.ROJO, 2.0)
 		elif a.moviendo:
 			_flecha(face.position + Vector2(face.size.x - 7, face.size.y - 6))
+		# Especialidad: el de radio muestra si la artillería está lista (tocar = pedirla)
+		if not a.dead and a is Aliado and a.esp != "":
+			var etiqueta: String = Compania.ESPECIALIDADES[a.esp]["c"]
+			var col_e := Color(Estilo.CREMA, 0.8)
+			if a.esp == "radio":
+				var falta := Escuadras.apoyo_listo - Game.elapsed
+				etiqueta = "RADIO" if falta <= 0.0 else str(int(falta))
+				col_e = Estilo.VERDE_LED if falta <= 0.0 else Estilo.AMBAR
+			Estilo.texto(self, etiqueta, Vector2(face.position.x + 2, face.end.y - 2), col_e)
 	# Órdenes: » síganme, → avancen, ‖ alto
 	_orden_rects.clear()
 	var x0 := r.position.x + 3 * paso

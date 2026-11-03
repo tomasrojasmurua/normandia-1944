@@ -15,6 +15,9 @@ class_name Aliado
 @export var nombre := "HAYES"
 @export var escuadra := 0          # 0 = la del jugador
 @export var es_lider := false      # sargento con IA de una escuadra 1–3
+var esp := ""                      # especialidad (hombres de tu compañía): "medico", "radio", "bazuca"...
+var rango := 0                     # 0 PVT … 3 SGT: los veteranos tiran un poco mejor
+var _t_bazuca := 12.0
 
 const ALCANCE := 60.0
 const BUNKER := Vector3(0, 0, -42)
@@ -84,6 +87,9 @@ func _physics_process(delta: float) -> void:
 		objetivo = elegir_objetivo("enemies", ALCANCE)
 		amenaza = objetivo.global_position if objetivo else _enemigo_conocido()
 
+	if esp == "bazuca":
+		_bazuca(delta)
+
 	if moviendo:     # corre en _process (combatiente.gd), cuadro a cuadro
 		_rafaga = 0
 		return
@@ -128,6 +134,32 @@ func _physics_process(delta: float) -> void:
 	if en_cobertura:
 		_asomado -= delta
 		cuerpo.pose = "rodilla" if _asomado > 0.0 or _rafaga > 0 else "agachado"
+
+
+## Bazuca: cada tanto le dispara un cohete a una MG42 o a un grupo de alemanes
+## que vea (no a uno suelto: los cohetes son pocos).
+func _bazuca(delta: float) -> void:
+	_t_bazuca -= delta
+	if _t_bazuca > 0.0 or objetivo == null or not is_instance_valid(objetivo) or objetivo.dead or moviendo:
+		return
+	var dist := global_position.distance_to(objetivo.global_position)
+	if dist < 12.0 or dist > 70.0:
+		_t_bazuca = 1.0
+		return
+	var juntos := 0
+	for e in get_tree().get_nodes_in_group("enemies"):
+		if e.global_position.distance_to(objetivo.global_position) < 5.0:
+			juntos += 1
+	if objetivo.arma != "mg42" and juntos < 2:
+		_t_bazuca = 2.0
+		return
+	_t_bazuca = randf_range(18.0, 26.0)
+	var desde: Vector3 = cuerpo.boca.global_position
+	var blanco: Vector3 = objetivo.global_position + Vector3(randf_range(-1.2, 1.2), 0.8, randf_range(-1.2, 1.2))
+	Cohete.lanzar(get_parent(), desde, (blanco - desde).normalized(), 220.0)
+	Game.play_at("throw", desde, 0.0)
+	if escuadra == Escuadras.mi_escuadra:
+		Game.say("[%s: ¡BAZUCA!]" % nombre, Game.COLOR_INFO)
 
 
 ## Dónde está el alemán vivo más cercano (aunque no lo vea): la escuadra sabe
@@ -248,6 +280,7 @@ func _disparar() -> void:
 	var chance := lerpf(0.13, 0.025, clampf(dist / ALCANCE, 0.0, 1.0))
 	if auto:
 		chance *= 0.45
+	chance *= 1.0 + 0.1 * rango
 	chance *= objetivo.factor_blanco()
 	if tiro_ia(objetivo, chance, -6.0):
 		var pecho: Vector3 = objetivo.global_position + Vector3(0, 1.1, 0)
@@ -283,3 +316,5 @@ func _morir(dir: Vector3) -> void:
 	_soltar_arma(dir)
 	Game.caidos += 1
 	Red.murio(self, dir, false)
+	if has_meta("compania"):
+		Compania.caido(nombre)

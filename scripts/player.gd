@@ -225,6 +225,20 @@ func _die() -> void:
 	Game.say("[%s CAÍDO]" % nombre, Game.COLOR_BAD)
 	var donde := global_transform
 	esperando_relevo = true
+	# Un médico de tu compañía cerca te levanta (una vez por misión cada uno)
+	var med := Escuadras.especialista("medico", global_position, 30.0) if not Red.es_invitado() else null
+	if med and not med.has_meta("uso_medico"):
+		med.set_meta("uso_medico", true)
+		Game.say("[%s: ¡AGUANTA, SARGENTO! TE ESTOY ATENDIENDO]" % med.nombre, Game.COLOR_GOOD)
+		await get_tree().create_timer(5.0).timeout
+		if not is_inside_tree():
+			return
+		if is_instance_valid(med) and not med.dead:
+			_reaparecer(global_position, 0.5)
+			Game.say("[%s TE LEVANTÓ. SOLO TIENE PARA UNA VEZ]" % med.nombre, Game.COLOR_GOOD)
+			return
+	if Compania.en_mision:
+		Compania.caido(nombre)    # si eras un hombre de tu compañía, ese cayó
 	await get_tree().create_timer(2.5).timeout
 	if not is_inside_tree():
 		return
@@ -292,9 +306,12 @@ func tomar_lugar_en(pos: Vector3, arma: String, nuevo_nombre: String) -> void:
 
 
 ## Cooperativo: vuelve a la orilla con vida y munición llenas.
-func _reaparecer() -> void:
-	var inicio: Vector3 = get_meta("inicio", global_position)
-	global_position = inicio + Vector3(randf_range(-6.0, 6.0), 0.5, 0)
+func _reaparecer(aqui := Vector3.INF, vida := 1.0) -> void:
+	if aqui == Vector3.INF:
+		var inicio: Vector3 = get_meta("inicio", global_position)
+		global_position = inicio + Vector3(randf_range(-6.0, 6.0), 0.5, 0)
+	else:
+		global_position = aqui + Vector3(0, 0.2, 0)
 	rotation.y = 0.0
 	head.rotation = Vector3.ZERO
 	head.position.y = STAND_HEAD
@@ -303,14 +320,15 @@ func _reaparecer() -> void:
 	var d := Armas.datos(weapons.id())
 	weapons.equip(weapons.id(), int(d["mag"]), int(d["mag"]) * 3)
 	weapons.visible = true
-	health = max_health
+	health = max_health * vida
 	_since_hit = 0.0
 	damage_flash = 0.0
 	hit_indicator = 0.0
 	grenades = maxi(grenades, 2)
 	dead = false
 	esperando_relevo = false
-	Game.say("[DE VUELTA AL COMBATE]", Game.COLOR_GOOD)
+	if aqui == Vector3.INF:
+		Game.say("[DE VUELTA AL COMBATE]", Game.COLOR_GOOD)
 
 
 ## Tu cuerpo queda en la arena (un soldado de sprites, ya caído).

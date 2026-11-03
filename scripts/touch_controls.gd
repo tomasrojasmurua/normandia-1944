@@ -124,6 +124,8 @@ func _touch_down(index: int, pos: Vector2) -> void:
 			var orden: String = _hud.orden_at(pos)
 			if orden != "":
 				Aliado.dar_orden(orden)
+			elif _hud.apoyo_at(pos):
+				Escuadras.pedir_artilleria()
 		return
 	if pos.x < size.x * 0.5:
 		if not _has_role("move"):

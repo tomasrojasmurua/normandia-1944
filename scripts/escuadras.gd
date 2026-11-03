@@ -46,6 +46,7 @@ var _fase_lista := 0         # la fase cuyos refuerzos ya se sumaron
 func _ready() -> void:
 	actual = self
 	_rng.randomize()
+	apoyo_listo = 0.0
 	SECTORES = Misiones.dato("sectores")
 	ordenes = ["seguir", "avanzar", "avanzar", "avanzar"]
 	jefes = [null, null, null, null]
@@ -60,10 +61,19 @@ func _ready() -> void:
 	if not adoptar.is_empty():
 		_adoptar()
 		return
-	# Escuadra del jugador: los de siempre
+	# Escuadra del jugador: los 3 que eligió de su compañía (jugando solo) o los de siempre
 	var mia: Array = Misiones.dato("escuadra_jugador")
-	for k in 3:
-		datos[0]["ranuras"][k] = _soldado(0, mia[k][0], mia[k][1], mia[k][2], false)
+	if Compania.activa():
+		var eq := Compania.equipo()
+		for k in mini(eq.size(), 3):
+			var a := _soldado(0, mia[k][0], eq[k][1], eq[k][0], false)
+			a.esp = eq[k][2]
+			a.rango = eq[k][3]
+			a.set_meta("compania", true)
+			datos[0]["ranuras"][k] = a
+	else:
+		for k in 3:
+			datos[0]["ranuras"][k] = _soldado(0, mia[k][0], mia[k][1], mia[k][2], false)
 	# Las otras tres, con su sargento, repartidas en su sector
 	for i in range(1, 4):
 		var s: Vector2 = SECTORES[i]
@@ -214,6 +224,73 @@ static func _mas_cercano(lista: Array, cerca: Vector3) -> Aliado:
 	return mejor
 
 
+## Los refuerzos que llegaron a la escuadra del jugador y siguen vivos (al
+## terminar la misión se unen a su compañía).
+static func reemplazos_vivos() -> Array:
+	if actual == null or not is_instance_valid(actual):
+		return []
+	var l := []
+	for a in actual.datos[mi_escuadra]["ranuras"]:
+		if a and is_instance_valid(a) and not a.dead and a.has_meta("reemplazo"):
+			l.append(a.nombre)
+	return l
+
+
+## Radio: morteros donde mira el jugador (cada 75 s, con el de radio vivo).
+static var apoyo_listo := 0.0
+const ESPERA_APOYO := 90.0
+
+
+static func pedir_artilleria() -> void:
+	var p := Engine.get_main_loop().get_first_node_in_group("player") as Player
+	if p == null or p.dead or actual == null:
+		return
+	var radio := especialista("radio", p.global_position)
+	if radio == null:
+		Game.say("[NO HAY RADIO EN TU ESCUADRA]", Game.COLOR_BAD)
+		return
+	if Game.elapsed < apoyo_listo:
+		Game.say("[%s: LA ARTILLERÍA ESTÁ OCUPADA. %d S]" % [radio.nombre, int(apoyo_listo - Game.elapsed)], Game.COLOR_INFO)
+		return
+	var cam := p.camera.global_transform
+	var q := PhysicsRayQueryParameters3D.create(cam.origin, cam.origin - cam.basis.z * 160.0, 1)
+	var hit := p.get_world_3d().direct_space_state.intersect_ray(q)
+	if hit.is_empty():
+		Game.say("[%s: ¿DÓNDE? APUNTA AL SUELO]" % radio.nombre, Game.COLOR_INFO)
+		return
+	var blanco: Vector3 = hit["position"]
+	if blanco.distance_to(p.global_position) < 18.0:
+		Game.say("[%s: ¡DEMASIADO CERCA, SARGENTO!]" % radio.nombre, Game.COLOR_BAD)
+		return
+	apoyo_listo = Game.elapsed + ESPERA_APOYO
+	Game.say("[%s: ¡MORTEROS EN CAMINO! CÚBRANSE]" % radio.nombre, Game.COLOR_GOOD)
+	actual._andanada(blanco)
+
+
+func _andanada(blanco: Vector3) -> void:
+	await get_tree().create_timer(5.0).timeout
+	for k in 4:
+		if not is_inside_tree():
+			return
+		var pos := Navegacion.cerca_de(blanco + Vector3(_rng.randf_range(-5, 5), 0, _rng.randf_range(-5, 5))) + Vector3(0, 0.1, 0)
+		Game.play_at("silbido", pos, 2.0)
+		await get_tree().create_timer(1.1).timeout
+		if is_inside_tree():
+			Game.explode(pos, 6.5, 170.0)
+		await get_tree().create_timer(0.5).timeout
+
+
+## Un hombre vivo de la escuadra del jugador con esa especialidad, a menos de
+## `radio` m de `cerca` (o null).
+static func especialista(esp: String, cerca: Vector3, radio := INF) -> Aliado:
+	if actual == null:
+		return null
+	for a in actual.datos[mi_escuadra]["ranuras"]:
+		if a and is_instance_valid(a) and not a.dead and a.esp == esp and a.global_position.distance_to(cerca) < radio:
+			return a
+	return null
+
+
 ## Sin compañeros vivos: ¿quedan refuerzos para que el jugador vuelva desde
 ## la orilla? (gasta uno). Sirve para el cooperativo.
 static func gastar_refuerzo(esc: int) -> bool:
@@ -338,5 +415,7 @@ func _desembarcar(i: int) -> bool:
 				p = Navegacion.cerca_de(ll[0] + Vector3(_rng.randf_range(-ll[1], ll[1]) / 2.0, 0, _rng.randf_range(-2, 2)))
 			d["ranuras"][k] = _soldado(i, p, ["garand", "garand", "bar", "thompson", "carbine"][_rng.randi() % 5],
 				_nombre_nuevo(), false)
+			if i == mi_escuadra and Compania.en_mision:
+				d["ranuras"][k].set_meta("reemplazo", true)   # si sobrevive, se une a la compañía
 			return true
 	return false

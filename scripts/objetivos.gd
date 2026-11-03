@@ -292,7 +292,8 @@ func _carga(i: int, delta: float) -> void:
 		if j.global_position.distance_to(o["pos"]) < 2.6:
 			cerca = true
 	if cerca:
-		progreso[i] += delta / float(o.get("seg", SEG_CARGA))
+		var ritmo := 2.0 if Escuadras.especialista("ingeniero", o["pos"], 15.0) else 1.0
+		progreso[i] += delta / float(o.get("seg", SEG_CARGA)) * ritmo
 	else:
 		progreso[i] = maxf(progreso[i] - delta * 0.1, 0.0)
 	if progreso[i] >= 1.0:

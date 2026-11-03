@@ -112,7 +112,7 @@ func _draw() -> void:
 	if _player.hit_indicator > 0.0 and not _player.dead:
 		_draw_hit_indicator(center, _player.hit_angle, minf(_player.hit_indicator, 1.0))
 	if not _player.dead and w.ads_amount < 0.5 and not _player.sprinting:
-		_draw_crosshair(center, w.spread_now)
+		_draw_crosshair(center, w.spread_now, _apunta_a_aleman())
 	if w.hit_marker > 0.0:
 		var c := Color(1, 1, 1, w.hit_marker)
 		for d in [Vector2(1, 1), Vector2(1, -1), Vector2(-1, 1), Vector2(-1, -1)]:
@@ -354,9 +354,17 @@ func _draw_scope(c: Vector2, top: float) -> void:
 	draw_line(c - Vector2(0, r), c - Vector2(0, 6), neg, 1.0)
 
 
-func _draw_crosshair(c: Vector2, spread_deg: float) -> void:
+## ¿La mira está sobre un alemán? (un rayo desde la cámara: escenario y alemanes)
+func _apunta_a_aleman() -> bool:
+	var cam := _player.camera.global_transform
+	var q := PhysicsRayQueryParameters3D.create(cam.origin, cam.origin - cam.basis.z * 150.0, 1 | 4)
+	var hit := _player.get_world_3d().direct_space_state.intersect_ray(q)
+	return not hit.is_empty() and hit["collider"] is Node and (hit["collider"] as Node).is_in_group("enemies")
+
+
+func _draw_crosshair(c: Vector2, spread_deg: float, enemigo := false) -> void:
 	var gap := roundf(2.0 + spread_deg * 2.2)
-	var col := Color(Estilo.AMBAR_CLARO, 0.9)
+	var col := Color(Estilo.ROJO.lightened(0.15), 1.0) if enemigo else Color(Estilo.AMBAR_CLARO, 0.9)
 	var sombra := Color(Estilo.NEGRO, 0.6)
 	for d in [Vector2.RIGHT, Vector2.LEFT, Vector2.UP, Vector2.DOWN]:
 		var a: Vector2 = c + d * gap

@@ -47,6 +47,8 @@ func _ready() -> void:
 	actual = self
 	_rng.randomize()
 	apoyo_listo = 0.0
+	Aliado._ultimo_canto = -100.0     # los avisos de la misión anterior no cuentan
+	Aliado._cantados = {}
 	SECTORES = Misiones.dato("sectores")
 	ordenes = ["seguir", "avanzar", "avanzar", "avanzar"]
 	jefes = [null, null, null, null]

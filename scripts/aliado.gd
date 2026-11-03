@@ -84,8 +84,11 @@ func _physics_process(delta: float) -> void:
 	_vista_t -= delta
 	if _vista_t <= 0.0:
 		_vista_t = 0.35
+		var antes := objetivo
 		objetivo = elegir_objetivo("enemies", ALCANCE)
 		amenaza = objetivo.global_position if objetivo else _enemigo_conocido()
+		if objetivo and objetivo != antes and escuadra == Escuadras.mi_escuadra:
+			_cantar(objetivo)
 
 	if esp == "bazuca":
 		_bazuca(delta)
@@ -134,6 +137,39 @@ func _physics_process(delta: float) -> void:
 	if en_cobertura:
 		_asomado -= delta
 		cuerpo.pose = "rodilla" if _asomado > 0.0 or _rafaga > 0 else "agachado"
+
+
+## Avisa dónde vio a un alemán que el jugador no está mirando:
+## "[HAYES: ¡ALEMÁN A LA IZQUIERDA, 40 M!]". Uno cada 7 s como mucho, y no
+## repite el mismo alemán antes de 20 s.
+static var _ultimo_canto := -100.0
+static var _cantados := {}
+
+
+func _cantar(e: Node3D) -> void:
+	if Game.elapsed - _ultimo_canto < 7.0 or _player == null or _player.dead:
+		return
+	var id := e.get_instance_id()
+	if Game.elapsed - float(_cantados.get(id, -100.0)) < 20.0:
+		return
+	var a := e.global_position - _player.global_position
+	var dist := Vector2(a.x, a.z).length()
+	var adelante := -_player.global_basis.z
+	var plano := Vector3(a.x, 0, a.z).normalized()
+	var ang := rad_to_deg(adelante.angle_to(plano))
+	if ang < 25.0 and dist < 30.0:
+		return          # lo tiene enfrente y cerca: ya lo ve
+	var donde := "ADELANTE"
+	if ang > 120.0:
+		donde = "ATRÁS"
+	elif ang > 30.0:
+		donde = "A LA DERECHA" if plano.dot(_player.global_basis.x) > 0.0 else "A LA IZQUIERDA"
+	if a.y > 4.0:
+		donde += ", ARRIBA"
+	_ultimo_canto = Game.elapsed
+	_cantados[id] = Game.elapsed
+	var quien := "MG42" if e.arma == "mg42" else "ALEMÁN"
+	Game.say("[%s: ¡%s %s, %d M!]" % [nombre, quien, donde, int(roundf(dist / 5.0) * 5.0)], Game.COLOR_INFO)
 
 
 ## Bazuca: cada tanto le dispara un cohete a una MG42 o a un grupo de alemanes

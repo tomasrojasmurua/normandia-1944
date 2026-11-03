@@ -153,6 +153,7 @@ func _actualizar(delta: float) -> void:
 	if cam:
 		var local := global_basis.inverse() * (cam.global_position - global_position)
 		d = posmod(roundi(atan2(local.x, -local.z) / (TAU / 8.0)), 8)
+		_escala_lejos(cam.global_position.distance_to(global_position))
 
 	if nombre != _anim or d != _dir:
 		_anim = nombre
@@ -171,9 +172,26 @@ func _actualizar(delta: float) -> void:
 			boca.position = info["boca"][k]
 	if _sacudon != Vector3.ZERO:
 		_sacudon = _sacudon.move_toward(Vector3.ZERO, delta * 0.6)
-		_spr.position = _sacudon
+	_spr.position = _sacudon + Vector3(0, _bajar, 0)
 	if muerto and k == int(info["cuadros"]) - 1:
 		set_process(false)      # ya cayó: queda quieto para siempre
+
+
+## Tamaño mínimo en pantalla: más allá de 28 m un alemán vivo se dibuja un
+## poco más grande (hasta 1,6 veces a 45 m), para que se distinga aunque solo
+## asome la cabeza. Crece alrededor del pecho, así la cabeza dibujada queda
+## casi donde está la de verdad (la que recibe los tiros).
+var _bajar := 0.0
+const LEJOS := 28.0
+const MAX_ESCALA := 1.6
+
+
+func _escala_lejos(dist: float) -> void:
+	var e := 1.0
+	if bando == "aleman" and not muerto:
+		e = clampf(dist / LEJOS, 1.0, MAX_ESCALA)
+	_spr.pixel_size = PIXEL * e
+	_bajar = -1.1 * (e - 1.0)
 
 
 ## Carga de una vez todas las imágenes de un juego de animaciones (al crear

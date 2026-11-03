@@ -8,8 +8,8 @@ class_name Defensa
 ## - Refuerzos: cada ~30 s llegan 3 alemanes desde atrás, hasta 18 en total.
 ## La playa queda despejada cuando no queda ningún alemán ni refuerzos por llegar.
 
-const REFUERZOS := 18
-const NIDOS := [Vector3(-24, 0, -31), Vector3(23, 0, -29)]
+## Nidos, refuerzos y morteros vienen de los datos de la misión (Misiones).
+static var NIDOS: Array = []
 
 static var restantes := 0
 static var actual: Defensa
@@ -26,7 +26,8 @@ var _nidos_listos := false
 func _ready() -> void:
 	actual = self
 	_rng.randomize()
-	restantes = REFUERZOS
+	NIDOS = Misiones.dato("nidos")
+	restantes = Misiones.dato("refuerzos_alemanes")
 	if migrada >= 0:
 		restantes = migrada
 		_nidos_listos = true
@@ -41,9 +42,10 @@ func _process(delta: float) -> void:
 		_nidos_listos = true
 		for n in NIDOS:
 			nidos.append(_aleman(_cobertura_cerca(n, 6.0), "mg42", "fijo"))
+	var mort = Misiones.actual().get("morteros", null)
 	_t_mortero -= delta
-	if _t_mortero <= 0.0:
-		_t_mortero = _rng.randf_range(7.0, 12.0)
+	if mort != null and _t_mortero <= 0.0:
+		_t_mortero = _rng.randf_range(mort.x, mort.y)
 		_mortero()
 	_t_refuerzo -= delta
 	if _t_refuerzo <= 0.0 and restantes > 0:
@@ -52,8 +54,9 @@ func _process(delta: float) -> void:
 		for i in mini(3, restantes):
 			restantes -= 1
 			var e := PruebaCarga.nuevo_aleman(get_parent(), _rng, usados)
-			if e.global_position.z > -36.0:   # que lleguen desde atrás
-				e.global_position = Navegacion.cerca_de(Vector3(e.global_position.x, 0, -47))
+			var rz: float = Misiones.dato("refuerzo_z")
+			if e.global_position.z > rz + 11.0:   # que lleguen desde atrás
+				e.global_position = Navegacion.cerca_de(Vector3(e.global_position.x, 0, rz))
 		Red.anunciar("[REFUERZOS ALEMANES]", Game.COLOR_BAD)
 
 

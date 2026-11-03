@@ -12,7 +12,8 @@ const COLOR_INFO := Color(0.95, 0.85, 0.4)
 const COLOR_BAD := Color(1.0, 0.35, 0.3)
 const COLOR_GOOD := Color(0.55, 0.95, 0.45)
 
-var start_minutes := 6 * 60 + 30
+var start_minutes := 6 * 60 + 30   # hora de la misión en curso (Misiones)
+var mision := Misiones.PRIMERA     # id de la misión en curso (ver misiones.gd)
 var elapsed := 0.0
 
 var _sounds := {}
@@ -150,9 +151,12 @@ func ir_al_menu() -> void:
 	get_tree().change_scene_to_file("res://scenes/menu.tscn")
 
 
-func empezar_mision() -> void:
+func empezar_mision(id := "") -> void:
+	if id != "" and Misiones.existe(id):
+		mision = id
+	start_minutes = Misiones.dato("hora")
 	get_tree().paused = false
-	get_tree().change_scene_to_file("res://scenes/main.tscn")
+	get_tree().change_scene_to_file(Misiones.dato("escena"))
 
 
 func clock_text() -> String:

@@ -138,7 +138,7 @@ func _ready() -> void:
 	var p := get_parent().get_node_or_null("Player") as Player
 	if p:
 		if Game.modo_red and Escuadras.mi_escuadra != 0:
-			var s: Vector2 = Escuadras.SECTORES[Escuadras.mi_escuadra]
+			var s: Vector2 = Misiones.dato("sectores")[Escuadras.mi_escuadra]
 			p.position.x = (s.x + s.y) / 2.0 + randf_range(-3.0, 3.0)
 		elif Game.modo_red:
 			p.position.x += randf_range(-3.0, 3.0)

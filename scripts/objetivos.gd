@@ -15,13 +15,9 @@ class_name Objetivos
 ## Lo decide quien tiene la IA (jugando solo, o el anfitrión); los invitados
 ## reciben el estado por la red y solo lo muestran.
 
-const LISTA := [
-	{"n": "VOLAR EL BÚNKER", "corto": "BÚNKER", "pos": Vector3(0, 0, -37.5), "tipo": "carga"},
-	{"n": "CALLAR LA MG42 IZQUIERDA", "corto": "MG42", "pos": Vector3(-24, 0, -31), "tipo": "mg", "i": 0},
-	{"n": "CALLAR LA MG42 DERECHA", "corto": "MG42", "pos": Vector3(23, 0, -29), "tipo": "mg", "i": 1},
-	{"n": "TOMAR LA TRINCHERA", "corto": "TRINCHERA", "pos": Vector3(-14, 0, -36), "tipo": "tomar"},
-]
-const SEG_CARGA := 5.0
+## Los objetivos vienen de los datos de la misión (Misiones: "objetivos").
+static var LISTA: Array = []
+const SEG_CARGA := 5.0     # por defecto, si la misión no dice "seg"
 const SEG_TOMAR := 8.0
 
 static var hecho := [false, false, false, false]
@@ -38,6 +34,7 @@ var _mecha := -1.0                               # carga del búnker puesta: seg
 
 func _ready() -> void:
 	actual = self
+	LISTA = Misiones.dato("objetivos")
 	hecho = [false, false, false, false]
 	progreso = [0.0, 0.0, 0.0, 0.0]
 	terminado = 0
@@ -114,7 +111,7 @@ func _process(delta: float) -> void:
 					if j.global_position.distance_to(_pos[i]) < 2.6:
 						cerca = true
 				if cerca:
-					progreso[i] += delta / SEG_CARGA
+					progreso[i] += delta / float(LISTA[i].get("seg", SEG_CARGA))
 				else:
 					progreso[i] = maxf(progreso[i] - delta * 0.1, 0.0)
 				if progreso[i] >= 1.0:
@@ -122,7 +119,7 @@ func _process(delta: float) -> void:
 					_mecha = 6.0
 					Red.anunciar("[CARGA PUESTA: ¡ALÉJENSE DEL BÚNKER!]", Game.COLOR_BAD)
 			"tomar":
-				_tomar(i, delta, SEG_TOMAR, 6.0)
+				_tomar(i, delta, float(LISTA[i].get("seg", SEG_TOMAR)), 6.0)
 				if progreso[i] >= 1.0:
 					_cumplir(i)
 	_t_fracaso -= delta

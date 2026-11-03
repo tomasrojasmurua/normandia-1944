@@ -15,7 +15,8 @@ class_name Escuadras
 ## Cuando caen hombres, llegan refuerzos desde la orilla (otra lancha) después
 ## de un rato, hasta un máximo por misión (ilimitado en la prueba de carga).
 
-const SECTORES := [Vector2(-6, 22), Vector2(-45, -20), Vector2(18, 45), Vector2(-22, -4)]
+## Sectores de cada escuadra: vienen de los datos de la misión (Misiones).
+static var SECTORES: Array = [Vector2(-6, 22), Vector2(-45, -20), Vector2(18, 45), Vector2(-22, -4)]
 const NOMBRES_SARGENTO := ["", "SGT. KOWALSKI", "SGT. REYES", "SGT. COLE"]
 const NOMBRES := ["GARCIA", "NOVAK", "BAKER", "JENKINS", "LOPEZ", "O'BRIEN", "WASHINGTON",
 	"FISHER", "MILLER", "DUBOIS", "ROSSI", "SANDERS", "PARKER", "HUGHES", "WALSH", "TURNER"]
@@ -44,6 +45,7 @@ var adoptar: Array = []      # traspaso de anfitrión: soldados ya hechos (no cr
 func _ready() -> void:
 	actual = self
 	_rng.randomize()
+	SECTORES = Misiones.dato("sectores")
 	ordenes = ["seguir", "avanzar", "avanzar", "avanzar"]
 	jefes = [null, null, null, null]
 	ordenes_jugador = ["seguir", "seguir", "seguir", "seguir"]
@@ -56,17 +58,17 @@ func _ready() -> void:
 		_adoptar()
 		return
 	# Escuadra del jugador: los de siempre
-	var mia := [[Vector3(-9, 0, -3), "thompson", "DELUCA"], [Vector3(11, 0, -6), "garand", "HAYES"],
-		[Vector3(-6, 0, 3), "bar", "BRENNAN"]]
+	var mia: Array = Misiones.dato("escuadra_jugador")
 	for k in 3:
 		datos[0]["ranuras"][k] = _soldado(0, mia[k][0], mia[k][1], mia[k][2], false)
 	# Las otras tres, con su sargento, repartidas en su sector
 	for i in range(1, 4):
 		var s: Vector2 = SECTORES[i]
 		var cx := (s.x + s.y) / 2.0
-		datos[i]["lider"] = _soldado(i, Vector3(cx, 0, 5), "thompson", NOMBRES_SARGENTO[i], true)
+		var hz: Vector2 = Misiones.dato("hombres_z")
+		datos[i]["lider"] = _soldado(i, Vector3(cx, 0, Misiones.dato("lider_z")), "thompson", NOMBRES_SARGENTO[i], true)
 		for k in 3:
-			var p := Vector3(cx + (k - 1) * 4.0 + _rng.randf_range(-1, 1), 0, _rng.randf_range(6.5, 9.0))
+			var p := Vector3(cx + (k - 1) * 4.0 + _rng.randf_range(-1, 1), 0, _rng.randf_range(hz.x, hz.y))
 			datos[i]["ranuras"][k] = _soldado(i, p, ["garand", "garand", "bar"][k], _nombre_nuevo(), false)
 
 
@@ -299,7 +301,8 @@ func _desembarcar(i: int) -> bool:
 		var a: Aliado = d["ranuras"][k]
 		if a == null or not is_instance_valid(a) or a.dead:
 			var s: Vector2 = SECTORES[i]
-			var p := Vector3(_rng.randf_range(s.x, s.y), 0, _rng.randf_range(7.0, 9.5))
+			var rz: Vector2 = Misiones.dato("refuerzos_z")
+			var p := Vector3(_rng.randf_range(s.x, s.y), 0, _rng.randf_range(rz.x, rz.y))
 			d["ranuras"][k] = _soldado(i, p, ["garand", "garand", "bar", "thompson", "carbine"][_rng.randi() % 5],
 				_nombre_nuevo(), false)
 			return true

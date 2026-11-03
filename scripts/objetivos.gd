@@ -212,6 +212,12 @@ func _process(delta: float) -> void:
 		var m: Label3D = _marcas[i]
 		m.visible = activo(i) and terminado == 0
 		m.modulate = Estilo.AMBAR_CLARO if i == foco_i else Color(Estilo.CREMA, 0.45)
+	# Los Sherman suben por el camino cuando falta poco para aguantar (en todos los celulares)
+	for i in LISTA.size():
+		if LISTA[i]["tipo"] == "defender" and progreso[i] >= 0.85 and not OmahaInterior._tanques_llegan:
+			if manda():
+				Red.anunciar("[RADIO: ¡LOS SHERMAN ESTÁN SUBIENDO POR EL CAMINO!]", Game.COLOR_GOOD)
+			OmahaInterior.llegan_tanques(get_parent(), (1.0 - minf(progreso[i], 1.0)) * float(LISTA[i].get("seg", 120.0)))
 	if not manda() or terminado != 0 or not Navegacion.listo:
 		return
 	for i in LISTA.size():

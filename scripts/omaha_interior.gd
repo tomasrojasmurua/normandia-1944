@@ -29,6 +29,8 @@ static var _casamata_rota := false
 
 static func construir(d: Node3D, rng: RandomNumberGenerator) -> void:
 	_casamata_rota = false
+	_tanques_llegan = false
+	_kit.clear()
 	_alambre(d, rng)
 	_ladera(d, rng)
 	_casamata_y_borde(d, rng)
@@ -191,10 +193,13 @@ static func _setos(d: Node3D, rng: RandomNumberGenerator) -> void:
 				if rng.randf() > 0.33:
 					setos.append([Vector3(x, ARRIBA + 1.05, z + rng.randf_range(-0.2, 0.2)), rng.randf_range(0.55, 0.7)])
 				x += rng.randf_range(3.2, 4.2)
-	# Un par de carros y pilas de heno como cobertura en los campos
+	# Carretas de heno (Meshy) como cobertura en los campos
 	for c in [[6.0, -105.0], [-24.0, -120.0], [30.0, -121.0], [-6.0, -138.0]]:
-		d._add_box(Vector3(c[0], ARRIBA + 0.55, c[1]), Vector3(2.6, 1.1, 1.4), d._wood, Vector3(0, rng.randf_range(-30, 30), 0))
-		Coberturas.agregar_muro(Vector3(c[0], ARRIBA, c[1]), 2.6, 0.0, 1.4, 1.1)
+		_modelo(d, "carreta", Vector3(c[0], ARRIBA, c[1]), rng.randf_range(-40, 40), 3.6)
+	# Restos de la batalla: un Panzer IV destruido, un camión y un cañón PaK 40
+	_modelo(d, "panzer", Vector3(32, ARRIBA, -106), 35.0, 6.6)
+	_modelo(d, "camion", Vector3(5, ARRIBA, -121), 80.0, 6.0)
+	_modelo(d, "canon", Vector3(-15, ARRIBA, -86.5), 90.0, 5.5)      # junto a la casamata, apuntando al mar
 	Ambiente._plantas(d, "seto", setos)
 
 
@@ -213,65 +218,155 @@ static func _pueblo(d: Node3D, rng: RandomNumberGenerator) -> void:
 		[15.0, -163.0, 10.0, 7.0], [-32.0, -149.0, 8.0, 7.0], [33.0, -153.0, 8.0, 8.0],
 		[7.0, -178.0, 8.0, 6.0], [36.0, -170.0, 7.0, 6.0], [-36.0, -136.0, 7.0, 6.0]]
 	for c in casas:
-		_casa(d, Vector3(c[0], ARRIBA, c[1]), c[2], c[3], piedra, rng)
-	# La iglesia: nave en ruinas y la torre entera
-	_casa(d, Vector3(-26.0, ARRIBA, -175.0), 10.0, 16.0, piedra, rng, 5.5)
-	d._add_box(Vector3(-26.0, ARRIBA + 8.0, -165.0), Vector3(4.2, 16.0, 4.2), piedra)
-	Coberturas.agregar_muro(Vector3(-26.0, ARRIBA, -165.0), 4.2, 0.0, 4.2, 3.0)
-	Game.box(d, Vector3(2.6, 3.0, 2.6), Vector3(-26.0, ARRIBA + 17.5, -165.0), d._dark)
+		_casa_kit(d, Vector3(c[0], ARRIBA, c[1]), c[2], c[3], piedra, rng)
+	_armar_kit(d)
+	# La iglesia (Meshy) con la fachada hacia el cruce; se ve desde lejos
+	_modelo(d, "iglesia", Vector3(-26.0, ARRIBA, -175.0), 0.0, 22.0).material_override = material_piedra()
+	# Casas enteras alrededor del pueblo (fondo), un camión y un cañón
+	for c in [[-48.0, -146.0, 90.0], [48.0, -138.0, -90.0], [-44.0, -186.0, 30.0], [42.0, -184.0, -20.0], [20.0, -194.0, 0.0]]:
+		_modelo(d, "casa", Vector3(c[0], ARRIBA, c[1]), c[2], 9.0)
+	_modelo(d, "camion", Vector3(9.0, ARRIBA, -158.0), 110.0, 6.0)
+	_modelo(d, "canon", Vector3(-6.0, ARRIBA, -170.0), 90.0, 5.5)
 	# Escombros sueltos en las calles
 	for e in [[4.0, -147.0], [-5.0, -157.0], [21.0, -151.0], [-21.0, -153.5], [2.0, -167.0]]:
 		d._add_box(Vector3(e[0], ARRIBA + 0.4, e[1]), Vector3(2.2, 0.8, 1.2), piedra, Vector3(0, rng.randf_range(-40, 40), 0))
 		Coberturas.agregar_muro(Vector3(e[0], ARRIBA, e[1]), 2.2, 0.0, 1.2, 0.8)
 
 
-## Una casa de piedra sin techo: cuatro paredes con puerta y ventanas, y
-## partes derrumbadas (más bajas: sirven de cobertura para disparar).
-static func _casa(d: Node3D, centro: Vector3, ancho: float, fondo: float, mat: Material,
-		rng: RandomNumberGenerator, alto := 3.4) -> void:
-	var g := 0.5
-	# [inicio, fin] de cada pared (en coordenadas de la casa), su giro y su lado
+## Un modelo de Meshy a su tamaño real (`largo` = su lado más largo, en metros),
+## con su caja de choque y puntos de cobertura alrededor.
+static func _modelo(d: Node3D, nombre: String, pos: Vector3, giro: float, largo: float,
+		choque := true) -> MeshInstance3D:
+	var a: AABB = (load("res://assets/decorado/%s.res" % nombre) as Mesh).get_aabb()
+	var e := largo / maxf(a.size.x, a.size.z)
+	return Ambiente.modelo(d, nombre, pos, giro, Vector3.ONE * e, choque, choque)
+
+
+# ================================================================ kit de ruinas
+
+## Las paredes en ruinas de Meshy. Cada pieza se estira al largo del tramo (alto
+## fijo 3,4 m, grueso 0,5 m) y lleva cajas de choque invisibles solo donde hay
+## pared: por la puerta se entra, por la ventana se dispara.
+## Cajas: [x desde, x hasta, y desde, y hasta] en fracciones de la pieza
+## (x de izquierda a derecha vista de frente; y de su propio alto).
+const KIT := {
+	"muro_ventana": [[0.0, 1.0, 0.0, 0.3], [0.0, 1.0, 0.7, 1.0], [0.0, 0.375, 0.3, 0.7], [0.573, 1.0, 0.3, 0.7]],
+	"muro_puerta": [[0.0, 0.458, 0.0, 1.0], [0.73, 1.0, 0.0, 1.0], [0.458, 0.73, 0.93, 1.0]],
+	"muro_roto": [[0.0, 0.19, 0.0, 0.95], [0.19, 0.385, 0.0, 0.7], [0.385, 0.52, 0.0, 0.5], [0.52, 0.97, 0.0, 0.25]],
+}
+const ALTO_KIT := 3.4 / 1.467       # escala de alto (la pared entera de Meshy mide 1,467)
+const GRUESO := 0.5
+static var _kit := {}               # pieza → [Transform3D] (se dibujan juntas: MultiMesh)
+
+
+## Una casa en ruinas armada con las piezas: cada pared se divide en tramos de
+## ~4 m; el frente lleva puerta; el resto, ventanas o partes derrumbadas.
+static func _casa_kit(d: Node3D, centro: Vector3, ancho: float, fondo: float, mat: Material,
+		rng: RandomNumberGenerator) -> void:
+	# [punto medio, largo, giro (el frente de la pieza mira hacia afuera)]
 	var paredes := [
-		[Vector3(-ancho / 2.0, 0, fondo / 2.0), Vector3(ancho / 2.0, 0, fondo / 2.0)],     # frente (+Z)
-		[Vector3(-ancho / 2.0, 0, -fondo / 2.0), Vector3(ancho / 2.0, 0, -fondo / 2.0)],   # fondo
-		[Vector3(-ancho / 2.0, 0, -fondo / 2.0), Vector3(-ancho / 2.0, 0, fondo / 2.0)],   # izquierda
-		[Vector3(ancho / 2.0, 0, -fondo / 2.0), Vector3(ancho / 2.0, 0, fondo / 2.0)],     # derecha
+		[Vector3(0, 0, fondo / 2.0), ancho, 0.0], [Vector3(0, 0, -fondo / 2.0), ancho, 180.0],
+		[Vector3(-ancho / 2.0, 0, 0), fondo, -90.0], [Vector3(ancho / 2.0, 0, 0), fondo, 90.0],
 	]
 	for k in paredes.size():
-		var a: Vector3 = paredes[k][0]
-		var b: Vector3 = paredes[k][1]
-		var largo := a.distance_to(b)
-		var dir := (b - a) / largo
-		var yaw := 0.0 if absf(dir.x) > 0.5 else 90.0
-		# Tramos: puerta (frente y fondo) o ventana, separados por paredes
-		var huecos: Array = []
-		if k <= 1:
-			huecos.append([largo * rng.randf_range(0.35, 0.65), 1.6])
-		else:
-			huecos.append([largo * rng.randf_range(0.3, 0.7), 1.4])
-		var t := 0.0
-		var cortes: Array = []
-		for h in huecos:
-			cortes.append([t, h[0] - h[1] / 2.0])
-			t = h[0] + h[1] / 2.0
-		cortes.append([t, largo])
-		for c in cortes:
-			var l: float = c[1] - c[0]
-			if l < 0.4:
-				continue
-			var h := alto
-			var r := rng.randf()
-			if r < 0.3:
-				h = 1.1          # derrumbada: se asoma por encima
-			elif r < 0.5:
-				h = alto * 0.65
-			var medio: Vector3 = centro + a + dir * ((c[0] + c[1]) / 2.0)
-			var tam := Vector3(l + (g if c[0] == 0.0 or c[1] == largo else 0.0), h, g)
-			d._add_box(medio + Vector3(0, h / 2.0, 0), tam, mat, Vector3(0, yaw, 0))
-			Coberturas.agregar_muro(medio, l, yaw, g, h)
+		var largo: float = paredes[k][1]
+		var giro: float = paredes[k][2]
+		var n := maxi(1, roundi(largo / 4.2))
+		var w := largo / n
+		var b := Basis(Vector3.UP, deg_to_rad(giro))
+		var puerta := n / 2 if k == 0 or (k == 1 and rng.randf() < 0.3) else -1
+		for i in n:
+			var tipo := "muro_puerta" if i == puerta else ("muro_roto" if rng.randf() < 0.35 else "muro_ventana")
+			var x := (i - (n - 1) / 2.0) * w
+			_pieza(d, tipo, centro + paredes[k][0] + b * Vector3(x, 0, 0), w, giro)
 	# Escombros adentro
 	d._add_box(centro + Vector3(rng.randf_range(-1.5, 1.5), 0.35, rng.randf_range(-1.5, 1.5)),
 		Vector3(1.8, 0.7, 1.2), mat, Vector3(0, rng.randf_range(0, 90), 0))
+
+
+static func _pieza(d: Node3D, tipo: String, base: Vector3, ancho: float, giro: float) -> void:
+	var a: AABB = (load("res://assets/decorado/%s.res" % tipo) as Mesh).get_aabb()
+	var b := Basis(Vector3.UP, deg_to_rad(giro))
+	var esc := Vector3(ancho / a.size.x, ALTO_KIT, GRUESO / a.size.z)
+	if not _kit.has(tipo):
+		_kit[tipo] = []
+	_kit[tipo].append(Transform3D(b * Basis.from_scale(esc), base))
+	var alto := a.size.y * ALTO_KIT
+	for c in KIT[tipo]:
+		var x0: float = c[0] * ancho - ancho / 2.0
+		var x1: float = c[1] * ancho - ancho / 2.0
+		var y0: float = c[2] * alto
+		var y1: float = c[3] * alto
+		var medio := base + b * Vector3((x0 + x1) / 2.0, 0, 0)
+		var cuerpo: StaticBody3D = d._add_box(medio + Vector3(0, (y0 + y1) / 2.0, 0), Vector3(x1 - x0, y1 - y0, GRUESO),
+			d._dark, Vector3(0, giro, 0))
+		cuerpo.get_child(0).visible = false
+		if y0 == 0.0:
+			Coberturas.agregar_muro(medio, x1 - x0, giro, GRUESO, y1)
+
+
+## Todas las piezas de un tipo en una sola malla múltiple (pocas llamadas de dibujo).
+static func _armar_kit(d: Node3D) -> void:
+	for tipo in _kit:
+		var mm := MultiMesh.new()
+		mm.transform_format = MultiMesh.TRANSFORM_3D
+		mm.mesh = load("res://assets/decorado/%s.res" % tipo)
+		mm.instance_count = _kit[tipo].size()
+		for i in mm.instance_count:
+			mm.set_instance_transform(i, _kit[tipo][i])
+		var mi := MultiMeshInstance3D.new()
+		mi.multimesh = mm
+		mi.material_override = material_piedra()
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		d.add_child(mi)
+	_kit.clear()
+
+
+## Color de cada vértice (el modelo de Meshy) × la textura de piedra proyectada
+## desde el mundo: de cerca se ven las piedras, no manchas lisas.
+static func material_piedra() -> StandardMaterial3D:
+	var m := Ambiente.material_modelo()
+	m.albedo_texture = load(DECOR.TEX % "piedra")
+	m.albedo_color = Color(1.12, 1.08, 1.06)     # la multiplicación oscurece: se compensa un poco
+	m.uv1_triplanar = true
+	m.uv1_world_triplanar = true
+	m.uv1_scale = Vector3.ONE / 2.6
+	m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST_WITH_MIPMAPS
+	return m
+
+
+# ================================================================ final
+
+## Al final del contraataque llegan dos Sherman por el camino desde la meseta
+## hasta el cruce (en todos los celulares; `segundos` = lo que falta).
+static var _tanques_llegan := false
+
+
+static func llegan_tanques(d: Node3D, segundos: float) -> void:
+	if _tanques_llegan:
+		return
+	_tanques_llegan = true
+	# Por el camino y los huecos de los setos: (0,-97), (12,-112) y (-4,-128)
+	var ruta := [Vector3(0, ARRIBA, -84), Vector3(0, ARRIBA, -101), Vector3(12, ARRIBA, -107),
+		Vector3(12, ARRIBA, -117), Vector3(-4, ARRIBA, -122)]
+	var largo := 0.0
+	for k in ruta.size() - 1:
+		largo += ruta[k].distance_to(ruta[k + 1])
+	var vel := (largo + 20.0) / maxf(segundos * 0.6, 8.0)    # que lleguen antes del final
+	for t in [[Vector3(-4, ARRIBA, -142), 0.0], [Vector3(-4, ARRIBA, -134.5), 7.0]]:
+		var puntos: Array = ruta + [t[0]]
+		var m := _modelo(d, "sherman_ok", puntos[0], 0.0, 5.9, false)
+		m.visible = false
+		var tw := m.create_tween()
+		tw.tween_interval(t[1])
+		tw.tween_callback(m.show)
+		for k in range(1, puntos.size()):
+			var a: Vector3 = puntos[k - 1]
+			var b: Vector3 = puntos[k]
+			var dir := (b - a).normalized()
+			# el cañón del modelo apunta a -X: girarlo para que mire hacia donde va
+			tw.tween_property(m, "rotation:y", atan2(dir.z, -dir.x), 0.4)
+			tw.tween_property(m, "position", b, a.distance_to(b) / vel)
 
 
 ## El bosque del fondo (de ahí sale el contraataque) y árboles por el pueblo.

@@ -17,6 +17,8 @@ static func limpiar() -> void:
 
 
 static func _agregar(pos: Vector3, n: Vector3, bajo: bool, parcial: bool) -> void:
+	if pos.y > 0.3 and pos.z < -56.3 and pos.z > -80.5:   # en la ladera: a la altura del terreno
+		pos.y = Ambiente.alto_acantilado(pos.z)
 	puntos.append({"pos": pos, "n": n.normalized(), "bajo": bajo, "parcial": parcial, "ocupado": null})
 
 
@@ -51,10 +53,15 @@ static func protege(p: Dictionary, amenaza: Vector3) -> float:
 
 
 ## El mejor punto libre según `puntaje` (Callable(p) -> float; -INF = no sirve).
-static func mejor(quien: Node, puntaje: Callable) -> Dictionary:
+## Con `radio`, solo mira los puntos a menos de `radio` m de `cerca` (mucho
+## más barato: el mapa tiene más de mil puntos).
+static func mejor(quien: Node, puntaje: Callable, cerca := Vector3.ZERO, radio := INF) -> Dictionary:
 	var mejor_p: Dictionary = {}
 	var mejor_v := -INF
+	var r2 := radio * radio
 	for p in puntos:
+		if radio < INF and (p["pos"] as Vector3).distance_squared_to(cerca) > r2:
+			continue
 		var ocupante: Variant = p["ocupado"]
 		if ocupante != null and ocupante != quien and is_instance_valid(ocupante):
 			continue
@@ -81,4 +88,15 @@ static func liberar(quien: Node) -> void:
 static func cercano(quien: Node, pos: Vector3, radio: float) -> Dictionary:
 	return mejor(quien, func(p: Dictionary) -> float:
 		var d := pos.distance_to(p["pos"])
-		return -d if d < radio else -INF)
+		return -d if d < radio else -INF, pos, radio)
+
+
+## ¿Se puede ir de `desde` a este punto? A la misma altura, o subiendo/bajando
+## por la ladera del acantilado (tierra adentro, sin pasar por techos).
+static func alcanzable(desde: Vector3, pos: Vector3) -> bool:
+	var dy := absf(pos.y - desde.y)
+	if dy <= 1.5:
+		return true
+	if pos.y < 4.0 and desde.y < 4.0:
+		return false       # el techo del búnker (otra isla del mapa)
+	return Vector2(pos.x - desde.x, pos.z - desde.z).length() >= dy * 1.4

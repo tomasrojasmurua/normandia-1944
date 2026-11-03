@@ -72,7 +72,8 @@ static func _vegetacion(padre: Node3D, rng: RandomNumberGenerator) -> void:
 	for fila_z in [-84.0, -97.0, -112.0, -128.0]:
 		var x := -95.0
 		while x < 95.0:
-			if rng.randf() < 0.85:   # algún hueco (entrada al campo)
+			# (en el centro, las filas de setos con talud las pone OmahaInterior)
+			if rng.randf() < 0.85 and (fila_z > -90.0 or absf(x) > 56.0):
 				var z: float = fila_z + rng.randf_range(-1.5, 1.5)
 				setos.append([Vector3(x, alto_acantilado(z), z), rng.randf_range(0.9, 1.2)])
 			if rng.randf() < 0.35:

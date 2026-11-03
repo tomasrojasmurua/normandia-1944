@@ -1,63 +1,174 @@
 extends Node
 class_name Defensa
-## La defensa alemana de la misión (sección 5, paso 3: más desafío).
-## - Dos nidos de ametralladora MG42 en los flancos (no se mueven, ráfagas largas).
-## - Morteros: cada 7–12 s cae uno cerca de algún grupo americano. Se oye el
-##   silbido ~1,3 s antes en el lugar donde va a caer: hay tiempo para correr.
-##   Rara vez apuntan al jugador, y entonces caen a unos metros (es un aviso).
-## - Refuerzos: cada ~30 s llegan 3 alemanes desde atrás, hasta 18 en total.
-## La playa queda despejada cuando no queda ningún alemán ni refuerzos por llegar.
-
-## Nidos, refuerzos y morteros vienen de los datos de la misión (Misiones).
-static var NIDOS: Array = []
+## La defensa alemana de la misión, por fases (sección 6). Lo que hace en cada
+## fase viene de Misiones:
+## - Al empezar la fase aparecen sus alemanes ("alemanes") en coberturas libres
+##   lejos de los americanos, y un tirador de MG42 en cada nido de sus
+##   objetivos "mg" (no se mueve, ráfagas largas).
+## - Morteros: cada tanto cae uno cerca de algún grupo americano. Se oye el
+##   silbido ~1,3 s antes donde va a caer: hay tiempo para correr. Mientras
+##   la casamata del cañón siga en pie, caen más seguido.
+## - Refuerzos: durante la fase llegan de a 3 desde atrás, hasta "n".
+## - Defender (Vierville): olas de alemanes que avanzan sobre el lugar.
+## Los alemanes de la primera fase los pone beach_decor.gd (los de la escena
+## y las trincheras de la playa).
 
 static var restantes := 0
 static var actual: Defensa
+static var fase_lista := -1          # la fase que ya se armó (no repetirla)
 
-var nidos: Array = []           # los dos tiradores de MG42 (para los objetivos)
-var migrada := -1               # traspaso de anfitrión: refuerzos que quedaban (no crear nidos)
+var nidos := {}                 # objetivo "mg" → su tirador de MG42 (para los objetivos)
+var migrada := -1               # traspaso de anfitrión: refuerzos que quedaban (no crear nada)
 
 var _rng := RandomNumberGenerator.new()
 var _t_mortero := 22.0
 var _t_refuerzo := 40.0
-var _nidos_listos := false
+var _t_ola := 8.0
+var _olas := 0
+var _cola: Array = []           # alemanes por aparecer: [pos, arma, rol, meta] (de a uno, para no trabar)
+var _t_cola := 0.0
 
 
 func _ready() -> void:
 	actual = self
 	_rng.randomize()
-	NIDOS = Misiones.dato("nidos")
-	restantes = Misiones.dato("refuerzos_alemanes")
 	if migrada >= 0:
+		fase_lista = Objetivos.fase()
 		restantes = migrada
-		_nidos_listos = true
 		_t_mortero = 8.0
 		_t_refuerzo = 20.0
+	else:
+		fase_lista = -1
+		restantes = 0
+
+
+func _exit_tree() -> void:
+	if actual == self:
+		actual = null
+
+
+## Dónde se repliegan los alemanes en la fase en curso.
+static func ancla() -> Vector3:
+	return Misiones.fase(Objetivos.fase()).get("ancla", Vector3(0, 0, -42))
 
 
 func _process(delta: float) -> void:
-	if not Navegacion.listo:
+	if not Navegacion.listo or Objetivos.terminado != 0:
 		return
-	if not _nidos_listos:
-		_nidos_listos = true
-		for n in NIDOS:
-			nidos.append(_aleman(_cobertura_cerca(n, 6.0), "mg42", "fijo"))
-	var mort = Misiones.actual().get("morteros", null)
+	var f := Objetivos.fase()
+	if f != fase_lista:
+		_empezar(f)
+	_t_cola -= delta
+	if not _cola.is_empty() and _t_cola <= 0.0:
+		_t_cola = 0.12
+		var c: Array = _cola.pop_front()
+		var e := _nuevo(c[0], c[1], c[2])
+		e.granadas = 1 if _rng.randf() < 0.3 else 0
+		if c[2] == "asalto":
+			e.meta = c[3]
+			e._alert = 0.5
+	var d := Misiones.fase(f)
+	# Morteros (en la defensa de Vierville, los de las olas)
+	var mort = d.get("morteros", null)
+	var ola := _defensa_activa()
+	if ola >= 0:
+		mort = Objetivos.LISTA[ola]["olas"].get("morteros", null)
 	_t_mortero -= delta
 	if mort != null and _t_mortero <= 0.0:
-		_t_mortero = _rng.randf_range(mort.x, mort.y)
+		var ritmo := 0.6 if Objetivos.pendiente("casamata") else 1.0
+		_t_mortero = _rng.randf_range(mort.x, mort.y) * ritmo
 		_mortero()
+	# Refuerzos de la fase
+	var r: Dictionary = d.get("refuerzos", {})
 	_t_refuerzo -= delta
-	if _t_refuerzo <= 0.0 and restantes > 0:
-		_t_refuerzo = _rng.randf_range(25.0, 35.0)
+	if _t_refuerzo <= 0.0 and restantes > 0 and not r.is_empty():
+		_t_refuerzo = _rng.randf_range(r["cada"].x, r["cada"].y)
 		var usados: Array = []
 		for i in mini(3, restantes):
 			restantes -= 1
-			var e := PruebaCarga.nuevo_aleman(get_parent(), _rng, usados)
-			var rz: float = Misiones.dato("refuerzo_z")
-			if e.global_position.z > rz + 11.0:   # que lleguen desde atrás
-				e.global_position = Navegacion.cerca_de(Vector3(e.global_position.x, 0, rz))
+			_nuevo(_lugar(r["zona"], usados, 30.0), Armas.botin_aleman(_rng), "flanqueador" if _rng.randf() < 0.25 else "defensor")
 		Red.anunciar("[REFUERZOS ALEMANES]", Game.COLOR_BAD)
+	# Olas del contraataque
+	if ola >= 0:
+		_t_ola -= delta
+		if _t_ola <= 0.0:
+			var o: Dictionary = Objetivos.LISTA[ola]["olas"]
+			_t_ola = _rng.randf_range(o["cada"].x, o["cada"].y)
+			_ola(ola, o)
+
+
+## Arma la fase: sus alemanes, los nidos de MG42 y los refuerzos.
+func _empezar(f: int) -> void:
+	var primera := fase_lista < 0
+	fase_lista = f
+	var d := Misiones.fase(f)
+	restantes = int(d.get("refuerzos", {}).get("n", 0))
+	_t_refuerzo = _rng.randf_range(30.0, 45.0)
+	_t_mortero = 22.0 if primera else 14.0
+	_olas = 0
+	_t_ola = 6.0
+	var usados: Array = []
+	if d.has("retirar_z") and not primera:
+		_retirar(float(d["retirar_z"]))
+	for g in d.get("alemanes", []):
+		for pos in _lugares(g[0], int(g[1]), usados, 25.0):
+			_cola.append([pos, Armas.botin_aleman(_rng),
+				"flanqueador" if _rng.randf() < 0.2 else "defensor", Vector3.ZERO])
+	for i in Objetivos.LISTA.size():
+		var o: Dictionary = Objetivos.LISTA[i]
+		if o["fase"] == f and o["tipo"] == "mg" and not Objetivos.hecho[i]:
+			nidos[i] = _aleman(_cobertura_cerca(o["nido"], 6.0), "mg42", "fijo")
+
+
+## Los alemanes que quedaron atrás del frente se rinden (salen del mapa), salvo
+## los que tienen un jugador cerca: así no se juntan los de todas las fases.
+func _retirar(z: float) -> void:
+	var jugadores: Array = get_tree().get_nodes_in_group("americanos").filter(
+		func(a: Node) -> bool: return a is Player or a is JugadorRemoto)
+	var n := 0
+	for e in get_tree().get_nodes_in_group("enemies"):
+		if not e is Enemy or e.dead or e.global_position.z < z:
+			continue
+		var cerca := false
+		for j in jugadores:
+			if j.global_position.distance_to(e.global_position) < 25.0:
+				cerca = true
+		if not cerca:
+			e.queue_free()
+			n += 1
+	if n > 0:
+		Red.anunciar("[%d ALEMANES SE RINDEN ATRÁS DEL FRENTE]" % n, Game.COLOR_GOOD)
+
+
+## El objetivo "defender" que está corriendo (o -1).
+func _defensa_activa() -> int:
+	for i in Objetivos.LISTA.size():
+		if Objetivos.LISTA[i]["tipo"] == "defender" and Objetivos.activo(i):
+			return i
+	return -1
+
+
+## Una ola del contraataque: alemanes que salen de un borde y avanzan sobre el
+## lugar. Si ya hay muchos vivos, esa ola no sale (que se pueda aguantar).
+func _ola(i: int, o: Dictionary) -> void:
+	if get_tree().get_nodes_in_group("enemies").size() >= int(o.get("max_vivos", 16)):
+		return
+	_olas += 1
+	var desde: Array = o["desde"]
+	var base: Vector3 = desde[_rng.randi() % desde.size()]
+	var meta: Vector3 = Objetivos.LISTA[i]["pos"]
+	var n := int(o["n"]) + mini(_olas - 1, 2)
+	for k in n:
+		var p := Navegacion.cerca_de(base + Vector3(_rng.randf_range(-6, 6), 0, _rng.randf_range(-4, 4)))
+		_cola.append([p, ["kar98k", "kar98k", "mp40", "stg44"][_rng.randi() % 4], "asalto",
+			meta + Vector3(_rng.randf_range(-8, 8), 0, _rng.randf_range(-8, 8))])
+	Red.anunciar("[¡CONTRAATAQUE ALEMÁN! - OLA %d]" % _olas, Game.COLOR_BAD)
+
+
+func _nuevo(pos: Vector3, arma: String, rol: String) -> Enemy:
+	var e := _aleman(pos, arma, rol)
+	e.granadas = 0
+	return e
 
 
 func _aleman(pos: Vector3, arma: String, rol: String) -> Enemy:
@@ -68,18 +179,70 @@ func _aleman(pos: Vector3, arma: String, rol: String) -> Enemy:
 	var enemigos := get_parent().get_node_or_null("Enemies")
 	(enemigos if enemigos else get_parent()).add_child(e)
 	e.global_position = pos
-	e.rotation.y = PI
+	e.rotation.y = 0.0 if rol == "asalto" else PI
 	return e
 
 
+func _lugar(zona: Array, usados: Array, lejos: float) -> Vector3:
+	return _lugares(zona, 1, usados, lejos)[0]
+
+
+## `n` lugares libres para alemanes dentro de `zona` ([x_min, x_max, z_min, z_max]):
+## coberturas que tapen hacia los americanos (hacia +Z) y a más de `lejos` m
+## de cualquier americano (que no aparezcan delante de sus narices).
+func _lugares(zona: Array, n: int, usados: Array, lejos: float) -> Array:
+	var americanos := get_tree().get_nodes_in_group("americanos").map(
+		func(a: Node3D) -> Vector3: return a.global_position)
+	var libres: Array = []
+	for c in Coberturas.puntos:
+		var pos: Vector3 = c["pos"]
+		if pos.x < zona[0] or pos.x > zona[1] or pos.z < zona[2] or pos.z > zona[3]:
+			continue
+		if c["n"].z < 0.5 or c["parcial"] or pos in usados:
+			continue
+		if c["ocupado"] != null and is_instance_valid(c["ocupado"]):
+			continue
+		var ok := true
+		for a in americanos:
+			if a.distance_to(pos) < lejos:
+				ok = false
+				break
+		if ok:
+			libres.append(pos)
+	var lista: Array = []
+	for k in n:
+		var p: Vector3
+		if libres.is_empty():
+			p = Navegacion.cerca_de(Vector3(_rng.randf_range(zona[0], zona[1]), 14.0, zona[2] + 2.0))
+		else:
+			p = libres.pop_at(_rng.randi() % libres.size())
+			# que no queden dos pegados (los puntos de un muro están cada 1,4 m)
+			libres = libres.filter(func(q: Vector3) -> bool: return q.distance_to(p) > 2.5)
+		usados.append(p)
+		lista.append(p)
+	return lista
+
+
 ## Otro alemán toma la MG42 de un nido (nadie llegó a tomarlo a tiempo).
-func reponer_nido(k: int) -> void:
+func reponer_nido(i: int) -> void:
 	if not Navegacion.listo:
 		return
-	var e := _aleman(_cobertura_cerca(NIDOS[k], 6.0), "mg42", "fijo")
-	while nidos.size() <= k:
-		nidos.append(null)
-	nidos[k] = e
+	nidos[i] = _aleman(_cobertura_cerca(Objetivos.LISTA[i]["nido"], 6.0), "mg42", "fijo")
+
+
+## Traspaso de anfitrión: los tiradores de MG42 que ya había (títeres hechos
+## soldados) vuelven a ser los de cada nido de la fase.
+func adoptar_nidos(mgs: Array) -> void:
+	for i in Objetivos.LISTA.size():
+		var o: Dictionary = Objetivos.LISTA[i]
+		if o["tipo"] != "mg" or not Objetivos.activo(i):
+			continue
+		var mejor: Enemy = null
+		for e in mgs:
+			if e.global_position.distance_to(o["nido"]) < 8.0 and (mejor == null or
+					e.global_position.distance_to(o["nido"]) < mejor.global_position.distance_to(o["nido"])):
+				mejor = e
+		nidos[i] = mejor
 
 
 func _cobertura_cerca(pos: Vector3, radio: float) -> Vector3:
@@ -106,7 +269,7 @@ func _mortero() -> void:
 	var lejos := _rng.randf_range(5.0, 9.0) if (b is Player or b is JugadorRemoto) else _rng.randf_range(1.5, 7.0)
 	var ang := _rng.randf() * TAU
 	var pos := b.global_position + Vector3(cos(ang), 0, sin(ang)) * lejos
-	pos.y = 0.1
+	pos = Navegacion.cerca_de(pos) + Vector3(0, 0.1, 0)
 	Game.play_at("silbido", pos, 2.0)
 	Red.silbido(pos)
 	await get_tree().create_timer(1.3).timeout

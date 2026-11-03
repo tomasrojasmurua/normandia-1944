@@ -64,7 +64,7 @@ func _ready() -> void:
 	add_to_group("player")
 	add_to_group("americanos")
 	collision_layer = 2          # capa 2: jugador
-	collision_mask = 1 | 4       # choca con escenario (1) y enemigos (3)
+	collision_mask = 1 | 4 | 64  # choca con escenario (1), enemigos (3) y el alambre de púas (7)
 	health = max_health
 	_capsule = collision.shape.duplicate()
 	collision.shape = _capsule

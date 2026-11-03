@@ -83,6 +83,10 @@ func _ready() -> void:
 		_add_box(p + Vector3(0, 1.0, 0), Vector3(0.22, 2.6, 0.22), _wood, tilt)
 
 	_add_bluffs()
+	# Tierra adentro: alambre, ladera, casamata, setos y Vierville (fases 2–4)
+	var rng4 := RandomNumberGenerator.new()
+	rng4.seed = seed_value + 400
+	OmahaInterior.construir(self, rng4)
 
 	# Ambiente del desembarco: vegetación, alambre, cráteres, horizonte, cielo
 	var rng3 := RandomNumberGenerator.new()
@@ -163,7 +167,7 @@ func _exit_tree() -> void:
 
 
 func _hornear_navegacion() -> void:
-	Navegacion.hornear(get_parent(), AABB(Vector3(-45, -2, -75), Vector3(90, 26, 88)))
+	Navegacion.hornear(get_parent(), AABB(Vector3(-52, -2, -208), Vector3(104, 34, 221)))
 	if not Game.prueba_carga and (not Game.modo_red or _soy_anfitrion()):
 		# Defensa alemana: los 7 de la escena + 13 en las trincheras (20 en total)
 		var rng := RandomNumberGenerator.new()
@@ -209,7 +213,8 @@ func _add_bluffs() -> void:
 	var depth := h / tan(deg_to_rad(slope))
 	_add_box(Vector3(0, h / 2.0 - 0.6, -56 - depth / 2.0), Vector3(500, 1.0, h / sin(deg_to_rad(slope))),
 		_grass, Vector3(slope, 0, 0))
-	_add_box(Vector3(0, h - 0.5, -56 - depth - 30), Vector3(500, 1.0, 60), _grass)
+	# La meseta de arriba llega hasta el bosque detrás de Vierville (sección 6)
+	_add_box(Vector3(0, h - 0.5, -56 - depth - 75), Vector3(500, 1.0, 150), _grass)
 
 ## Erizo checo: tres vigas de acero en ángulo (perfil L) cruzadas en el centro,
 ## perpendiculares entre sí, unidas con cartelas. Se apoya sobre tres puntas y

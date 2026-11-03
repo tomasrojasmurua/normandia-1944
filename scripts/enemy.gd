@@ -12,6 +12,8 @@ class_name Enemy
 ## - Los "flanqueador" contraatacan: si te quedas quieto mucho rato, corren a
 ##   una cobertura de costado para dispararte desde otro ángulo.
 ## - Los "fijo" no se mueven (el del techo del búnker).
+## - Los "asalto" (contraataque de Vierville) avanzan de cobertura en cobertura
+##   hacia `meta`; al llegar se quedan defendiendo ahí.
 ## El cuerpo y sus animaciones están en soldado.gd; lo común, en combatiente.gd.
 
 @export var sight_range := 55.0
@@ -24,7 +26,7 @@ class_name Enemy
 ## (además contraataca por los costados) o "fijo" (no se mueve).
 @export var rol := "defensor"
 
-const BUNKER := Vector3(0, 0, -42)
+var meta := Vector3.ZERO        # rol "asalto": hacia dónde avanza
 
 var _player: Player
 var _sees := false
@@ -50,7 +52,7 @@ func _ready() -> void:
 	add_to_group("enemies")
 	health = minf(health, 60.0)   # un tiro de fusil al cuerpo mata (Garand 100, carabina 60)
 	collision_layer = 4          # capa 3: enemigos
-	collision_mask = 1 | 2
+	collision_mask = 1 | 2 | 64   # 64 = alambre de púas (no va en el mapa de caminos)
 	_fire_timer = randf_range(fire_interval.x, fire_interval.y) * 0.5
 	if arma == "":
 		var rng := RandomNumberGenerator.new()
@@ -158,6 +160,9 @@ func _actualizar_amenaza(pos: Vector3) -> void:
 func _pensar() -> void:
 	if rol == "fijo" or not Navegacion.listo:
 		return
+	if rol == "asalto":
+		_asaltar()
+		return
 	var aviso := _alert > 0.1 or Game.elapsed - _ultimo_dano < 6.0
 	if not aviso:
 		return          # todavía no sabe dónde están los americanos
@@ -184,6 +189,31 @@ func _pensar() -> void:
 	if Game.elapsed - _quieto_desde > randf_range(18.0, 30.0) and randf() < 0.25:
 		_quieto_desde = Game.elapsed
 		_ir(_buscar(9.0, -2.0, 2.5))
+
+
+## Contraataque: avanza hacia `meta` de cobertura en cobertura (o al
+## descubierto si no hay). Cerca de la meta se queda defendiendo.
+func _asaltar() -> void:
+	var yo := global_position
+	if yo.distance_to(meta) < 9.0:
+		rol = "defensor"
+		return
+	var falta := yo.distance_to(meta)
+	var p := Coberturas.mejor(self, func(c: Dictionary) -> float:
+		var pos: Vector3 = c["pos"]
+		var viaje := yo.distance_to(pos)
+		if viaje < 3.0 or viaje > 16.0 or absf(pos.y - yo.y) > 1.5:
+			return -INF
+		var avance := falta - pos.distance_to(meta)
+		if avance < 3.0:
+			return -INF
+		var prot := Coberturas.protege(c, amenaza) if _alert > 0.1 else 0.5
+		return avance * 0.3 + prot * 2.0 - viaje * 0.1, yo, 16.0)
+	if not p.is_empty() and _ir(p):
+		return
+	var dir := meta - yo
+	dir.y = 0.0
+	ir_a({"pos": Navegacion.cerca_de(yo + dir.normalized() * minf(randf_range(7.0, 11.0), falta))})
 
 
 ## Mensaje en el HUD, sin repetirlo a cada rato.
@@ -222,14 +252,14 @@ func _buscar(radio: float, atras: float, minimo := 0.0) -> Dictionary:
 		var lejos := pos.distance_to(amenaza)
 		if lejos < dist_ahora + atras or lejos < 7.0:
 			return -INF
-		# Prefiere: que proteja bien, cerca del búnker, y no correr tanto
-		return prot * 4.0 - viaje * 0.25 - pos.distance_to(BUNKER) * 0.05)
+		# Prefiere: que proteja bien, cerca de su línea, y no correr tanto
+		return prot * 4.0 - viaje * 0.25 - pos.distance_to(Defensa.ancla()) * 0.05, yo, radio)
 
 
 ## Cobertura de costado: protege del blanco y lo ve desde otro ángulo que el búnker.
 func _buscar_flanco() -> Dictionary:
 	var yo := global_position
-	var frente := (BUNKER - amenaza)
+	var frente := (Defensa.ancla() - amenaza)
 	frente.y = 0.0
 	frente = frente.normalized()
 	return Coberturas.mejor(self, func(p: Dictionary) -> float:
@@ -247,7 +277,7 @@ func _buscar_flanco() -> Dictionary:
 		var angulo := rad_to_deg(frente.angle_to(lado / d))
 		if angulo < 40.0:
 			return -INF
-		return angulo * 0.05 - viaje * 0.15)
+		return angulo * 0.05 - viaje * 0.15, yo, 30.0)
 
 
 # ================================================================ disparar

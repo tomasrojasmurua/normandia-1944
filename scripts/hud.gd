@@ -143,12 +143,24 @@ func _draw() -> void:
 	# Objetivo de mi escuadra (y la barra de la carga / la toma, si va avanzando)
 	if Objetivos.actual and Objetivos.terminado == 0:
 		var oy := 57.0 if Game.modo_red else 43.0
-		var mio := Objetivos.mio()
-		Estilo.texto(self, Objetivos.texto(), Vector2(4, oy), Estilo.AMBAR_CLARO if not Objetivos.hecho[mio] else Estilo.VERDE_LED)
-		var pr: float = Objetivos.progreso[maxi(Objetivos.foco_mio(), 0)]
+		var foco := Objetivos.foco_mio()
+		Estilo.texto(self, Objetivos.texto_fase(), Vector2(4, oy), Color(Estilo.CREMA, 0.6))
+		oy += 11.0
+		var propio: bool = foco >= 0 and Objetivos.mio() in Objetivos.LISTA[foco].get("esc", [])
+		var color := Estilo.ROJO if Objetivos.perdiendo > 0.0 else (Estilo.AMBAR_CLARO if propio else Estilo.VERDE_LED)
+		Estilo.texto(self, Objetivos.texto(), Vector2(4, oy), color)
+		var pr: float = Objetivos.progreso[foco] if foco >= 0 else 0.0
 		if pr > 0.0 and pr < 1.0:
 			draw_rect(Rect2(4, oy + 4, 120, 5), Color(Estilo.NEGRO, 0.7))
 			draw_rect(Rect2(5, oy + 5, 118 * pr, 3), Estilo.AMBAR)
+
+	# Título de la fase que empieza
+	if Objetivos.actual and Objetivos.banner_t > 0.0 and Objetivos.terminado == 0:
+		var a := clampf(Objetivos.banner_t, 0.0, 1.0)
+		var f := Objetivos.fase()
+		Estilo.texto_c(self, "FASE %d" % (f + 1), s.x / 2, s.y * 0.28, Color(Estilo.CREMA, 0.8 * a))
+		Estilo.texto_c(self, Misiones.fase(f)["nombre"], s.x / 2, s.y * 0.28 + 20, Color(Estilo.AMBAR, a), Estilo.TAM_GRANDE)
+		Estilo.texto_c(self, Game.clock_text(), s.x / 2, s.y * 0.28 + 38, Color(Estilo.CREMA, 0.6 * a))
 
 	# Arma en el suelo para recoger
 	var suelta := _player.pickup_near as ArmaSuelta

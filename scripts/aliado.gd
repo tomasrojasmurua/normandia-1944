@@ -56,14 +56,14 @@ func _ready() -> void:
 	add_to_group("americanos")
 	add_to_group("aliados")
 	collision_layer = 16         # capa 5: compañeros (las balas del jugador no los tocan)
-	collision_mask = 1
+	collision_mask = 1 | 64      # 64 = alambre de púas
 	if arma == "":
 		arma = "garand"
 	_indice = get_tree().get_nodes_in_group("aliados").size()
 	_vista_t = randf() * 0.35
 	_pensar_t = randf_range(0.5, 1.5)
 	_fuego_t = randf_range(1.0, 3.0)
-	amenaza = BUNKER
+	amenaza = Objetivos.rumbo(escuadra) if Objetivos.actual else BUNKER
 	_crear_cuerpo("aliado")
 	tomar_cobertura_inicial.call_deferred()
 
@@ -132,10 +132,15 @@ func _physics_process(delta: float) -> void:
 
 ## Dónde está el alemán vivo más cercano (aunque no lo vea): la escuadra sabe
 ## más o menos dónde está la línea enemiga.
+## Solo cuentan los que están por donde va la escuadra (cerca de su objetivo):
+## un rezagado atrás no la hace volver. Sin ninguno, va hacia su objetivo.
 func _enemigo_conocido() -> Vector3:
-	var mejor := BUNKER
+	var rumbo := Objetivos.rumbo(escuadra) if Objetivos.actual else BUNKER
+	var mejor := rumbo
 	var mejor_d := INF
 	for e in get_tree().get_nodes_in_group("enemies"):
+		if e.global_position.distance_to(rumbo) > 45.0:
+			continue
 		var d := global_position.distance_to(e.global_position)
 		if d < mejor_d:
 			mejor_d = d
@@ -196,7 +201,7 @@ func _buscar(extra: Callable) -> Dictionary:
 	var yo := global_position
 	return Coberturas.mejor(self, func(p: Dictionary) -> float:
 		var pos: Vector3 = p["pos"]
-		if absf(pos.y - yo.y) > 1.5:
+		if not Coberturas.alcanzable(yo, pos):
 			return -INF
 		var prot := Coberturas.protege(p, amenaza)
 		if prot < 0.35:
@@ -205,7 +210,7 @@ func _buscar(extra: Callable) -> Dictionary:
 			if a.distance_to(pos) < 11.0:
 				return -INF      # demasiado cerca de un alemán
 		var e: float = extra.call(p, yo.distance_to(pos))
-		return e + prot * 2.0)
+		return e + prot * 2.0, yo, 26.0)
 
 
 func _ir(p: Dictionary) -> bool:

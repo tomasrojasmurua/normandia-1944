@@ -541,7 +541,7 @@ func _volverse_anfitrion() -> void:
 		enemigos.name = "Enemies"
 		escena.add_child(enemigos)
 	var adoptar := []
-	var mgs := [null, null]
+	var mgs := []
 	for rid in titeres.keys():
 		var t = titeres[rid]
 		if not is_instance_valid(t) or t.dead:
@@ -555,8 +555,7 @@ func _volverse_anfitrion() -> void:
 			enemigos.add_child(e)
 			n = e
 			if t.arma == "mg42":
-				var k := 0 if t.global_position.x < 0 else 1
-				mgs[k] = e
+				mgs.append(e)
 		else:
 			var a := Aliado.new()
 			a.arma = t.arma
@@ -582,7 +581,7 @@ func _volverse_anfitrion() -> void:
 	var def := Defensa.new()
 	def.migrada = _ultimo_dr
 	escena.add_child(def)
-	def.nidos = mgs
+	def.adoptar_nidos(mgs)
 	Game.say("[AHORA TU CELULAR MANDA A LOS ALEMANES]", Game.COLOR_GOOD)
 
 

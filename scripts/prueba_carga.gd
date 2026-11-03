@@ -75,7 +75,7 @@ static func lugar_aleman(rng: RandomNumberGenerator, usados: Array) -> Vector3:
 	for c in Coberturas.puntos:
 		var pos: Vector3 = c["pos"]
 		var n: Vector3 = c["n"]
-		if pos.z < -20.0 and n.z > 0.5 and not c["parcial"] and not pos in usados \
+		if pos.z < -20.0 and pos.z > -54.0 and pos.y < 2.0 and n.z > 0.5 and not c["parcial"] and not pos in usados \
 				and (c["ocupado"] == null or not is_instance_valid(c["ocupado"])):
 			libres.append(pos)
 	if libres.is_empty():

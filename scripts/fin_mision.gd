@@ -67,12 +67,20 @@ func _draw() -> void:
 	Estilo.marco(self, panel, "chapa")
 	var titulo := "MISIÓN CUMPLIDA" if resultado > 0 else "MISIÓN FRACASADA"
 	Estilo.texto_c(self, titulo, c.x, c.y - 78, Estilo.AMBAR if resultado > 0 else Estilo.ROJO, Estilo.TAM_GRANDE)
-	Estilo.texto_c(self, "PLAYA OMAHA - 6 DE JUNIO DE 1944", c.x, c.y - 58, Color(Estilo.CREMA, 0.75))
+	Estilo.texto_c(self, "%s - %s" % [Misiones.dato("nombre"), Misiones.dato("fecha")], c.x, c.y - 58, Color(Estilo.CREMA, 0.75))
 	var y := c.y - 36
-	for i in 4:
-		var ok: bool = Objetivos.hecho[i]
-		Estilo.texto(self, ("OK  " if ok else "--  ") + str(Objetivos.LISTA[i]["n"]), Vector2(c.x - 140, y),
-			Estilo.VERDE_LED if ok else Color(Estilo.CREMA, 0.5))
+	var fases := Misiones.fases()
+	for f in fases.size():
+		var hechos := 0
+		var total := 0
+		for i in Objetivos.LISTA.size():
+			if Objetivos.LISTA[i]["fase"] == f:
+				total += 1
+				if Objetivos.hecho[i]:
+					hechos += 1
+		var ok := hechos == total
+		Estilo.texto(self, "%s  FASE %d: %s  (%d/%d)" % ["OK" if ok else "--", f + 1, fases[f]["nombre"], hechos, total],
+			Vector2(c.x - 140, y), Estilo.VERDE_LED if ok else Color(Estilo.CREMA, 0.5))
 		y += 14
 	y += 8
 	Estilo.texto(self, "TIEMPO: %d:%02d" % [segundos / 60, segundos % 60], Vector2(c.x - 140, y), Estilo.CREMA)

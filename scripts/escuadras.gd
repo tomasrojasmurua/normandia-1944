@@ -40,6 +40,7 @@ var _nombre_i := 0
 
 
 var adoptar: Array = []      # traspaso de anfitrión: soldados ya hechos (no crear los de siempre)
+var _fase_lista := 0         # la fase cuyos refuerzos ya se sumaron
 
 
 func _ready() -> void:
@@ -53,7 +54,9 @@ func _ready() -> void:
 		Aliado.orden = "seguir"
 	for i in 4:
 		datos.append({"ranuras": [null, null, null], "lider": null,
-			"refuerzos": 1000000 if Game.prueba_carga else REFUERZOS_POR_ESCUADRA, "llegan": []})
+			"refuerzos": 1000000 if Game.prueba_carga else int(Misiones.fase(0).get("refuerzos_us", REFUERZOS_POR_ESCUADRA)),
+			"llegan": []})
+	_fase_lista = Objetivos.fase() if not adoptar.is_empty() and Objetivos.actual else 0
 	if not adoptar.is_empty():
 		_adoptar()
 		return
@@ -136,9 +139,7 @@ static func lider_de(a: Aliado) -> Node3D:
 static func sector(esc: int) -> Vector2:
 	esc = clampi(esc, 0, 3)
 	if Objetivos.actual and Objetivos.terminado == 0:
-		var f := Objetivos.foco(esc)
-		if f >= 0:
-			return SECTORES[f]
+		return Objetivos.carril(esc)
 	return SECTORES[esc]
 
 
@@ -189,11 +190,24 @@ static func relevo_jugador() -> Aliado:
 	return relevo_de(mi_escuadra, p.global_position)
 
 
+## Si su escuadra no tiene a nadie, toma al más cercano de otra (la misión
+## no se pierde mientras quede algún americano en pie).
 static func relevo_de(esc: int, cerca: Vector3) -> Aliado:
 	if actual == null:
 		return null
+	var mejor := _mas_cercano(actual.datos[esc]["ranuras"] + [actual.datos[esc]["lider"]], cerca)
+	if mejor == null:
+		var todos: Array = []
+		for i in 4:
+			if i != esc:
+				todos += actual.datos[i]["ranuras"] + [actual.datos[i]["lider"]]
+		mejor = _mas_cercano(todos, cerca)
+	return mejor
+
+
+static func _mas_cercano(lista: Array, cerca: Vector3) -> Aliado:
 	var mejor: Aliado = null
-	for a in actual.datos[esc]["ranuras"] + [actual.datos[esc]["lider"]]:
+	for a in lista:
 		if a and is_instance_valid(a) and not a.dead:
 			if mejor == null or a.global_position.distance_to(cerca) < mejor.global_position.distance_to(cerca):
 				mejor = a
@@ -232,9 +246,10 @@ static func le_queda(esc: int) -> bool:
 	var d: Dictionary = actual.datos[esc]
 	if d["refuerzos"] > 0 or not d["llegan"].is_empty():
 		return true
-	for a in d["ranuras"] + [d["lider"]]:
-		if a and is_instance_valid(a) and not a.dead:
-			return true
+	for i in 4:   # cualquier hombre de cualquier escuadra puede relevarlo
+		for a in actual.datos[i]["ranuras"] + [actual.datos[i]["lider"]]:
+			if a and is_instance_valid(a) and not a.dead:
+				return true
 	return false
 
 
@@ -261,6 +276,13 @@ func _process(delta: float) -> void:
 	if _t > 0.0:
 		return
 	_t = 1.0
+	# Fase nueva: llegan más refuerzos para cada escuadra
+	if Objetivos.actual and not Game.prueba_carga:
+		var f := Objetivos.fase()
+		while _fase_lista < f:
+			_fase_lista += 1
+			for i in 4:
+				datos[i]["refuerzos"] += int(Misiones.fase(_fase_lista).get("refuerzos_us", 0))
 	for i in 4:
 		var d: Dictionary = datos[i]
 		# Si cayó el sargento, asciende el primero que siga vivo
@@ -310,6 +332,10 @@ func _desembarcar(i: int) -> bool:
 			var s: Vector2 = SECTORES[i]
 			var rz: Vector2 = Misiones.dato("refuerzos_z")
 			var p := Vector3(_rng.randf_range(s.x, s.y), 0, _rng.randf_range(rz.x, rz.y))
+			# Tierra adentro llegan detrás del frente (no en la orilla)
+			var ll: Array = Misiones.fase(Objetivos.fase()).get("llegada", []) if Objetivos.actual else []
+			if not ll.is_empty():
+				p = Navegacion.cerca_de(ll[0] + Vector3(_rng.randf_range(-ll[1], ll[1]) / 2.0, 0, _rng.randf_range(-2, 2)))
 			d["ranuras"][k] = _soldado(i, p, ["garand", "garand", "bar", "thompson", "carbine"][_rng.randi() % 5],
 				_nombre_nuevo(), false)
 			return true

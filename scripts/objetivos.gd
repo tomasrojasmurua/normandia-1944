@@ -295,6 +295,8 @@ func _carga(i: int, delta: float) -> void:
 	var o: Dictionary = LISTA[i]
 	if _mecha.has(i):   # carga puesta: explota sola, hay que alejarse
 		_mecha[i] -= delta
+		if fmod(_mecha[i], 1.0) > fmod(_mecha[i] + delta, 1.0) or _mecha[i] + delta >= float(o.get("mecha", 6.0)):
+			_alejar_ia(o.get("boom", o["pos"]))
 		progreso[i] = 1.0 + maxf(_mecha[i], 0.01)   # >1 = mecha encendida (así lo ven también los invitados)
 		if _mecha[i] < 0.0:
 			_mecha.erase(i)
@@ -302,8 +304,10 @@ func _carga(i: int, delta: float) -> void:
 			_cumplir(i)
 		return
 	var cerca := false
+	var radio: float = o.get("radio", 3.0)
 	for j in _jugadores():
-		if j.global_position.distance_to(o["pos"]) < 2.6:
+		var dj: Vector3 = j.global_position - o["pos"]
+		if Vector2(dj.x, dj.z).length() < radio and absf(dj.y) < 2.5:
 			cerca = true
 	if cerca:
 		var ritmo := 2.0 if Escuadras.especialista("ingeniero", o["pos"], 15.0) else 1.0
@@ -314,6 +318,22 @@ func _carga(i: int, delta: float) -> void:
 		_mecha[i] = float(o.get("mecha", 6.0))
 		progreso[i] = 1.0 + _mecha[i]
 		Red.anunciar("[CARGA PUESTA: ¡ALÉJENSE! %d S]" % int(_mecha[i]), Game.COLOR_BAD)
+
+
+## Carga encendida: los compañeros con IA que estén cerca corren a ponerse a salvo.
+func _alejar_ia(centro: Vector3) -> void:
+	for a in get_tree().get_nodes_in_group("aliados"):
+		if not a is Aliado or a.dead:
+			continue
+		var d: Vector3 = a.global_position - centro
+		d.y = 0.0
+		if d.length() > 11.0:
+			continue
+		var fuera := d.normalized() if d.length() > 0.5 else Vector3(0, 0, 1)
+		if a.moviendo and Game.elapsed < float(a.get_meta("huye_hasta", 0.0)):
+			continue
+		a.set_meta("huye_hasta", Game.elapsed + 7.0)   # mientras tanto no vuelve (aliado.gd)
+		a.ir_a({"pos": Navegacion.cerca_de(centro + fuera * 14.0)})
 
 
 ## Tomar un lugar: avanza con americanos a menos de `radio` m y sin alemanes

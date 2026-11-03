@@ -98,7 +98,7 @@ const DATOS := {
 				"refuerzos": {"n": 6, "zona": [-20.0, 44.0, -95.0, -82.0], "cada": Vector2(30.0, 40.0)},
 				"objetivos": [
 					{"id": "bangalore", "n": "VOLAR EL ALAMBRE CON EL BANGALORE", "corto": "BANGALORE",
-						"pos": Vector3(12, 0, -50.6), "tipo": "carga", "seg": 4.0, "mecha": 4.0,
+						"pos": Vector3(12, 0, -50.6), "tipo": "carga", "seg": 4.0, "mecha": 4.0, "radio": 4.0,
 						"boom": Vector3(12, 0.4, -52.6), "efecto": "brecha", "esc": [0, 1, 2, 3], "carril": Vector2(4, 20)},
 					{"id": "trinchera_ladera", "n": "LIMPIAR LA TRINCHERA DE LA LADERA", "corto": "TRINCHERA",
 						"pos": Vector3(2, 5.3, -65.5), "tipo": "tomar", "seg": 12.0, "radio": 6.0,

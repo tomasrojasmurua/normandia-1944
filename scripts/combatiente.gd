@@ -63,6 +63,12 @@ func _seguir_pose() -> void:
 	if absf(_capsula.height - alto) > 0.02:
 		_capsula.height = lerpf(_capsula.height, alto, 0.15)
 		_col_cuerpo.position.y = _capsula.height / 2.0
+	# A lo lejos el dibujo es más grande (soldado_sprite.gd): la caja también
+	var e: float = cuerpo.get("escala") if cuerpo.get("escala") != null else 1.0
+	var r := minf(0.3 * e, _capsula.height / 2.0)
+	if absf(_capsula.radius - r) > 0.03:
+		_capsula.radius = r
+		(_col_cabeza.shape as SphereShape3D).radius = 0.17 * e
 	var cabeza: Vector3 = to_local(cuerpo.pos_cabeza())
 	if cabeza.distance_squared_to(_col_cabeza.position) > 0.03 * 0.03:
 		_col_cabeza.position = cabeza

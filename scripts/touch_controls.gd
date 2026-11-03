@@ -114,7 +114,9 @@ func _touch_down(index: int, pos: Vector2) -> void:
 			"reload": _player.weapons.reload()
 			"grenade": _player.throw_grenade()
 			"jump": _player.touch_jump = true
-			"crouch": _player.toggle_crouch()
+			"crouch":
+				_player.crouch_press()
+				_player.touch_crouch_held = true
 		return
 	if pos.y > size.y - HUD_H:
 		if _hud:
@@ -145,6 +147,8 @@ func _touch_up(index: int) -> void:
 		_player.touch_sprint = false
 	if f.has("btn"):
 		_pressed.erase(f["btn"])
+		if f["btn"] == "crouch":
+			_player.touch_crouch_held = false
 		if f["btn"] in ["fire", "fire_left"] and not _pressed.has("fire") and not _pressed.has("fire_left"):
 			_player.touch_fire = false
 			if _player.touch_hold_aim:

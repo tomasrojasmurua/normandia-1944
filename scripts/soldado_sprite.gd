@@ -115,7 +115,10 @@ func pos_cabeza() -> Vector3:
 	if _info.is_empty():
 		return to_global(Vector3(0, 1.62, 0))
 	var c: Array = _info["cabeza"]
-	return to_global(c[clampi(_cuadro, 0, c.size() - 1)]) + Vector3(0, 0.08, 0)
+	var l: Vector3 = c[clampi(_cuadro, 0, c.size() - 1)]
+	if escala > 1.0:   # dibujado más grande desde el pecho: la cabeza queda más arriba
+		l = Vector3(l.x * escala, 1.1 + (l.y - 1.1) * escala, l.z * escala)
+	return to_global(l) + Vector3(0, 0.08 * escala, 0)
 
 
 # ================================================================ dibujo
@@ -186,10 +189,14 @@ const LEJOS := 28.0
 const MAX_ESCALA := 1.6
 
 
+var escala := 1.0      # lo usa combatiente.gd: la caja de choque crece con el dibujo
+
+
 func _escala_lejos(dist: float) -> void:
 	var e := 1.0
 	if bando == "aleman" and not muerto:
 		e = clampf(dist / LEJOS, 1.0, MAX_ESCALA)
+	escala = e
 	_spr.pixel_size = PIXEL * e
 	_bajar = -1.1 * (e - 1.0)
 

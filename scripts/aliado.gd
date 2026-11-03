@@ -221,6 +221,8 @@ func _enemigo_conocido() -> Vector3:
 func _pensar() -> void:
 	if not Navegacion.listo:
 		return
+	if Game.elapsed < float(get_meta("huye_hasta", 0.0)):
+		return          # se está alejando de una carga a punto de explotar
 	_alemanes.clear()
 	for e in get_tree().get_nodes_in_group("enemies"):
 		_alemanes.append(e.global_position)

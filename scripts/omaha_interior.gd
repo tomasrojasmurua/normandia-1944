@@ -60,13 +60,26 @@ static func _alambre(d: Node3D, rng: RandomNumberGenerator) -> void:
 	_brecha_cuerpo = StaticBody3D.new()
 	_brecha_cuerpo.collision_layer = 64
 	_brecha_cuerpo.collision_mask = 0
-	_brecha_cuerpo.position = Vector3((BRECHA.x + BRECHA.y) / 2.0, 0.45, Z_ALAMBRE)
+	_brecha_cuerpo.position = Vector3((BRECHA.x + BRECHA.y) / 2.0, 1.2, Z_ALAMBRE)
 	var col := CollisionShape3D.new()
 	var forma := BoxShape3D.new()
-	forma.size = Vector3(BRECHA.y - BRECHA.x, 0.9, 1.2)
+	forma.size = Vector3(BRECHA.y - BRECHA.x, 2.4, 1.2)     # alto: no se puede saltar
 	col.shape = forma
 	_brecha_cuerpo.add_child(col)
 	d.add_child(_brecha_cuerpo)
+	# Y el resto del alambre tampoco se salta: una pared invisible alta en la capa 7
+	# (no tapa la vista ni las balas; la parte baja de arriba ya está en el mapa de caminos)
+	var alto := StaticBody3D.new()
+	alto.collision_layer = 64
+	alto.collision_mask = 0
+	d.add_child(alto)
+	for tramo in [Vector2(-250.0, BRECHA.x), Vector2(BRECHA.y, 250.0)]:
+		var c := CollisionShape3D.new()
+		var f := BoxShape3D.new()
+		f.size = Vector3(tramo.y - tramo.x, 2.4, 1.2)
+		c.shape = f
+		c.position = Vector3((tramo.x + tramo.y) / 2.0, 1.2, Z_ALAMBRE)
+		alto.add_child(c)
 	# Las rollos de alambre (dos filas, la de la brecha aparte para poder sacarla)
 	var lugares := []
 	var en_brecha := []
@@ -184,14 +197,15 @@ static func _setos(d: Node3D, rng: RandomNumberGenerator) -> void:
 			var a: float = cortes[k]
 			var b: float = cortes[k + 1]
 			var largo := b - a
-			var centro := Vector3((a + b) / 2.0, ARRIBA + 0.55, z)
-			d._add_box(centro, Vector3(largo, 1.1, 1.8), tierra)
-			Coberturas.agregar_muro(Vector3(centro.x, ARRIBA, z), largo, 0.0, 1.8, 1.1)
+			# 0,85 m como los sacos: el que se asoma a disparar muestra la cabeza
+			var centro := Vector3((a + b) / 2.0, ARRIBA + 0.425, z)
+			d._add_box(centro, Vector3(largo, 0.85, 1.8), tierra)
+			Coberturas.agregar_muro(Vector3(centro.x, ARRIBA, z), largo, 0.0, 1.8, 0.85)
 			# El seto tapa la vista; donde falta (1 de cada 3) se puede tirar por encima del talud
 			var x := a + 1.5
 			while x < b - 1.0:
 				if rng.randf() > 0.33:
-					setos.append([Vector3(x, ARRIBA + 1.05, z + rng.randf_range(-0.2, 0.2)), rng.randf_range(0.55, 0.7)])
+					setos.append([Vector3(x, ARRIBA + 0.8, z + rng.randf_range(-0.2, 0.2)), rng.randf_range(0.55, 0.7)])
 				x += rng.randf_range(3.2, 4.2)
 	# Carretas de heno (Meshy) como cobertura en los campos
 	for c in [[6.0, -105.0], [-24.0, -120.0], [30.0, -121.0], [-6.0, -138.0]]:

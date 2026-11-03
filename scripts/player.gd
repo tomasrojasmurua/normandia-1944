@@ -25,6 +25,12 @@ const STAND_HEIGHT := 1.75
 const CROUCH_HEIGHT := 1.15
 const STAND_HEAD := 1.6
 const CROUCH_HEAD := 1.0
+## Cuerpo a tierra: manteniendo AGACHAR ~0,6 s. Se arrastra lento, casi no
+## asoma (las balas pegan mucho menos) y detrás de un talud no lo ven.
+const PRONE_HEIGHT := 0.72
+const PRONE_HEAD := 0.38
+const PRONE_SPEED := 0.9
+const PRONE_HOLD := 0.6
 
 @onready var head: Node3D = $Head
 @onready var camera: Camera3D = $Head/Camera3D
@@ -37,6 +43,9 @@ var supresion := 0.0                  # 0..1: balas pasando cerca (oscurece la v
 var nombre := "MURPHY"                # el soldado que manejas (cambia al tomar el lugar de otro)
 var dead := false
 var crouching := false
+var prone := false
+var touch_crouch_held := false        # el botón AGACHAR del celular, apretado
+var _agachar_desde := -1.0            # segundos que lleva apretado AGACHAR (-1 = suelto)
 var sprinting := false
 var aiming := false
 var touch_fire := false              # el dedo está sobre FUEGO (para las automáticas)
@@ -102,7 +111,9 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event.is_action_pressed("use"):
 		recoger()
 	elif event.is_action_pressed("crouch"):
-		toggle_crouch()
+		crouch_press()
+	elif event.is_action_released("crouch"):
+		_agachar_desde = -1.0
 
 
 ## Gira la cámara. `delta` en radianes (x = horizontal, y = vertical).
@@ -135,10 +146,31 @@ func toggle_crouch() -> void:
 		_set_crouch(not crouching)
 
 
+## AGACHAR: un toque agacha o levanta; mantenido, cuerpo a tierra. Desde el
+## piso, un toque te deja agachado.
+func crouch_press() -> void:
+	if dead:
+		return
+	if prone:
+		_set_crouch(true)
+		return
+	toggle_crouch()
+	_agachar_desde = 0.0
+
+
 func _set_crouch(on: bool) -> void:
 	crouching = on
+	prone = false
 	_capsule.height = CROUCH_HEIGHT if on else STAND_HEIGHT
 	collision.position.y = _capsule.height / 2.0
+
+
+func _set_prone() -> void:
+	crouching = true
+	prone = true
+	_capsule.height = PRONE_HEIGHT
+	collision.position.y = _capsule.height / 2.0
+	Game.say("[CUERPO A TIERRA]", Game.COLOR_INFO)
 
 
 func throw_grenade() -> void:
@@ -170,7 +202,9 @@ func pos_cabeza() -> Vector3:
 
 func factor_blanco() -> float:
 	var f := 1.0
-	if crouching:
+	if prone:
+		f *= 0.35
+	elif crouching:
 		f *= 0.6
 	if sprinting:
 		f *= 0.6
@@ -365,10 +399,21 @@ func _physics_process(delta: float) -> void:
 	if _since_hit > regen_delay and health < max_health:
 		health = minf(health + regen_per_second * delta, max_health)
 
+	# Mantener AGACHAR: cuerpo a tierra
+	if _agachar_desde >= 0.0 and not prone:
+		_agachar_desde += delta     # cuánto lleva apretado
+		if not (Input.is_action_pressed("crouch") or touch_crouch_held):
+			_agachar_desde = -1.0
+		elif _agachar_desde > PRONE_HOLD:
+			_agachar_desde = -1.0
+			_set_prone()
+
 	var wants_jump := Input.is_action_just_pressed("jump") or touch_jump
 	touch_jump = false
 	if wants_jump and is_on_floor():
-		if crouching:
+		if prone:
+			_set_crouch(true)
+		elif crouching:
 			_set_crouch(false)
 		else:
 			velocity.y = jump_velocity
@@ -390,6 +435,8 @@ func _physics_process(delta: float) -> void:
 	var speed := walk_speed
 	if sprinting:
 		speed = sprint_speed
+	elif prone:
+		speed = PRONE_SPEED
 	elif crouching:
 		speed = crouch_speed
 	if aiming:
@@ -403,7 +450,8 @@ func _physics_process(delta: float) -> void:
 	move_and_slide()
 
 	# Altura de la cabeza (agachado / de pie)
-	head.position.y = lerpf(head.position.y, CROUCH_HEAD if crouching else STAND_HEAD, delta * 10.0)
+	var alto_cabeza := PRONE_HEAD if prone else (CROUCH_HEAD if crouching else STAND_HEAD)
+	head.position.y = lerpf(head.position.y, alto_cabeza, delta * (6.0 if prone else 10.0))
 
 	# Zoom al apuntar, algo más abierto al correr
 	var target_fov := _base_fov

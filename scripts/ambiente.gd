@@ -81,6 +81,8 @@ static func _plantas(padre: Node3D, nombre: String, lugares: Array) -> void:
 			# de los árboles solo tapa el tronco y las ramas bajas
 			if nombre.begins_with("arbol"):
 				forma.size = Vector3(0.9 * e, 4.0 * e, 0.9 * e)
+			elif nombre == "seto":   # el seto tapa casi todo su ancho (si no, se ve entre las ramas)
+				forma.size = Vector3(quad.size.x * e * 0.95, (quad.size.y - 0.15) * e * 0.95, 0.7)
 			else:
 				forma.size = Vector3(quad.size.x * e * 0.75, (quad.size.y - 0.15) * e * 0.95, 0.7)
 			col.shape = forma

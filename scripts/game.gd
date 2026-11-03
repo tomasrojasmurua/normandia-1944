@@ -156,6 +156,14 @@ func ir_al_menu() -> void:
 	get_tree().change_scene_to_file("res://scenes/menu.tscn")
 
 
+## Mapa de la campaña (jugando solo): el coronel, las misiones y el diario.
+func ir_al_mapa() -> void:
+	_cerrar_compania()
+	get_tree().paused = false
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	get_tree().change_scene_to_file("res://scenes/mapa.tscn")
+
+
 ## Pantalla previa a la misión (jugando solo): elegir a los hombres.
 func ir_a_previa() -> void:
 	_cerrar_compania()
@@ -168,6 +176,7 @@ func ir_a_previa() -> void:
 func _cerrar_compania() -> void:
 	if Compania.en_mision:
 		Compania.cerrar_mision(0, Escuadras.reemplazos_vivos())
+		Campana.cerrar_mision(0)
 
 
 func empezar_mision(id := "") -> void:
@@ -175,6 +184,9 @@ func empezar_mision(id := "") -> void:
 	if id != "" and Misiones.existe(id):
 		mision = id
 	Compania.empezar_mision()
+	if Compania.activa():
+		Campana.cargar()
+	Campana.empezar_mision()
 	start_minutes = Misiones.dato("hora")
 	get_tree().paused = false
 	get_tree().change_scene_to_file(Misiones.dato("escena"))

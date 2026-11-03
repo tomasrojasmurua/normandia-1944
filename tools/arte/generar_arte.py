@@ -143,7 +143,8 @@ G = {
     "x": [".....", ".....", "#...#", ".#.#.", "..#..", ".#.#.", "#...#"],
 }
 # Letras con tilde: la letra base con una marca encima (filas -2 y -1).
-ACENTOS = {"Á": "A", "É": "E", "Í": "I", "Ó": "O", "Ú": "U", "Ü": "U", "Ñ": "N"}
+ACENTOS = {"Á": "A", "É": "E", "Í": "I", "Ó": "O", "Ú": "U", "Ü": "U", "Ñ": "N",
+           "À": "A", "È": "E", "Ô": "O"}   # las tres últimas: nombres franceses (Sainte-Mère-Église, Saint-Lô)
 
 
 def glifo(ch):
@@ -159,6 +160,10 @@ def glifo(ch):
         marca = [".#.#."[:w].ljust(w, ".")]
     elif ch == "Ñ":
         marca = [".##.#", "#.##."]
+    elif ch in "ÀÈ":
+        marca = [".#..."[:w].ljust(w, ".") if w == 5 else "#.."]
+    elif ch == "Ô":
+        marca = ["..#..", ".#.#."]
     else:
         marca = ["...#."[:w].ljust(w, ".") if w == 5 else "..#"]
     if len(marca) == 1:

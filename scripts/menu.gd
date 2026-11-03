@@ -94,7 +94,7 @@ func _pulsado(id: String) -> void:
 		"jugar":
 			Game.prueba_carga = false
 			Game.modo_red = false
-			Game.ir_a_previa()
+			Game.ir_al_mapa()
 		"controles", "creditos":
 			pantalla = id
 		"volver":

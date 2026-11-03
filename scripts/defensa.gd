@@ -102,7 +102,8 @@ func _empezar(f: int) -> void:
 	var primera := fase_lista < 0
 	fase_lista = f
 	var d := Misiones.fase(f)
-	restantes = int(d.get("refuerzos", {}).get("n", 0))
+	# Si la misión se dejó para después en la campaña, llegan más refuerzos
+	restantes = int(round(float(d.get("refuerzos", {}).get("n", 0)) * Campana.factor_refuerzos()))
 	_t_refuerzo = _rng.randf_range(30.0, 45.0)
 	_t_mortero = 22.0 if primera else 14.0
 	_olas = 0

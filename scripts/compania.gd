@@ -8,14 +8,15 @@ class_name Compania
 ## - El que cae en la misión queda MUERTO (no vuelve nunca) o HERIDO (se pierde
 ##   las próximas 1 o 2 misiones). Los que sobreviven suman misiones y ascienden.
 ## - Los reemplazos que llegan a tu escuadra durante la misión y sobreviven se
-##   unen a la compañía. Si quedan pocos disponibles, llegan reclutas.
+##   unen a la compañía. Los reclutas se pagan con SUMINISTROS en el mapa de la
+##   campaña (Campana); solo si quedan menos de 3 disponibles llegan gratis.
 ## - Tú eres el sargento MURPHY: no está en la lista (si caes, sigues como el
 ##   compañero que te releva; si ese cae, ese sí cuenta como caído).
 ## Solo cuenta jugando solo (no en el cooperativo ni en la prueba de carga).
 
 const ARCHIVO := "user://campana.cfg"
 const MAXIMO := 15            # hombres vivos en la compañía (sin contar a Murphy)
-const MINIMO_LISTOS := 6      # si quedan menos disponibles, llegan reclutas
+const MINIMO_LISTOS := 3      # si quedan menos disponibles, llegan reclutas gratis
 const PROB_MUERTO := 0.55     # el resto de los caídos queda herido
 
 const ESPECIALIDADES := {
@@ -60,6 +61,8 @@ static var en_mision := false
 static var companeros: Array = []      # los que fueron
 static var caidos: Array = []          # los que cayeron (se decide al final si muerto o herido)
 static var informe: Array = []         # [texto, color] del cierre de la última misión
+static var ultimos_muertos: Array = [] # nombres (para el diario)
+static var ultimos_heridos: Array = []
 
 
 ## ¿Cuenta la compañía en esta partida?
@@ -188,6 +191,8 @@ static func cerrar_mision(resultado: int, reemplazos: Array = []) -> void:
 	en_mision = false
 	misiones_jugadas += 1
 	informe = []
+	ultimos_muertos = []
+	ultimos_heridos = []
 	var rng := RandomNumberGenerator.new()
 	rng.randomize()
 	# Los que estaban heridos (y no fueron) se van recuperando
@@ -205,10 +210,12 @@ static func cerrar_mision(resultado: int, reemplazos: Array = []) -> void:
 		if n in caidos:
 			if rng.randf() < PROB_MUERTO:
 				h["estado"] = "muerto"
+				ultimos_muertos.append(n)
 				informe.append(["%s: MUERTO EN COMBATE" % n, "mal"])
 			else:
 				h["estado"] = "herido"
 				h["herido"] = rng.randi_range(1, 2)
+				ultimos_heridos.append(n)
 				informe.append(["%s: HERIDO, FUERA %d %s" % [n, h["herido"], "MISIÓN" if h["herido"] == 1 else "MISIONES"], "aviso"])
 		else:
 			h["misiones"] += 1
@@ -241,6 +248,40 @@ static func cerrar_mision(resultado: int, reemplazos: Array = []) -> void:
 		informe.append(["LLEGAN %d %s" % [llegan, "RECLUTA" if llegan == 1 else "RECLUTAS"], "bien"])
 	_limpiar_elegidos()
 	guardar()
+
+
+## Un turno sin ir a misión (descansar, otra unidad): los heridos sanan un
+## turno. Devuelve los que vuelven del hospital.
+static func descanso() -> Array:
+	cargar()
+	var sanos: Array = []
+	for h in hombres:
+		if h["estado"] == "herido":
+			h["herido"] -= 1
+			if h["herido"] <= 0:
+				h["estado"] = "ok"
+				sanos.append(h["n"])
+	guardar()
+	return sanos
+
+
+static func puede_reclutar() -> bool:
+	return vivos().size() < MAXIMO
+
+
+## Recluta pagado (desde el mapa). Devuelve el nombre ("" si no se pudo).
+static func reclutar(esp: String) -> String:
+	if not puede_reclutar() or not ESPECIALIDADES.has(esp):
+		return ""
+	var libres := RECLUTAS.filter(func(r: String) -> bool: return hombre(r).is_empty())
+	if libres.is_empty():
+		return ""
+	var rng := RandomNumberGenerator.new()
+	rng.randomize()
+	var n: String = libres[rng.randi() % libres.size()]
+	_agregar(n, esp, rng)
+	guardar()
+	return n
 
 
 static func _agregar(nombre: String, esp: String, rng: RandomNumberGenerator) -> void:

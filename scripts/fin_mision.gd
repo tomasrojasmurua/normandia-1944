@@ -31,6 +31,7 @@ static func mostrar(arbol: SceneTree, res: int, b: int, c: int, s: int) -> void:
 	if not Game.modo_red:
 		arbol.paused = true
 	Compania.cerrar_mision(res, Escuadras.reemplazos_vivos())
+	Campana.cerrar_mision(res)
 
 
 func _ready() -> void:
@@ -63,7 +64,10 @@ func _pulsado(id: String) -> void:
 		"menu":
 			Game.ir_al_menu()
 		"otra":
-			Game.ir_a_previa()
+			if resultado > 0 and Compania.activa():
+				Game.ir_al_mapa()
+			else:
+				Game.ir_a_previa()
 
 
 func _draw() -> void:

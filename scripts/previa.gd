@@ -10,7 +10,6 @@ const COLS := 3
 const CARTA := Vector2(126, 36)
 
 var _info := ""            # descripción de la especialidad del último tocado
-var _confirmar_nueva := 0.0
 var _retratos := {}
 
 
@@ -20,8 +19,7 @@ func _ready() -> void:
 	Compania.cargar()
 
 
-func _process(delta: float) -> void:
-	_confirmar_nueva = maxf(_confirmar_nueva - delta, 0.0)
+func _process(_delta: float) -> void:
 	queue_redraw()
 
 
@@ -57,8 +55,7 @@ func _botones() -> Array:
 		var r := Rect2(x0 + 96 + k * 98, 250, 94, 46)
 		l.append(["a:" + eq[k][0], r, eq[k][0], Compania.ESPECIALIDADES[eq[k][2]]["armas"].size() > 1, ""])
 	var by := size.y - 34
-	l.append(["volver", Rect2(8, by, 96, 26), "VOLVER", true, ""])
-	l.append(["nueva", Rect2(112, by, 116, 26), "NUEVA CAMPAÑA", true, "¿SEGURO?" if _confirmar_nueva > 0.0 else ""])
+	l.append(["volver", Rect2(8, by, 120, 26), "AL MAPA", true, ""])
 	l.append(["atacar", Rect2(size.x - 168, by, 160, 26), "¡AL ATAQUE!", Compania.equipo().size() > 0, ""])
 	return l
 
@@ -74,14 +71,7 @@ func _pulsado(id: String) -> void:
 		return
 	match id:
 		"volver":
-			Game.ir_al_menu()
-		"nueva":
-			if _confirmar_nueva > 0.0:
-				Compania.nueva()
-				_confirmar_nueva = 0.0
-				_info = "NUEVA CAMPAÑA: LA COMPAÑÍA ESTÁ COMPLETA"
-			else:
-				_confirmar_nueva = 3.0
+			Game.ir_al_mapa()
 		"atacar":
 			Game.prueba_carga = false
 			Game.modo_red = false

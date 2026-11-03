@@ -1,22 +1,27 @@
 extends Node
 class_name Red
-## Cooperativo (sección 5, paso 5): conecta este juego con los demás de la
-## misma sala a través del servidor de Cloudflare (servidor/).
+## Cooperativo (sección 5): conecta este juego con los demás de la misma sala
+## a través del servidor de Cloudflare (servidor/).
 ##
-## - Cada jugador manda dónde está, hacia dónde mira, si corre o se agacha,
-##   y sus disparos. Los demás lo dibujan con un soldado de sprites que se
-##   mueve suave entre las posiciones recibidas (con 120 ms de atraso).
-## - El ANFITRIÓN (el primero en entrar) es el único que tiene alemanes de
-##   verdad: corre su IA, los nidos de MG42, los morteros y los refuerzos.
-##   En cada envío va dónde está cada alemán y los sucesos (tiros alemanes,
-##   explosiones, silbidos, avisos, muertes).
-## - Cada celular manda UN solo paquete por envío (12 por segundo) con todo
-##   junto: su posición, sus sucesos y (el anfitrión) los alemanes. Menos
-##   mensajes = menos atascos y menos gasto en el servidor.
-## - Los invitados ven "títeres" (AlemanRemoto). Si les disparan, el golpe se
-##   manda al anfitrión, que lo aplica al alemán de verdad. Si un alemán le
-##   pega a un invitado, el anfitrión le manda el daño a ese jugador.
-## - Las explosiones las calcula cada uno para su propio jugador.
+## - Cada jugador tiene un PUESTO (0–3, lo da el servidor): manda esa escuadra
+##   y lleva el nombre de su jefe (MURPHY, KOWALSKI, REYES, COLE).
+## - El ANFITRIÓN es el único que tiene la IA de verdad: los alemanes, los
+##   compañeros de las cuatro escuadras, los nidos de MG42, los morteros, los
+##   refuerzos y los objetivos. Los invitados ven "títeres" (AlemanRemoto).
+## - Cada celular manda UN paquete por envío (12 por segundo):
+##     {"t":"est","id", "p":[mi jugador], "l":[sucesos],
+##      "a":[alemanes], "b":[compañeros], "o":[objetivos], "dr":refuerzos}
+##   (a, b, o y dr solo el anfitrión). Menos mensajes = menos atascos.
+## - Sucesos: t disparo de jugador - s tiro de IA - d murió un soldado de IA ·
+##   x explosión - w silbido de mortero - m aviso - h daño a un jugador ·
+##   g golpe a un títere - o orden a mi escuadra - r pido relevo - R respuesta
+##   - q quitar títere - c cuerpos (para el que recién entra) - gr granada
+##   alemana - fin fin de misión.
+## - Si un invitado le pega a un títere, el golpe va al anfitrión; si la IA le
+##   pega a un invitado, el daño va a ese jugador. Las explosiones las calcula
+##   cada uno para su propio jugador.
+## - Si el anfitrión se va, el servidor elige otro: ese celular convierte los
+##   títeres en soldados de verdad y sigue la partida (traspaso).
 ##
 ## Red vive fuera de la escena (en la raíz) para conectarse desde el menú y
 ## saber quién es el anfitrión ANTES de armar la misión.
@@ -26,20 +31,22 @@ class_name Red
 const SERVIDOR := "wss://normandy-1944.tomasrojasmurua.workers.dev"
 const ENVIOS_POR_SEGUNDO := 12.0
 const ATRASO := 0.15
-const NOMBRES := ["MURPHY", "DELUCA", "HAYES", "BRENNAN"]
+const NOMBRES := ["MURPHY", "KOWALSKI", "REYES", "COLE"]
 const POSES := ["reposo", "pie", "rodilla", "agachado"]
 const ANDARES := ["", "camina", "corre"]
+const MAX_CUERPOS := 60
 
 static var actual: Red
 
 var mi_id := ""
+var puesto := 0
 var mi_nombre := "MURPHY"
 var anfitrion := false
 var ping_ms := -1
 var estado := "conectando"     # conectando / conectado / sala llena / sin conexión
 var remotos := {}              # id → JugadorRemoto
-var titeres := {}              # rid → AlemanRemoto (en los invitados)
-var alemanes := {}             # rid → Enemy (en el anfitrión)
+var titeres := {}              # rid → AlemanRemoto (en los invitados; alemanes y compañeros)
+var soldados := {}             # rid → Enemy / Aliado (en el anfitrión)
 
 var _ws := WebSocketPeer.new()
 var _t_envio := 0.0
@@ -48,6 +55,9 @@ var _t_limpiar := 0.0
 var _abierto := false
 var _eventos: Array = []
 var _rid_sig := 1
+var _cuerpos: Array = []       # [bando, arma, x, y, z, giro] (anfitrión: para los que entran tarde)
+var _vuelven := {}             # id → hasta cuándo vuelve desde la orilla (anfitrión)
+var _ultimo_dr := 9            # refuerzos alemanes que quedaban (por si hay traspaso)
 
 
 ## Se conecta a la sala (desde el menú). Queda en la raíz del árbol.
@@ -123,10 +133,21 @@ func _jugador() -> Player:
 
 
 func _escena() -> Node:
-	return get_tree().current_scene
+	var e := get_tree().current_scene
+	return e if e and e.name == "Main" else null
 
 
-## El paquete de cada envío: mi posición, mis sucesos y (anfitrión) los alemanes.
+static func _v(p: Vector3) -> Array:
+	return [snappedf(p.x, 0.01), snappedf(p.y, 0.01), snappedf(p.z, 0.01)]
+
+
+func _vec(a: Array, i := 0) -> Vector3:
+	return Vector3(a[i], a[i + 1], a[i + 2])
+
+
+# ================================================================ enviar
+
+## El paquete de cada envío: mi jugador, mis sucesos y (anfitrión) la IA.
 func _enviar_paquete() -> void:
 	var paq := {"t": "est", "id": mi_id}
 	var p := _jugador()
@@ -134,25 +155,26 @@ func _enviar_paquete() -> void:
 		var v := Vector2(p.velocity.x, p.velocity.z).length()
 		paq["p"] = [p.nombre, p.weapons.id(), snappedf(p.global_position.x, 0.01),
 			snappedf(p.global_position.y, 0.01), snappedf(p.global_position.z, 0.01),
-			snappedf(p.rotation.y, 0.01), 1 if p.crouching else 0, snappedf(v, 0.1), 1 if p.dead else 0]
+			snappedf(p.rotation.y, 0.01), 1 if p.crouching else 0, snappedf(v, 0.1), 1 if p.dead else 0, puesto]
 	if not _eventos.is_empty():
 		paq["l"] = _eventos
 		_eventos = []
 	if anfitrion and p:
 		paq["a"] = _lista_alemanes()
+		paq["b"] = _lista_aliados()
+		paq["o"] = Objetivos.estado()
+		paq["dr"] = Defensa.restantes
 	if paq.size() > 2:
 		_ws.send_text(JSON.stringify(paq))
 
 
-# ================================================================ anfitrión → invitados
-
-## Número de un alemán en la red (se lo da la primera vez que se lo pide).
-func rid_de(e: Node) -> int:
-	if not e.has_meta("rid"):
-		e.set_meta("rid", _rid_sig)
-		alemanes[_rid_sig] = e
+## Número de un soldado de IA en la red (se lo da la primera vez que se lo pide).
+func rid_de(n: Node) -> int:
+	if not n.has_meta("rid"):
+		n.set_meta("rid", _rid_sig)
+		soldados[_rid_sig] = n
 		_rid_sig += 1
-	return e.get_meta("rid")
+	return n.get_meta("rid")
 
 
 func _lista_alemanes() -> Array:
@@ -160,10 +182,23 @@ func _lista_alemanes() -> Array:
 	for e in get_tree().get_nodes_in_group("enemies"):
 		if not e is Enemy or e.dead or e.cuerpo == null:
 			continue
-		var p: Vector3 = e.global_position
-		lista.append([rid_de(e), snappedf(p.x, 0.01), snappedf(p.y, 0.01), snappedf(p.z, 0.01),
+		var q: Vector3 = e.global_position
+		lista.append([rid_de(e), snappedf(q.x, 0.01), snappedf(q.y, 0.01), snappedf(q.z, 0.01),
 			snappedf(e.rotation.y, 0.01), maxi(POSES.find(e.cuerpo.pose), 0),
 			maxi(ANDARES.find(e.cuerpo.andar), 0), e.arma])
+	return lista
+
+
+func _lista_aliados() -> Array:
+	var lista := []
+	for a in get_tree().get_nodes_in_group("aliados"):
+		if not a is Aliado or a.dead or a.cuerpo == null:
+			continue
+		var q: Vector3 = a.global_position
+		lista.append([rid_de(a), snappedf(q.x, 0.01), snappedf(q.y, 0.01), snappedf(q.z, 0.01),
+			snappedf(a.rotation.y, 0.01), maxi(POSES.find(a.cuerpo.pose), 0),
+			maxi(ANDARES.find(a.cuerpo.andar), 0), a.arma, a.escuadra, Escuadras.puesto_de(a),
+			a.nombre, int(a.health)])
 	return lista
 
 
@@ -173,10 +208,6 @@ static func evento(ev: Array) -> void:
 		actual._eventos.append(ev)
 
 
-static func _v(p: Vector3) -> Array:
-	return [snappedf(p.x, 0.01), snappedf(p.y, 0.01), snappedf(p.z, 0.01)]
-
-
 ## Aviso en el HUD de todos (si soy el anfitrión) o solo en el mío.
 static func anunciar(texto: String, color: Color = Game.COLOR_INFO) -> void:
 	Game.say(texto, color)
@@ -184,19 +215,35 @@ static func anunciar(texto: String, color: Color = Game.COLOR_INFO) -> void:
 		evento(["m", texto, color.to_html(false)])
 
 
-static func tiro_aleman(e: Node, desde: Vector3, hasta: Vector3) -> void:
+## Tiro de un soldado de IA (alemán o compañero), para que lo vean los invitados.
+static func tiro_ia(n: Node, desde: Vector3, hasta: Vector3) -> void:
 	if es_anfitrion():
-		evento(["s", actual.rid_de(e)] + _v(desde) + _v(hasta))
+		evento(["s", actual.rid_de(n)] + _v(desde) + _v(hasta))
 
 
-static func aleman_muerto(e: Node, dir: Vector3, cabeza: bool) -> void:
-	if es_anfitrion():
-		evento(["d", actual.rid_de(e), snappedf(dir.x, 0.01), snappedf(dir.z, 0.01), 1 if cabeza else 0])
+## Murió un soldado de IA: los invitados ven caer a su títere y el cuerpo
+## queda anotado para los que entren después.
+static func murio(n: Node3D, dir: Vector3, cabeza: bool) -> void:
+	if not es_anfitrion():
+		return
+	evento(["d", actual.rid_de(n), snappedf(dir.x, 0.01), snappedf(dir.z, 0.01), 1 if cabeza else 0])
+	actual._anotar_cuerpo("aleman" if n is Enemy else "aliado", n.arma, n.global_position, n.rotation.y)
+
+
+func _anotar_cuerpo(bando: String, arma: String, pos: Vector3, giro: float) -> void:
+	_cuerpos.append([bando, arma] + _v(pos) + [snappedf(giro, 0.01)])
+	if _cuerpos.size() > MAX_CUERPOS:
+		_cuerpos.pop_front()
 
 
 static func silbido(pos: Vector3) -> void:
 	if es_anfitrion():
 		evento(["w"] + _v(pos))
+
+
+static func granada(desde: Vector3, vel: Vector3) -> void:
+	if es_anfitrion():
+		evento(["gr"] + _v(desde) + _v(vel))
 
 
 ## Una explosión hecha aquí (granada, cohete, mortero): los demás la ven y
@@ -205,7 +252,7 @@ static func explosion(pos: Vector3, radio: float, dano: float) -> void:
 	evento(["x"] + _v(pos) + [radio, dano])
 
 
-## Un alemán de verdad (en el anfitrión) le pegó a otro jugador.
+## Un soldado de IA (en el anfitrión) le pegó a otro jugador.
 static func dano(id: String, cantidad: float, desde: Vector3) -> void:
 	evento(["h", id, cantidad] + _v(desde))
 
@@ -215,9 +262,15 @@ static func golpe(rid: int, cantidad: float, cabeza: bool, pos: Vector3, dir: Ve
 	evento(["g", rid, snappedf(cantidad, 0.1), 1 if cabeza else 0] + _v(pos) + _v(dir))
 
 
-## Avisa a los demás de un disparo mío (desde, hasta), para que vean la trazadora.
+## Disparo mío (desde, hasta), para que los demás vean la trazadora.
 static func disparo(desde: Vector3, hasta: Vector3) -> void:
 	evento(["t"] + _v(desde) + _v(hasta))
+
+
+## Invitado: caí; que el anfitrión me diga a qué compañero tomo (o si vuelvo
+## desde la orilla, o si no queda nadie).
+static func pedir_relevo() -> void:
+	evento(["r"])
 
 
 # ================================================================ recibir
@@ -230,38 +283,46 @@ func _recibir(texto: String) -> void:
 		"hola":
 			mi_id = d["id"]
 			anfitrion = d["anfitrion"]
-			# Cada jugador con su propio soldado (y su cara), según el orden de llegada
-			mi_nombre = NOMBRES[mini((d["otros"] as Array).size(), NOMBRES.size() - 1)]
+			puesto = clampi(int(d.get("puesto", 0)), 0, 3)
+			mi_nombre = NOMBRES[puesto]
 		"llena":
 			estado = "sala llena"
 		"entra":
 			Game.say("[ENTRÓ UN JUGADOR]", Game.COLOR_GOOD)
+			if anfitrion and not _cuerpos.is_empty():
+				evento(["c", str(d["id"]), _cuerpos])
 		"sale":
 			_quitar(str(d["id"]))
-			if d.get("anfitrion", false) and not anfitrion:
-				Game.say("[EL ANFITRIÓN SE FUE: LOS ALEMANES QUEDAN QUIETOS]", Game.COLOR_BAD)
+			if d.get("anfitrion", false):
+				Game.say("[SE FUE EL ANFITRIÓN: OTRO JUGADOR TOMA SU LUGAR]", Game.COLOR_BAD)
 			else:
 				Game.say("[UN JUGADOR SE FUE]", Game.COLOR_BAD)
+		"anfitrion":
+			if str(d["id"]) == mi_id and not anfitrion:
+				_volverse_anfitrion()
 		"pong":
 			ping_ms = Time.get_ticks_msec() - int(d["k"])
 		"est":
 			var id := str(d["id"])
 			if d.has("p"):
 				_recibir_jugador(id, d["p"])
-			if d.has("a") and not anfitrion:
-				_recibir_alemanes(d["a"])
+			if not anfitrion:
+				if d.has("a"):
+					_recibir_titeres(d["a"], "aleman")
+				if d.has("b"):
+					_recibir_titeres(d["b"], "aliado")
+				if d.has("o"):
+					Objetivos.recibir(d["o"])
+				if d.has("dr"):
+					_ultimo_dr = int(d["dr"])
 			if d.has("l"):
 				for ev in d["l"]:
 					_suceso(ev, id)
 
 
-func _vec(a: Array) -> Vector3:
-	return Vector3(a[0], a[1], a[2])
-
-
 func _recibir_jugador(id: String, p: Array) -> void:
 	var escena := _escena()
-	if escena == null or escena.name != "Main":
+	if escena == null:
 		return
 	if not remotos.has(id) or not is_instance_valid(remotos[id]):
 		var r := JugadorRemoto.new()
@@ -269,12 +330,17 @@ func _recibir_jugador(id: String, p: Array) -> void:
 		r.arma = str(p[1])
 		escena.add_child(r)
 		remotos[id] = r
-	remotos[id].recibir({"n": p[0], "x": p[2], "y": p[3], "z": p[4], "r": p[5], "c": p[6], "v": p[7], "m": p[8]})
+	var r: JugadorRemoto = remotos[id]
+	var esc := int(p[9]) if p.size() > 9 else 1
+	r.escuadra = esc
+	if anfitrion and Escuadras.actual and Escuadras.jefes[esc] != r:
+		Escuadras.poner_jefe(esc, r)    # ese jugador manda su escuadra
+	r.recibir({"n": p[0], "x": p[2], "y": p[3], "z": p[4], "r": p[5], "c": p[6], "v": p[7], "m": p[8]})
 
 
-func _recibir_alemanes(lista: Array) -> void:
+func _recibir_titeres(lista: Array, bando: String) -> void:
 	var escena := _escena()
-	if escena == null or escena.name != "Main":
+	if escena == null:
 		return
 	var ahora := Time.get_ticks_msec() / 1000.0
 	for a in lista:
@@ -283,9 +349,15 @@ func _recibir_alemanes(lista: Array) -> void:
 		if t == null or not is_instance_valid(t):
 			t = AlemanRemoto.new()
 			t.rid = rid
+			t.bando = bando
 			t.arma = str(a[7])
 			escena.add_child(t)
 			titeres[rid] = t
+		if bando == "aliado":
+			t.escuadra = int(a[8])
+			t.puesto = int(a[9])
+			t.nombre = str(a[10])
+			t.health = float(a[11])
 		t.recibir(ahora, Vector3(a[1], a[2], a[3]), float(a[4]), POSES[int(a[5])], ANDARES[int(a[6])])
 
 
@@ -301,13 +373,24 @@ func _limpiar_titeres() -> void:
 			titeres.erase(rid)
 
 
+## Invitado: los tres puestos de mi escuadra (títeres), para el HUD.
+func ranuras_mias() -> Array:
+	var r := [null, null, null]
+	for rid in titeres:
+		var t = titeres[rid]
+		if is_instance_valid(t) and t.bando == "aliado" and not t.dead \
+				and t.escuadra == puesto and t.puesto >= 0 and t.puesto < 3:
+			r[t.puesto] = t
+	return r
+
+
 func _suceso(ev: Array, de: String) -> void:
 	if ev.is_empty():
 		return
 	match str(ev[0]):
 		"t":   # disparo de otro jugador
-			var desde := Vector3(ev[1], ev[2], ev[3])
-			var hasta := Vector3(ev[4], ev[5], ev[6])
+			var desde := _vec(ev, 1)
+			var hasta := _vec(ev, 4)
 			# La trazadora sale del fusil del soldado que se ve (no de sus ojos),
 			# más gruesa y con el disparo cercano: que se note quién dispara
 			var r = remotos.get(de)
@@ -316,49 +399,191 @@ func _suceso(ev: Array, de: String) -> void:
 				r.disparo()
 			Game.tracer(desde, hasta, Color(1.0, 0.85, 0.5), 2.5)
 			Game.play_at("rifle", desde, 2.0)
-		"h":   # un alemán (del anfitrión) le pegó a alguien
-			if str(ev[1]) == mi_id:
-				var p := _jugador()
-				if p:
-					p.take_damage(float(ev[2]), Vector3(ev[3], ev[4], ev[5]))
-		"g":   # un invitado le pegó a un títere: al alemán de verdad
-			if anfitrion:
-				var e = alemanes.get(int(ev[1]))
-				if e and is_instance_valid(e) and not e.dead:
-					e.hit(float(ev[2]), int(ev[3]) == 1, Vector3(ev[4], ev[5], ev[6]),
-						Vector3(ev[7], ev[8], ev[9]), false)
-		"s":   # tiro alemán
+		"s":   # tiro de un soldado de IA
 			var t = titeres.get(int(ev[1]))
-			var desde := Vector3(ev[2], ev[3], ev[4])
-			var hasta := Vector3(ev[5], ev[6], ev[7])
+			var desde := _vec(ev, 2)
+			var hasta := _vec(ev, 5)
 			var arma := "kar98k"
+			var aliado := false
 			if t and is_instance_valid(t):
 				arma = t.arma
+				aliado = t.bando == "aliado"
 				if t.cuerpo and t.cuerpo.boca:
 					desde = t.cuerpo.boca.global_position
 				t.disparo()
-			Game.tracer(desde, hasta)
-			var sonido := "pistol" if arma in ["mp40", "luger", "stg44"] else "rifle_far"
-			Game.play_at(sonido, desde, 2.0 if arma != "mp40" else 0.0)
-			# ¿pasó cerca de mi cabeza? (supresión)
+			if aliado:
+				Game.tracer(desde, hasta, Color(1.0, 0.8, 0.45))
+			else:
+				Game.tracer(desde, hasta)
+			var sonido := "pistol" if arma in ["mp40", "luger", "stg44", "thompson", "colt"] else "rifle_far"
+			Game.play_at(sonido, desde, -6.0 if aliado else 2.0)
+			# ¿un tiro alemán pasó cerca de mi cabeza? (supresión)
 			var p := _jugador()
-			if p and not p.dead:
+			if p and not p.dead and not aliado:
 				var dir := (hasta - desde).normalized()
 				var cab := p.pos_cabeza()
 				var u := clampf((cab - desde).dot(dir), 0.0, desde.distance_to(hasta))
 				var cerca := (desde + dir * u).distance_to(cab)
 				if cerca < 2.5 and cerca > 0.3:
 					p.casi(cerca)
-		"d":   # murió un alemán
+		"d":   # murió un soldado de IA
 			var t = titeres.get(int(ev[1]))
 			if t and is_instance_valid(t):
 				t.morir(Vector3(ev[2], 0, ev[3]), int(ev[4]) == 1)
+		"q":   # un compañero dejó de estar (un jugador tomó su lugar)
+			var t = titeres.get(int(ev[1]))
+			if t and is_instance_valid(t):
+				t.queue_free()
+			titeres.erase(int(ev[1]))
 		"x":   # explosión hecha en otro celular
-			Game.explode(Vector3(ev[1], ev[2], ev[3]), float(ev[4]), float(ev[5]), true)
+			Game.explode(_vec(ev, 1), float(ev[4]), float(ev[5]), true)
 		"w":   # silbido de mortero
-			Game.play_at("silbido", Vector3(ev[1], ev[2], ev[3]), 2.0)
+			Game.play_at("silbido", _vec(ev, 1), 2.0)
+		"gr":  # granada alemana volando (solo se ve: la explosión llega aparte)
+			var escena := _escena()
+			if escena:
+				var g := Grenade.new()
+				g.modelo_aleman()
+				g.solo_vista = true
+				escena.add_child(g)
+				g.global_position = _vec(ev, 1)
+				g.linear_velocity = _vec(ev, 4)
+				Game.play_at("throw", _vec(ev, 1), 0.0)
 		"m":   # aviso del anfitrión
 			Game.say(str(ev[1]), Color.html(str(ev[2])))
+		"h":   # un soldado de IA (del anfitrión) le pegó a alguien
+			if str(ev[1]) == mi_id:
+				var p := _jugador()
+				if p:
+					p.take_damage(float(ev[2]), _vec(ev, 3))
+		"g":   # un invitado le pegó a un títere: al soldado de verdad
+			if anfitrion:
+				var e = soldados.get(int(ev[1]))
+				if e and is_instance_valid(e) and e is Enemy and not e.dead:
+					e.hit(float(ev[2]), int(ev[3]) == 1, _vec(ev, 4), _vec(ev, 7), false)
+		"o":   # un invitado le dio una orden a su escuadra
+			if anfitrion:
+				var r = remotos.get(de)
+				if r and is_instance_valid(r):
+					Escuadras.dar_orden_remota(r.escuadra, str(ev[1]))
+		"r":   # un invitado cayó y pide relevo
+			if anfitrion:
+				_dar_relevo(de)
+		"R":   # respuesta del anfitrión a mi pedido de relevo
+			if str(ev[1]) == mi_id:
+				var p := _jugador()
+				if p:
+					match str(ev[2]):
+						"a":
+							p.tomar_lugar_en(_vec(ev, 3), str(ev[6]), str(ev[7]))
+						"o":
+							p.volver_desde_orilla()
+						_:
+							p.sin_relevo()
+		"c":   # cuerpos que ya había (para el que recién entra)
+			if str(ev[1]) == mi_id:
+				_poner_cuerpos(ev[2])
+		"fin":
+			Objetivos.terminado = int(ev[1])
+			FinMision.mostrar(get_tree(), int(ev[1]), int(ev[2]), int(ev[3]), int(ev[4]))
+
+
+## Anfitrión: un invitado cayó. Toma al compañero vivo más cercano de su
+## escuadra; si no hay, vuelve desde la orilla (gasta un refuerzo); si no
+## queda nada, queda fuera hasta el fin de la misión.
+func _dar_relevo(id: String) -> void:
+	var r = remotos.get(id)
+	if r == null or not is_instance_valid(r):
+		return
+	var a := Escuadras.relevo_de(r.escuadra, r.global_position)
+	if a:
+		evento(["R", id, "a"] + _v(a.global_position) + [a.arma, a.nombre])
+		evento(["q", rid_de(a)])
+		Escuadras.quitar_de_escuadra(a)
+		a.queue_free()
+	elif Escuadras.gastar_refuerzo(r.escuadra):
+		evento(["R", id, "o"])
+		_vuelven[id] = Time.get_ticks_msec() / 1000.0 + 9.0
+	else:
+		evento(["R", id, "f"])
+
+
+## ¿Este jugador está por volver desde la orilla? (para no dar la misión por perdida)
+func vuelve_pronto(id: String) -> bool:
+	return _vuelven.get(id, 0.0) > Time.get_ticks_msec() / 1000.0
+
+
+func _poner_cuerpos(lista: Array) -> void:
+	var escena := _escena()
+	if escena == null:
+		return
+	for c in lista:
+		var s := SoldadoSprite.new()
+		s.bando = str(c[0])
+		s.arma = str(c[1])
+		escena.add_child(s)
+		s.global_position = _vec(c, 2)
+		s.rotation.y = float(c[5])
+		s.morir(-s.global_basis.z, false)
+
+
+## El anfitrión se fue y el servidor me eligió: los títeres pasan a ser
+## soldados de verdad (con el mismo número, así los demás siguen viendo los
+## mismos) y este celular corre la IA desde ahora.
+func _volverse_anfitrion() -> void:
+	anfitrion = true
+	var escena := _escena()
+	if escena == null:
+		return
+	var enemigos: Node = escena.get_node_or_null("Enemies")
+	if enemigos == null:
+		enemigos = Node3D.new()
+		enemigos.name = "Enemies"
+		escena.add_child(enemigos)
+	var adoptar := []
+	var mgs := [null, null]
+	for rid in titeres.keys():
+		var t = titeres[rid]
+		if not is_instance_valid(t) or t.dead:
+			continue
+		var n: Combatiente
+		if t.bando == "aleman":
+			var e := Enemy.new()
+			e.arma = t.arma
+			e.rol = "fijo" if t.arma == "mg42" else "defensor"
+			e.granadas = 0
+			enemigos.add_child(e)
+			n = e
+			if t.arma == "mg42":
+				var k := 0 if t.global_position.x < 0 else 1
+				mgs[k] = e
+		else:
+			var a := Aliado.new()
+			a.arma = t.arma
+			a.nombre = t.nombre
+			a.escuadra = maxi(t.escuadra, 0)
+			escena.add_child(a)
+			n = a
+			adoptar.append([a, a.escuadra, t.puesto])
+		n.global_position = t.global_position
+		n.rotation.y = t.rotation.y
+		n.set_meta("rid", rid)
+		soldados[rid] = n
+		_rid_sig = maxi(_rid_sig, rid + 1)
+		t.queue_free()
+	titeres.clear()
+	var esc := Escuadras.new()
+	esc.adoptar = adoptar
+	escena.add_child(esc)
+	for id in remotos:
+		var r = remotos[id]
+		if is_instance_valid(r):
+			Escuadras.poner_jefe(r.escuadra, r)
+	var def := Defensa.new()
+	def.migrada = _ultimo_dr
+	escena.add_child(def)
+	def.nidos = mgs
+	Game.say("[AHORA TU CELULAR MANDA A LOS ALEMANES]", Game.COLOR_GOOD)
 
 
 func _quitar(id: String) -> void:
@@ -369,15 +594,15 @@ func _quitar(id: String) -> void:
 		remotos.erase(id)
 
 
-## Texto para el medidor: "SALA 1234 · ANFITRIÓN · RED 85 MS · 2 JUGADORES".
+## Texto para el medidor: "SALA 1234 - ANFITRIÓN - RED 85 MS - 2 JUGADORES".
 static func texto() -> String:
 	if actual == null:
 		return ""
 	if not actual._abierto:
-		return "SALA %s · %s" % [Game.sala, actual.estado.to_upper()]
+		return "SALA %s - %s" % [Game.sala, actual.estado.to_upper()]
 	var n := 1
 	for id in actual.remotos:
 		if is_instance_valid(actual.remotos[id]):
 			n += 1
-	return "SALA %s · %s · RED %s MS · %d JUGADORES" % [Game.sala, "ANFITRIÓN" if actual.anfitrion else "INVITADO",
+	return "SALA %s - %s - RED %s MS - %d JUGADORES" % [Game.sala, "ANFITRIÓN" if actual.anfitrion else "INVITADO",
 		str(actual.ping_ms) if actual.ping_ms >= 0 else "--", n]

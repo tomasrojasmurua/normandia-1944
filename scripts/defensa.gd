@@ -12,6 +12,10 @@ const REFUERZOS := 18
 const NIDOS := [Vector3(-24, 0, -31), Vector3(23, 0, -29)]
 
 static var restantes := 0
+static var actual: Defensa
+
+var nidos: Array = []           # los dos tiradores de MG42 (para los objetivos)
+var migrada := -1               # traspaso de anfitrión: refuerzos que quedaban (no crear nidos)
 
 var _rng := RandomNumberGenerator.new()
 var _t_mortero := 22.0
@@ -20,8 +24,14 @@ var _nidos_listos := false
 
 
 func _ready() -> void:
+	actual = self
 	_rng.randomize()
-	restantes = REFUERZOS if not Game.modo_red else REFUERZOS / 2   # cooperativo: sin escuadras IA
+	restantes = REFUERZOS
+	if migrada >= 0:
+		restantes = migrada
+		_nidos_listos = true
+		_t_mortero = 8.0
+		_t_refuerzo = 20.0
 
 
 func _process(delta: float) -> void:
@@ -30,7 +40,7 @@ func _process(delta: float) -> void:
 	if not _nidos_listos:
 		_nidos_listos = true
 		for n in NIDOS:
-			_aleman(_cobertura_cerca(n, 6.0), "mg42", "fijo")
+			nidos.append(_aleman(_cobertura_cerca(n, 6.0), "mg42", "fijo"))
 	_t_mortero -= delta
 	if _t_mortero <= 0.0:
 		_t_mortero = _rng.randf_range(7.0, 12.0)
@@ -47,7 +57,7 @@ func _process(delta: float) -> void:
 		Red.anunciar("[REFUERZOS ALEMANES]", Game.COLOR_BAD)
 
 
-func _aleman(pos: Vector3, arma: String, rol: String) -> void:
+func _aleman(pos: Vector3, arma: String, rol: String) -> Enemy:
 	var e := Enemy.new()
 	e.arma = arma
 	e.rol = rol
@@ -56,6 +66,17 @@ func _aleman(pos: Vector3, arma: String, rol: String) -> void:
 	(enemigos if enemigos else get_parent()).add_child(e)
 	e.global_position = pos
 	e.rotation.y = PI
+	return e
+
+
+## Otro alemán toma la MG42 de un nido (nadie llegó a tomarlo a tiempo).
+func reponer_nido(k: int) -> void:
+	if not Navegacion.listo:
+		return
+	var e := _aleman(_cobertura_cerca(NIDOS[k], 6.0), "mg42", "fijo")
+	while nidos.size() <= k:
+		nidos.append(null)
+	nidos[k] = e
 
 
 func _cobertura_cerca(pos: Vector3, radio: float) -> Vector3:

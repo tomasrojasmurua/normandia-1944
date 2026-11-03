@@ -1,6 +1,7 @@
 extends StaticBody3D
 class_name AlemanRemoto
-## Un alemán visto en el celular de un INVITADO del cooperativo: un "títere".
+## Un alemán (o un compañero americano, si bando = "aliado") visto en el
+## celular de un INVITADO del cooperativo: un "títere".
 ## El alemán de verdad vive en el anfitrión; este solo lo imita (posición,
 ## giro, pose), moviéndose suave entre las posiciones que llegan 10 veces por
 ## segundo. Tiene formas de choque como los alemanes (capa 3: cuerpo y
@@ -9,8 +10,16 @@ class_name AlemanRemoto
 ## (Game.explode llama a hit) y para la ayuda de puntería táctil.
 
 var rid := 0
+var bando := "aleman"
 var arma := "kar98k"
 var dead := false
+# Solo los compañeros (para el HUD de la escuadra del invitado):
+var nombre := ""
+var escuadra := -1
+var puesto := -1
+var health := 100.0
+var max_health := 100.0
+var moviendo := false
 var cuerpo: SoldadoSprite
 var ultimo := 0.0                 # cuándo llegó la última posición (tiempo local)
 var _fotos: Array = []            # [tiempo local, pos, giro]
@@ -20,13 +29,17 @@ var _col_cabeza: CollisionShape3D
 
 
 func _ready() -> void:
-	add_to_group("enemies")
-	collision_layer = 4
-	collision_mask = 0
 	cuerpo = SoldadoSprite.new()
-	cuerpo.bando = "aleman"
+	cuerpo.bando = bando
 	cuerpo.arma = arma
 	add_child(cuerpo)
+	collision_mask = 0
+	if bando == "aliado":   # las balas del jugador atraviesan a los compañeros
+		collision_layer = 0
+		add_to_group("aliados_remotos")
+		return
+	add_to_group("enemies")
+	collision_layer = 4
 	# Forma 0 = cuerpo, forma 1 = cabeza (como en combatiente.gd)
 	_col_cuerpo = CollisionShape3D.new()
 	_capsula = CapsuleShape3D.new()
@@ -55,6 +68,7 @@ func recibir(t: float, pos: Vector3, giro: float, pose: String, andar: String) -
 		rotation.y = giro
 	cuerpo.pose = pose
 	cuerpo.andar = andar
+	moviendo = andar != ""
 
 
 func pos_cabeza() -> Vector3:
@@ -83,6 +97,7 @@ func morir(dir: Vector3, cabeza: bool) -> void:
 	if dead:
 		return
 	dead = true
+	health = 0.0
 	remove_from_group("enemies")
 	collision_layer = 0
 	cuerpo.andar = ""
@@ -104,6 +119,8 @@ func _process(_delta: float) -> void:
 		f = clampf((t - a[0]) / (b[0] - a[0]), 0.0, 1.0)
 	global_position = (a[1] as Vector3).lerp(b[1], f)
 	rotation.y = lerp_angle(a[2], b[2], f)
+	if bando == "aliado":
+		return
 	# La cabeza sigue a la pose (agachado no se le puede pegar igual)
 	var alto: float = {"reposo": 1.48, "pie": 1.48, "rodilla": 1.12, "agachado": 0.8}.get(cuerpo.pose, 1.48)
 	if absf(_capsula.height - alto) > 0.02:

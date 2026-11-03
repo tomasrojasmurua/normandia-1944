@@ -305,6 +305,7 @@ func _intentar_granada(dist: float) -> bool:
 	var v := (blanco - desde - 0.5 * Vector3(0, -9.8, 0) * t * t) / t
 	g.linear_velocity = v
 	g.angular_velocity = Vector3(randf_range(-8, 8), randf_range(-3, 3), randf_range(-8, 8))
+	Red.granada(desde, v)   # que los invitados la vean volar
 	Game.play_at("throw", desde, 0.0)
 	Red.anunciar("[¡GRANADA!]", Game.COLOR_BAD)
 	return true
@@ -342,4 +343,5 @@ func _die(dir: Vector3, headshot: bool, por_jugador := true) -> void:
 	cuerpo.andar = ""
 	cuerpo.morir(dir, headshot)
 	_soltar_arma(dir)
-	Red.aleman_muerto(self, dir, headshot)
+	Red.murio(self, dir, headshot)
+	Game.bajas += 1

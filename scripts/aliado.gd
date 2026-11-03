@@ -39,10 +39,13 @@ static func dar_orden(o: String) -> void:
 	orden = o
 	Game.say({"seguir": "[ESCUADRA: SÍGANME]", "avanzar": "[ESCUADRA: AVANCEN]",
 		"mantener": "[ESCUADRA: MANTENGAN POSICIÓN]"}.get(o, ""), Game.COLOR_GOOD)
+	if Red.es_invitado():   # mi escuadra la corre el anfitrión: que él la mande
+		Red.evento(["o", o])
+		return
 	# Que reaccionen enseguida (cada uno un poco desfasado); solo los del jugador
 	var i := 0
 	for a in Engine.get_main_loop().get_nodes_in_group("aliados"):
-		if a.escuadra != 0:
+		if a.escuadra != Escuadras.mi_escuadra:
 			continue
 		a._pensar_t = 0.2 + i * 0.35
 		a._espera_hasta = 0.0
@@ -173,7 +176,7 @@ func _pensar() -> void:
 			if Game.elapsed < _espera_hasta and not flanqueado:
 				return
 			var mio := global_position.distance_to(amenaza)
-			var propio := escuadra != 0   # las escuadras con IA se quedan en su sector
+			var propio := escuadra != Escuadras.mi_escuadra   # las otras escuadras se quedan en su sector
 			if not _ir(_buscar(func(p: Dictionary, viaje: float) -> float:
 					var avance := mio - amenaza.distance_to(p["pos"])
 					if viaje < 2.5 or viaje > 14.0 or avance < 2.5:
@@ -268,8 +271,10 @@ func _morir(dir: Vector3) -> void:
 	remove_from_group("aliados")
 	collision_layer = 0
 	collision_mask = 0
-	if escuadra == 0:    # de las otras escuadras no se avisa (serían demasiados mensajes)
+	if escuadra == Escuadras.mi_escuadra:    # de las otras no se avisa (serían demasiados)
 		Game.say("[%s CAÍDO]" % nombre, Game.COLOR_BAD)
 	cuerpo.andar = ""
 	cuerpo.morir(dir, false)
 	_soltar_arma(dir)
+	Game.caidos += 1
+	Red.murio(self, dir, false)

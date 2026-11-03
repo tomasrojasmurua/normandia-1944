@@ -1,9 +1,11 @@
 extends PanelBotones
 ## Pausa durante la misión: Esc en PC, botón "II" arriba a la derecha en el
 ## celular. Detiene el juego y ofrece continuar, cambiar el modo táctil o
-## volver al menú principal.
+## volver al menú principal. En el cooperativo NO detiene el juego (los demás
+## siguen jugando): solo abre el menú. Se esconde con la pantalla de fin.
 
 var _tactil := DisplayServer.is_touchscreen_available()
+var abierta := false
 
 
 func _ready() -> void:
@@ -17,7 +19,9 @@ func _process(_delta: float) -> void:
 
 
 func pausar(si: bool) -> void:
-	get_tree().paused = si
+	abierta = si
+	if not Game.modo_red:
+		get_tree().paused = si
 	if si:
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	elif not _tactil:
@@ -26,18 +30,20 @@ func pausar(si: bool) -> void:
 
 
 func _input(event: InputEvent) -> void:
+	if Objetivos.terminado != 0:
+		return
 	if event.is_action_pressed("ui_cancel") and not Game.warming:
-		pausar(not get_tree().paused)
+		pausar(not abierta)
 		get_viewport().set_input_as_handled()
 		return
 	super(event)
 
 
 func _botones() -> Array:
-	if Game.warming:
+	if Game.warming or Objetivos.terminado != 0:
 		return []
 	var s := size
-	if not get_tree().paused:
+	if not abierta:
 		return [["pausa", Rect2(s.x - 34, 6, 28, 22), "II", _tactil, ""]] if _tactil else []
 	var x := s.x / 2.0 - 110.0
 	var lista := [["seguir", Rect2(x, 140, 220, 26), "CONTINUAR", true, ""]]
@@ -68,7 +74,7 @@ func _pulsado(id: String) -> void:
 
 
 func _draw() -> void:
-	if get_tree().paused:
+	if abierta and Objetivos.terminado == 0:
 		draw_rect(Rect2(Vector2.ZERO, size), Color(Estilo.NEGRO, 0.6))
 		var panel := Rect2(size.x / 2.0 - 130, 90, 260, 228 if _tactil else 160)
 		Estilo.marco(self, panel, "chapa")

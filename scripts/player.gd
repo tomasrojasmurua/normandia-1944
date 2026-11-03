@@ -209,36 +209,67 @@ func shake(amount: float) -> void:
 	_shake = maxf(_shake, amount)
 
 
-## Al caer, como en Hamburger Hill: tomas el lugar del siguiente hombre vivo
-## de tu escuadra. La misión se reinicia solo si no queda nadie.
+## Al caer, como en Hamburger Hill: tomas el lugar del compañero vivo más
+## cercano de tu escuadra. Si no queda ninguno, vuelves desde la orilla con
+## un refuerzo de tu escuadra; si tampoco quedan, quedas fuera (y si todos los
+## jugadores están fuera, la misión fracasa: objetivos.gd).
+## En un invitado del cooperativo lo decide el anfitrión (Red.pedir_relevo).
+var esperando_relevo := false
+
+
 func _die() -> void:
 	dead = true
 	health = 0.0
 	weapons.visible = false
+	Game.caidos += 1
 	Game.say("[%s CAÍDO]" % nombre, Game.COLOR_BAD)
 	var donde := global_transform
+	esperando_relevo = true
 	await get_tree().create_timer(2.5).timeout
 	if not is_inside_tree():
 		return
 	_dejar_cuerpo(donde)
-	if Game.modo_red:   # cooperativo: vuelves como refuerzo desde la orilla
-		Game.say("[REFUERZO EN 5 S]", Game.COLOR_INFO)
+	if Red.es_invitado():
+		Red.pedir_relevo()
 		await get_tree().create_timer(5.0).timeout
-		if is_inside_tree():
-			_reaparecer()
+		if is_inside_tree() and dead and esperando_relevo:
+			_reaparecer()      # el anfitrión no contestó: a la orilla
 		return
 	var relevo := Escuadras.relevo_jugador()
-	if relevo == null:
-		Game.say("[TU ESCUADRA FUE ANIQUILADA]", Game.COLOR_BAD)
-		await get_tree().create_timer(2.5).timeout
-		get_tree().reload_current_scene()
-		return
-	_tomar_lugar(relevo)
+	if relevo:
+		_tomar_lugar(relevo)
+	elif Escuadras.gastar_refuerzo(Escuadras.mi_escuadra):
+		volver_desde_orilla()
+	else:
+		sin_relevo()
+
+
+## Sin compañeros vivos: refuerzo desde la orilla en 5 s.
+func volver_desde_orilla() -> void:
+	esperando_relevo = true
+	Game.say("[SIN COMPAÑEROS: LLEGAS CON UN REFUERZO EN 5 S]", Game.COLOR_INFO)
+	await get_tree().create_timer(5.0).timeout
+	if is_inside_tree() and dead:
+		_reaparecer()
+
+
+func sin_relevo() -> void:
+	esperando_relevo = false
+	Game.say("[TU ESCUADRA NO TIENE MÁS HOMBRES]", Game.COLOR_BAD)
 
 
 ## Pasa a manejar a este compañero: su lugar, su arma, su nombre y su cara.
 func _tomar_lugar(a: Aliado) -> void:
-	global_position = a.global_position
+	var pos := a.global_position
+	Escuadras.quitar_de_escuadra(a)
+	if Red.es_anfitrion():
+		Red.evento(["q", Red.actual.rid_de(a)])
+	a.queue_free()
+	tomar_lugar_en(pos, a.arma, a.nombre)
+
+
+func tomar_lugar_en(pos: Vector3, arma: String, nuevo_nombre: String) -> void:
+	global_position = pos
 	rotation.y = 0.0     # mirando hacia el búnker
 	head.rotation = Vector3.ZERO
 	head.position.y = STAND_HEAD
@@ -246,18 +277,17 @@ func _tomar_lugar(a: Aliado) -> void:
 	camera.v_offset = 0
 	_set_crouch(false)
 	velocity = Vector3.ZERO
-	var d := Armas.datos(a.arma)
-	weapons.equip(a.arma, int(d["mag"]), int(d["mag"]) * 3)
+	var d := Armas.datos(arma)
+	weapons.equip(arma, int(d["mag"]), int(d["mag"]) * 3)
 	weapons.visible = true
-	nombre = a.nombre
+	nombre = nuevo_nombre
 	health = max_health
 	_since_hit = 0.0
 	damage_flash = 0.0
 	hit_indicator = 0.0
 	grenades = maxi(grenades, 2)
-	Escuadras.quitar_de_escuadra(a)
-	a.queue_free()
 	dead = false
+	esperando_relevo = false
 	Game.say("[AHORA ERES %s]" % nombre, Game.COLOR_GOOD)
 
 
@@ -279,6 +309,7 @@ func _reaparecer() -> void:
 	hit_indicator = 0.0
 	grenades = maxi(grenades, 2)
 	dead = false
+	esperando_relevo = false
 	Game.say("[DE VUELTA AL COMBATE]", Game.COLOR_GOOD)
 
 

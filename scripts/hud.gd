@@ -119,8 +119,9 @@ func _draw() -> void:
 			draw_line(center + d * 3, center + d * 7, c, 1.0)
 	if _player.dead:
 		draw_rect(Rect2(Vector2.ZERO, s), Color(0, 0, 0, 0.45))
-		Estilo.texto_c(self, "HAS CAIDO", s.x / 2, top / 2 + 2, Estilo.ROJO, Estilo.TAM_GRANDE)
-		Estilo.texto_c(self, "REINICIANDO...", s.x / 2, top / 2 + 18, Estilo.CREMA)
+		Estilo.texto_c(self, "HAS CAÍDO", s.x / 2, top / 2 + 2, Estilo.ROJO, Estilo.TAM_GRANDE)
+		Estilo.texto_c(self, "ESPERANDO RELEVO..." if _player.esperando_relevo else "TU ESCUADRA NO TIENE MÁS HOMBRES",
+			s.x / 2, top / 2 + 18, Estilo.CREMA)
 
 	if Game.warming:   # pantalla de espera mientras se preparan los efectos
 		# Dibuja todas las letras una vez (tapadas por el negro): la fuente
@@ -139,6 +140,15 @@ func _draw() -> void:
 		Estilo.texto(self, Game.carga_texto, Vector2(4, 43), Color(Estilo.AMBAR_CLARO, 0.8))
 	if Game.modo_red:
 		Estilo.texto(self, Red.texto(), Vector2(4, 43), Color(Estilo.AMBAR_CLARO, 0.85))
+	# Objetivo de mi escuadra (y la barra de la carga / la toma, si va avanzando)
+	if Objetivos.actual and Objetivos.terminado == 0:
+		var oy := 57.0 if Game.modo_red else 43.0
+		var mio := Objetivos.mio()
+		Estilo.texto(self, Objetivos.texto(), Vector2(4, oy), Estilo.AMBAR_CLARO if not Objetivos.hecho[mio] else Estilo.VERDE_LED)
+		var pr: float = Objetivos.progreso[mio]
+		if pr > 0.0 and pr < 1.0:
+			draw_rect(Rect2(4, oy + 4, 120, 5), Color(Estilo.NEGRO, 0.7))
+			draw_rect(Rect2(5, oy + 5, 118 * pr, 3), Estilo.AMBAR)
 
 	# Arma en el suelo para recoger
 	var suelta := _player.pickup_near as ArmaSuelta
@@ -400,7 +410,7 @@ func _draw_escuadra(r: Rect2) -> void:
 		Estilo.marco(self, col, "chapa")
 		if i >= aliados.size() or aliados[i] == null or not is_instance_valid(aliados[i]):
 			continue
-		var a: Aliado = aliados[i]
+		var a = aliados[i]    # Aliado (o su títere, en un invitado del cooperativo)
 		_nombre_angosto(a.nombre, col.position.x + col.size.x / 2, col.position.y + 9,
 			Estilo.ROJO if a.dead else Estilo.CREMA, col.size.x - 6)
 		var face := Rect2(col.position + Vector2(1, 11), Vector2(col.size.x - 2, 35))

@@ -158,7 +158,7 @@ func _conectando() -> void:
 
 func _coop() -> void:
 	Estilo.texto(self, "COOPERATIVO", Vector2(X, 66), Estilo.CREMA, 33)
-	Estilo.texto(self, "PRUEBA: HASTA 4 JUGADORES CONTRA LA DEFENSA ALEMANA.", Vector2(X, 96), Estilo.AMBAR_CLARO)
+	Estilo.texto(self, "HASTA 4 JUGADORES: CADA UNO MANDA UNA ESCUADRA Y TIENE SU OBJETIVO.", Vector2(X, 96), Estilo.AMBAR_CLARO)
 	Estilo.texto(self, "UNO CREA LA SALA Y LES DICTA EL CÓDIGO A LOS DEMÁS.", Vector2(X, 110), Estilo.CREMA)
 
 

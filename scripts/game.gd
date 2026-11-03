@@ -27,7 +27,9 @@ const AJUSTES := "user://ajustes.cfg"
 var garra := false
 ## Disparo táctil "al soltar": mantener FUEGO apunta por la mira, soltarlo dispara.
 var disparo_soltar := false
-var modo_red := false         # prototipo del cooperativo (ver red.gd)
+var modo_red := false
+var bajas := 0        # alemanes abatidos en la misión (para la pantalla final)
+var caidos := 0       # americanos caídos (compañeros y jugadores)         # prototipo del cooperativo (ver red.gd)
 var sala := ""                # código de la sala (4 números)
 var prueba_carga := false     # menú "PRUEBA DE CARGA": playa llena (ver prueba_carga.gd)
 var soldados_3d := false       # true = modelos 3D (pesados); false = sprites
@@ -112,6 +114,8 @@ func _process(delta: float) -> void:
 ## Se llama al empezar una misión (y al reiniciar tras morir).
 func reset_mission() -> void:
 	elapsed = 0.0
+	bajas = 0
+	caidos = 0
 
 
 ## Soldados con sprites (liviano, por defecto) o con los modelos 3D (para comparar).

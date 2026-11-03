@@ -118,28 +118,33 @@ func _ready() -> void:
 		_sandbag_wall(Vector3(x, 0, -36.0), 4.0, 6, 2, 0.0, rng2)
 	_build_bags()
 
-	if Game.modo_red:
-		# Cooperativo: los alemanes de verdad solo existen en el anfitrión;
-		# los invitados ven títeres (AlemanRemoto) que manda el anfitrión.
-		# Sin escuadras con IA por ahora: solo los jugadores contra la defensa.
-		if not _soy_anfitrion():
-			var enemigos := get_parent().get_node_or_null("Enemies")
-			if enemigos:
-				enemigos.queue_free()
-		else:
-			get_parent().add_child.call_deferred(Defensa.new())
-		var p := get_parent().get_node_or_null("Player") as Player
-		if p:   # que no aparezcan todos en el mismo lugar
-			p.position.x += randf_range(-8.0, 8.0)
-			p.set_meta("inicio", p.position)
-			if Red.actual:
-				p.nombre = Red.actual.mi_nombre
+	# Cooperativo: la IA (alemanes, escuadras, defensa) solo existe en el
+	# anfitrión; los invitados ven títeres que él manda. Cada jugador manda la
+	# escuadra de su puesto y empieza en su sector de la playa.
+	Escuadras.mi_escuadra = Red.actual.puesto if Game.modo_red and Red.actual else 0
+	var con_ia := not Game.modo_red or _soy_anfitrion()
+	if not con_ia:
+		var enemigos := get_parent().get_node_or_null("Enemies")
+		if enemigos:
+			enemigos.queue_free()
 	else:
 		# Las cuatro escuadras americanas (la del jugador y tres con sargento IA)
 		get_parent().add_child.call_deferred(Escuadras.new())
 		# La defensa alemana: nidos de MG42, morteros y refuerzos
 		if not Game.prueba_carga:
 			get_parent().add_child.call_deferred(Defensa.new())
+	if not Game.prueba_carga:
+		get_parent().add_child.call_deferred(Objetivos.new())
+	var p := get_parent().get_node_or_null("Player") as Player
+	if p:
+		if Game.modo_red and Escuadras.mi_escuadra != 0:
+			var s: Vector2 = Escuadras.SECTORES[Escuadras.mi_escuadra]
+			p.position.x = (s.x + s.y) / 2.0 + randf_range(-3.0, 3.0)
+		elif Game.modo_red:
+			p.position.x += randf_range(-3.0, 3.0)
+		p.set_meta("inicio", p.position)
+		if Game.modo_red and Red.actual:
+			p.nombre = Red.actual.mi_nombre
 
 	# Mapa de caminos para la IA, con todo lo de arriba ya puesto
 	_hornear_navegacion.call_deferred()

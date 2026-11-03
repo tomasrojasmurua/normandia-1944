@@ -252,7 +252,7 @@ func tiro_ia(blanco: Node3D, prob: float, sonido_db: float) -> bool:
 		Game.tracer(from, end, Color(1.0, 0.8, 0.45))
 	else:
 		Game.tracer(from, end)
-		Red.tiro_aleman(self, from, end)   # en el cooperativo: que lo vean los invitados
+	Red.tiro_ia(self, from, end)   # en el cooperativo: que lo vean los invitados
 	cuerpo.disparo()
 	return acierta
 

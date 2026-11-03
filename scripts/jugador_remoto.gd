@@ -7,6 +7,7 @@ class_name JugadorRemoto
 ## distintos retrasos.
 
 var id := ""
+var escuadra := 1             # su puesto (la escuadra que manda)
 var arma := "garand"
 var dead := false             # (para la IA alemana del anfitrión)
 var cuerpo: SoldadoSprite

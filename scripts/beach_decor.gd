@@ -101,6 +101,8 @@ func _ready() -> void:
 	var rng3 := RandomNumberGenerator.new()
 	rng3.seed = seed_value + 6
 	Ambiente.crear(self, rng3)
+	# Telones a los costados: la batalla sigue más allá de la zona de juego
+	add_child(Telones.new())
 	# Tanques Sherman quemados en la arena (sirven de cobertura)
 	Ambiente.modelo(self, "sherman", Vector3(-22, 0, -7), 25.0, Vector3.ONE * 3.0, true, true)
 	Ambiente.modelo(self, "sherman", Vector3(21, 0, -15), -40.0, Vector3.ONE * 3.0, true, true)

@@ -1,0 +1,18 @@
+{
+ "telon_meseta": {
+  "horizonte": 0.05972434915773354,
+  "proporcion": 0.4251302083333333
+ },
+ "telon_playa_der": {
+  "horizonte": 0.33288770053475936,
+  "proporcion": 0.4869791666666667
+ },
+ "telon_playa_izq": {
+  "horizonte": 0.34342105263157896,
+  "proporcion": 0.4947916666666667
+ },
+ "telon_pueblo": {
+  "horizonte": 0.11077844311377245,
+  "proporcion": 0.4348958333333333
+ }
+}

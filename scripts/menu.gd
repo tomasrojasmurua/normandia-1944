@@ -12,6 +12,8 @@ var _codigo := ""             # código de sala que se está escribiendo
 var _tactil := DisplayServer.is_touchscreen_available()
 
 
+const LOGO := preload("res://assets/ui/logo.png")
+
 func _ready() -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	if Red.actual:   # volvió de una partida cooperativa: se sale de la sala
@@ -171,8 +173,9 @@ func _unirse() -> void:
 
 
 func _titulo() -> void:
-	Estilo.texto(self, "NORMANDY", Vector2(X, 66), Estilo.CREMA, 44)
-	Estilo.texto(self, "1944", Vector2(X + 2, 104), Estilo.AMBAR, 33)
+	# Logotipo (ChatGPT, tools/arte/telones.py): 200 px de ancho
+	var w := 200.0
+	draw_texture_rect(LOGO, Rect2(X - 4, 12, w, w * LOGO.get_height() / LOGO.get_width()), false)
 	Estilo.texto(self, "6 DE JUNIO DE 1944 - PLAYA OMAHA", Vector2(X + 2, 120), Color(Estilo.CREMA, 0.8))
 
 

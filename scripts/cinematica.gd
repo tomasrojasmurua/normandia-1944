@@ -43,7 +43,7 @@ const DATOS := {
 			"tarjeta": ["EL CANAL DE LA MANCHA", "6 DE JUNIO DE 1944 - 02:15"],
 			"subs": [[2.5, "", "CINCO MIL BARCOS CRUZAN EN SILENCIO."], [6.5, "", "NADIE DUERME."]],
 			"amb": {"mar": -8.0, "motor": -18.0}},
-		{"img": "", "dur": 4.0, "titulo": "NORMANDY 1944", "amb": {"mar": -24.0}},
+		{"img": "", "dur": 5.0, "logo": true, "amb": {"mar": -24.0}},
 	],
 	"omaha": [
 		{"img": "prologo_5", "dur": 10.0, "z": Vector2(1.0, 1.12), "c": [Vector2(0.5, 0.42), Vector2(0.46, 0.48)],
@@ -65,6 +65,7 @@ const DATOS := {
 	],
 }
 
+const LOGO := preload("res://assets/ui/logo.png")
 const BARRA := 40.0        # franjas negras de arriba y abajo
 const FUNDIDO := 0.6       # segundos de fundido a negro entre planos
 const TECLA := 0.045       # segundos por letra de la tarjeta
@@ -278,6 +279,13 @@ func _draw() -> void:
 		draw_texture_rect_region(tex, vista, Rect2(o, Vector2(w, h)), tinte)
 		_efectos(p, vista)
 		draw_texture_rect(_vineta, vista, false)
+	if p.get("logo", false):
+		var a := 1.0 - _fundido(p)
+		var lw := minf(size.x * 0.55, 420.0)
+		var lh := lw * LOGO.get_height() / LOGO.get_width()
+		var k2 := 1.0 + 0.04 * clampf(_t / p["dur"], 0.0, 1.0)      # se acerca apenas
+		var r := Rect2(size / 2.0 - Vector2(lw, lh) * k2 / 2.0, Vector2(lw, lh) * k2)
+		draw_texture_rect(LOGO, r, false, Color(1, 1, 1, a))
 	if p.has("titulo"):
 		var a := 1.0 - _fundido(p)
 		Estilo.texto_c(self, p["titulo"], size.x / 2.0, size.y / 2.0 + 8, Color(Estilo.AMBAR, a), 44)

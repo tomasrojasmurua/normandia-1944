@@ -142,8 +142,12 @@ func _draw() -> void:
 		draw_rect(Rect2(i * 14.0, 0, 14.0, s.y), Color(Estilo.NEGRO, a))
 
 	# Versión, abajo a la derecha (para saber si cargó la última)
-	var v := "V" + str(ProjectSettings.get_setting("application/config/version", "?"))
-	Estilo.texto(self, v, Vector2(s.x - 10 - Estilo.ancho_texto(v), s.y - 8), Color(Estilo.CREMA, 0.75))
+	# En una placa oscura y a pleno color, en píxeles enteros: nítida sobre la foto
+	var v := "VERSIÓN " + str(ProjectSettings.get_setting("application/config/version", "?"))
+	var w := Estilo.ancho_texto(v)
+	var placa := Rect2(floorf(s.x - w - 22), floorf(s.y - 24), ceilf(w + 16), 18)
+	Estilo.marco(self, placa, "hundido")
+	Estilo.texto(self, v, Vector2(placa.position.x + 8, placa.position.y + 13), Estilo.AMBAR_CLARO)
 	match pantalla:
 		"inicio":
 			_titulo()
@@ -158,8 +162,6 @@ func _draw() -> void:
 		"conectando":
 			_conectando()
 	_dibujar_botones()
-	Estilo.texto(self, "V%s" % ProjectSettings.get_setting("application/config/version"),
-		Vector2(s.x - 44, s.y - 8), Color(Estilo.CREMA, 0.4))
 
 
 func _entrar_sala(codigo: String) -> void:

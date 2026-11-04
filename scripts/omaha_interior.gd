@@ -37,6 +37,7 @@ static func construir(d: Node3D, rng: RandomNumberGenerator) -> void:
 	_setos(d, rng)
 	_pueblo(d, rng)
 	_bosque(d, rng)
+	_costados_meseta(d)
 	# Que nadie se caiga por el fondo de la meseta
 	var muro := StaticBody3D.new()
 	muro.position = Vector3(0, ARRIBA + 2.0, -214.0)
@@ -188,11 +189,11 @@ static func _setos(d: Node3D, rng: RandomNumberGenerator) -> void:
 	var filas := [[-97.0, [-30.0, 0.0, 28.0]], [-112.0, [-18.0, 12.0, 38.0]], [-128.0, [-36.0, -4.0, 24.0]]]
 	for fila in filas:
 		var z: float = fila[0]
-		var cortes: Array = [-54.0]
+		var cortes: Array = [-88.0]   # los setos siguen más allá de las paredes (decorado)
 		for h in fila[1]:
 			cortes.append(h - 2.0)
 			cortes.append(h + 2.0)
-		cortes.append(54.0)
+		cortes.append(88.0)
 		for k in range(0, cortes.size(), 2):
 			var a: float = cortes[k]
 			var b: float = cortes[k + 1]
@@ -250,7 +251,7 @@ static func _pueblo(d: Node3D, rng: RandomNumberGenerator) -> void:
 		# Escalones intermedios para avanzar de cobertura en cobertura
 		[-18.0, -178.0, 4.0, 0.0], [20.0, -179.0, 4.0, -5.0], [-6.0, -183.0, 3.0, 15.0],
 		# Flancos (los que llegan por los costados)
-		[-42.0, -166.0, 5.0, 75.0], [-40.0, -176.0, 4.0, 60.0], [42.0, -165.0, 5.0, -75.0], [40.0, -176.0, 4.0, -60.0],
+		[-35.0, -164.0, 5.0, 75.0], [-34.0, -176.0, 4.0, 60.0], [35.0, -163.0, 5.0, -75.0], [34.0, -176.0, 4.0, -60.0],
 		# Alrededor del cruce (los que lo defienden al principio de la fase)
 		[-6.0, -148.5, 3.0, 0.0], [6.5, -156.0, 3.0, 0.0], [-7.5, -155.5, 2.5, 90.0], [7.0, -147.0, 2.5, 90.0],
 	]
@@ -414,5 +415,27 @@ static func _bosque(d: Node3D, rng: RandomNumberGenerator) -> void:
 	for p in [[-44.0, -160.0], [44.0, -140.0], [24.0, -132.0], [-20.0, -186.0], [26.0, -184.0],
 			[-46.0, -120.0], [46.0, -108.0], [-8.0, -92.0]]:
 		arboles["arbol_1" if rng.randf() < 0.5 else "arbol_3"].append([Vector3(p[0], ARRIBA, p[1]), rng.randf_range(0.9, 1.1)])
+	for t in arboles:
+		Ambiente._plantas(d, t, arboles[t])
+
+
+## Más allá de las paredes de los costados (x ±40) la meseta no queda vacía:
+## árboles, granjas, restos de vehículos y carretas hasta donde llega la niebla.
+static func _costados_meseta(d: Node3D) -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 6061944
+	var arboles := {"arbol_1": [], "arbol_2": [], "arbol_3": []}
+	for lado in [-1.0, 1.0]:
+		for i in 26:
+			var t: String = ["arbol_1", "arbol_2", "arbol_3", "arbol_1"][rng.randi() % 4]
+			arboles[t].append([Vector3(lado * rng.randf_range(46.0, 90.0), ARRIBA, rng.randf_range(-200.0, -88.0)),
+				rng.randf_range(0.85, 1.25)])
+		_modelo(d, "casa", Vector3(lado * rng.randf_range(58.0, 66.0), ARRIBA, rng.randf_range(-125.0, -110.0)),
+			rng.randf_range(0.0, 360.0), 9.0, false)
+		_modelo(d, "carreta", Vector3(lado * rng.randf_range(48.0, 56.0), ARRIBA, rng.randf_range(-104.0, -92.0)),
+			rng.randf_range(0.0, 360.0), 3.6, false)
+	_modelo(d, "panzer", Vector3(-56.0, ARRIBA, -142.0), 120.0, 6.6, false)
+	_modelo(d, "camion", Vector3(58.0, ARRIBA, -164.0), 20.0, 6.0, false)
+	_modelo(d, "sherman", Vector3(52.0, ARRIBA, -128.0), -60.0, 6.0, false)
 	for t in arboles:
 		Ambiente._plantas(d, t, arboles[t])

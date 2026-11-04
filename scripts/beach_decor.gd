@@ -8,6 +8,11 @@ extends Node3D
 @export var hedgehog_count := 18
 @export var area := Vector2(60, 30)
 @export var seed_value := 1944
+
+## Ancho jugable: de −LIMITE_X a +LIMITE_X (paredes invisibles a los costados).
+## Más allá hay una franja de decorado hasta el telón.
+const LIMITE_X := 40.0
+var _erizos: Array = []      # transformaciones de todos los erizos (se dibujan juntos)
 const ALEMANES_EXTRA := 13
 
 const TEX := "res://assets/texturas/textura_%s.png"
@@ -124,7 +129,9 @@ func _ready() -> void:
 		_sandbag_wall(Vector3(x, 0, -48.0 + absf(x) * 0.05), 5.0, 6, 2, 0.0, rng2)
 	for x in [-34.0, -14.0, 14.0, 34.0]:
 		_sandbag_wall(Vector3(x, 0, -36.0), 4.0, 6, 2, 0.0, rng2)
+	_costados(rng2)
 	_build_bags()
+	_dibujar_erizos()
 
 	# Cooperativo: la IA (alemanes, escuadras, defensa) solo existe en el
 	# anfitrión; los invitados ven títeres que él manda. Cada jugador manda la
@@ -171,7 +178,7 @@ func _exit_tree() -> void:
 
 
 func _hornear_navegacion() -> void:
-	Navegacion.hornear(get_parent(), AABB(Vector3(-52, -2, -208), Vector3(104, 34, 221)))
+	Navegacion.hornear(get_parent(), AABB(Vector3(-LIMITE_X, -2, -208), Vector3(LIMITE_X * 2.0, 34, 221)))
 	if not Game.prueba_carga and (not Game.modo_red or _soy_anfitrion()):
 		# Defensa alemana: los 7 de la escena + 13 en las trincheras (20 en total)
 		var rng := RandomNumberGenerator.new()
@@ -223,35 +230,67 @@ func _add_bluffs() -> void:
 ## Erizo checo: tres vigas de acero en ángulo (perfil L) cruzadas en el centro,
 ## perpendiculares entre sí, unidas con cartelas. Se apoya sobre tres puntas y
 ## las otras tres apuntan hacia arriba (por eso la diagonal (1,1,1) va vertical).
-func _add_hedgehog(pos: Vector3, yaw: float) -> void:
+func _add_hedgehog(pos: Vector3, yaw: float, choque := true) -> void:
 	var largo := 2.3
 	var ala := 0.13       # ancho de cada ala del perfil L
-	var espesor := 0.022
-	var root := StaticBody3D.new()
 	var parado := Basis(Quaternion(Vector3.ONE.normalized(), Vector3.UP))
-	root.transform = Transform3D(Basis(Vector3.UP, yaw) * parado,
+	var t := Transform3D(Basis(Vector3.UP, yaw) * parado,
 		pos + Vector3(0, largo / (2.0 * sqrt(3.0)) - 0.06, 0))   # un poco hundido en la arena
+	_erizos.append(t)
+	if not choque:
+		return
+	var root := StaticBody3D.new()
+	root.transform = t
 	add_child(root)
 	var ejes := [Vector3.RIGHT, Vector3.UP, Vector3.BACK]
 	var beam_shape := BoxShape3D.new()
 	beam_shape.size = Vector3(ala, ala, largo)
 	for k in 3:
+		var col := CollisionShape3D.new()
+		col.shape = beam_shape
+		col.basis = Basis(ejes[(k + 1) % 3], ejes[(k + 2) % 3], ejes[k])
+		root.add_child(col)
+
+
+## La malla de un erizo (tres vigas en L y las cartelas), hecha una vez.
+func _malla_erizo() -> Mesh:
+	var largo := 2.3
+	var ala := 0.13
+	var espesor := 0.022
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var ejes := [Vector3.RIGHT, Vector3.UP, Vector3.BACK]
+	var caja := func(tam: Vector3, tr: Transform3D) -> void:
+		var bm := BoxMesh.new()
+		bm.size = tam
+		st.append_from(bm, 0, tr)
+	for k in 3:
 		var eje: Vector3 = ejes[k]
 		var u: Vector3 = ejes[(k + 1) % 3]
 		var v: Vector3 = ejes[(k + 2) % 3]
 		var b := Basis(u, v, eje)   # la viga corre a lo largo de "eje" (z local)
-		# Ala 1 (plancha en el plano eje-u) y ala 2 (plano eje-v): forman la L
-		_plate(root, b, Vector3(ala, espesor, largo), u * (ala / 2.0 - 0.03) - v * 0.03)
-		_plate(root, b, Vector3(espesor, ala, largo), v * (ala / 2.0 - 0.03) - u * 0.03)
-		var col := CollisionShape3D.new()
-		col.shape = beam_shape
-		col.basis = b
-		root.add_child(col)
-	# Cartelas (planchas que unen las vigas en el centro) y algo de óxido extra
+		caja.call(Vector3(ala, espesor, largo), Transform3D(b, u * (ala / 2.0 - 0.03) - v * 0.03))
+		caja.call(Vector3(espesor, ala, largo), Transform3D(b, v * (ala / 2.0 - 0.03) - u * 0.03))
 	for k in 3:
 		var e: Vector3 = ejes[k]
-		var g := Game.box(root, Vector3(0.34, 0.34, 0.015), Vector3.ZERO, _steel)
-		g.basis = Basis(ejes[(k + 1) % 3], ejes[(k + 2) % 3], e).rotated(e, PI / 4.0)
+		caja.call(Vector3(0.34, 0.34, 0.015), Transform3D(Basis(ejes[(k + 1) % 3], ejes[(k + 2) % 3], e).rotated(e, PI / 4.0), Vector3.ZERO))
+	var m := st.commit()
+	m.surface_set_material(0, _steel)
+	return m
+
+
+## Dibuja todos los erizos (jugables y de decorado) en una sola llamada.
+func _dibujar_erizos() -> void:
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.mesh = _malla_erizo()
+	mm.instance_count = _erizos.size()
+	for i in _erizos.size():
+		mm.set_instance_transform(i, _erizos[i])
+	var mi := MultiMeshInstance3D.new()
+	mi.multimesh = mm
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(mi)
 
 
 func _plate(parent: Node3D, b: Basis, size: Vector3, offset: Vector3) -> void:
@@ -268,7 +307,7 @@ func _plate(parent: Node3D, b: Basis, size: Vector3, offset: Vector3) -> void:
 ## "filas" sacos de fondo, con pequeñas diferencias de giro y tamaño para que
 ## no se vea perfecto. La colisión es una sola caja del tamaño del muro.
 func _sandbag_wall(center: Vector3, length: float, courses: int, rows: int, yaw_deg: float,
-		rng: RandomNumberGenerator) -> void:
+		rng: RandomNumberGenerator, solido := true) -> void:
 	var bag_len := 0.62
 	var bag_h := 0.15
 	var bag_d := 0.36
@@ -291,6 +330,8 @@ func _sandbag_wall(center: Vector3, length: float, courses: int, rows: int, yaw_
 				var forma := Basis(Vector3.BACK, PI / 2.0) * Basis.from_scale(
 					Vector3(bag_h * s.y, bag_len * 0.5 * s.x, bag_d * s.z))
 				_bags.append(Transform3D(wall * giro * forma, center + wall * local))
+	if not solido:
+		return      # decorado lejano: solo los sacos, sin choque ni cobertura
 	var body := StaticBody3D.new()
 	body.transform = Transform3D(wall, center + Vector3(0, courses * bag_h * 0.92 / 2.0, 0))
 	add_child(body)
@@ -337,3 +378,55 @@ func _add_box(pos: Vector3, box_size: Vector3, mat: Material, rot_deg := Vector3
 	col.shape = shape
 	body.add_child(col)
 	return body
+
+
+
+# ================================================================ costados
+
+## La playa jugable va de −40 a +40. Los carriles de los costados (donde
+## avanzan las escuadras de Kowalski y Reyes) se llenan de obstáculos para
+## cubrirse; más allá de las paredes invisibles sigue el decorado (erizos,
+## postes, sacos, restos) hasta el telón, para que no se vea el fin del mundo.
+func _costados(rng: RandomNumberGenerator) -> void:
+	# Paredes invisibles (capa 7: paran a la gente, no a las balas ni la vista)
+	for lado in [-1.0, 1.0]:
+		var muro := StaticBody3D.new()
+		muro.collision_layer = 64
+		muro.collision_mask = 0
+		muro.position = Vector3(lado * (LIMITE_X + 0.5), 10.0, -95.0)
+		var col := CollisionShape3D.new()
+		var forma := BoxShape3D.new()
+		forma.size = Vector3(1.0, 40.0, 250.0)
+		col.shape = forma
+		muro.add_child(col)
+		add_child(muro)
+	# Carriles de los costados (x 24…38): erizos, postes y parapetos
+	for lado in [-1.0, 1.0]:
+		for i in 9:
+			var pos := Vector3(lado * rng.randf_range(24.0, 38.0), 0, rng.randf_range(-30.0, -3.0))
+			_add_hedgehog(pos, rng.randf() * TAU)
+			Coberturas.agregar_erizo(pos)
+		for i in 5:
+			var p := Vector3(lado * rng.randf_range(22.0, 38.0), 0, rng.randf_range(-9.0, 2.0))
+			var tilt := Vector3(rng.randf_range(-25, -10), 0, rng.randf_range(-12, 12))
+			_add_box(p + Vector3(0, 1.0, 0), Vector3(0.22, 2.6, 0.22), _wood, tilt)
+		_sandbag_wall(Vector3(lado * 31.0, 0, -14.0), 3.0, 5, 2, lado * 12.0, rng)
+		_sandbag_wall(Vector3(lado * 36.0, 0, -24.0), 3.0, 5, 2, -lado * 8.0, rng)
+		_sandbag_wall(Vector3(lado * 27.0, 0, -6.0), 2.5, 4, 2, lado * 5.0, rng)
+	# Decorado más allá de las paredes (sin choque: no se llega)
+	for lado in [-1.0, 1.0]:
+		for i in 22:
+			var pos := Vector3(lado * rng.randf_range(LIMITE_X + 2.0, 95.0), 0, rng.randf_range(-48.0, 4.0))
+			_add_hedgehog(pos, rng.randf() * TAU, false)
+		for i in 10:
+			var p := Vector3(lado * rng.randf_range(LIMITE_X + 2.0, 90.0), 0, rng.randf_range(-12.0, 3.0))
+			var tilt := Vector3(rng.randf_range(-25, -10), 0, rng.randf_range(-12, 12))
+			Game.box(self, Vector3(0.22, 2.6, 0.22), p + Vector3(0, 1.0, 0), _wood, tilt)
+		for k in 4:
+			var c := Vector3(lado * rng.randf_range(48.0, 85.0), 0, rng.randf_range(-48.0, -30.0))
+			_sandbag_wall(c, rng.randf_range(4.0, 7.0), 5, 2, rng.randf_range(-15.0, 15.0), rng, false)
+		# Restos grandes: un Sherman quemado y una lancha varada por lado
+		Ambiente.modelo(self, "sherman", Vector3(lado * rng.randf_range(52.0, 70.0), 0, rng.randf_range(-24.0, -8.0)),
+			rng.randf_range(0.0, 360.0), Vector3.ONE * 3.0, false)
+		Ambiente.modelo(self, "higgins", Vector3(lado * rng.randf_range(55.0, 80.0), -0.7, rng.randf_range(12.0, 17.0)),
+			rng.randf_range(70.0, 110.0), Vector3.ONE * 5.8, false)

@@ -193,6 +193,7 @@ func throw_grenade() -> void:
 	g.linear_velocity = fwd * 13.0 + Vector3.UP * 3.5 + velocity * 0.5
 	g.angular_velocity = Vector3(randf_range(-8, 8), randf_range(-8, 8), randf_range(-8, 8))
 	Game.say("[GRANADA!]")
+	g.del_jugador = true
 
 
 ## Para los soldados de IA: dónde apuntar y cuánto cuesta pegarte.
@@ -237,6 +238,7 @@ func casi(dist: float) -> void:
 	supresion = minf(supresion + 0.18 * f, 1.0)
 	shake(0.12 * f)
 	Game.play("zumbido", -8.0 + 6.0 * f, randf_range(0.85, 1.2))
+	Fragor.casi(global_position)
 
 
 func shake(amount: float) -> void:

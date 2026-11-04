@@ -135,15 +135,12 @@ func _explosion(pos: Vector3) -> void:
 	_bocanadas.append(b)
 	b.global_position = pos + Vector3(0, 1.5, 0)
 	b.restart()
-	Game.play_at("explosion", pos, 2.0)
+	Game.play_at("explosion_lejos", pos, 6.0)
 
 
 ## Ráfaga lejana de ametralladora: varios tiros seguidos.
 func _rafaga(pos: Vector3) -> void:
-	var n := _rng.randi_range(4, 9)
-	for i in n:
-		get_tree().create_timer(i * 0.07).timeout.connect(func() -> void:
-			Game.play_at("rifle_far", pos, -2.0))
+	Game.play_at("mg42_lejos", pos, 4.0)
 
 
 func _columna(pos: Vector3) -> void:

@@ -356,6 +356,8 @@ func hit(amount: float, headshot: bool, pos: Vector3, dir: Vector3, por_jugador 
 		amenaza = global_position - dir * 20.0     # sabe más o menos de dónde vino
 	if health <= 0.0:
 		_die(dir, headshot, por_jugador)
+	else:
+		Fragor.aleman_herido(global_position)
 
 
 func _die(dir: Vector3, headshot: bool, por_jugador := true) -> void:
@@ -373,6 +375,7 @@ func _die(dir: Vector3, headshot: bool, por_jugador := true) -> void:
 	cuerpo.andar = ""
 	cuerpo.morir(dir, headshot)
 	Game.cuerpo_caido(self)
+	Fragor.muerte(global_position, false)
 	_soltar_arma(dir)
 	Red.murio(self, dir, headshot)
 	Game.bajas += 1

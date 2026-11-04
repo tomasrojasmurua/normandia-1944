@@ -60,6 +60,12 @@ func _ready() -> void:
 		disparo_soltar = cfg.get_value("controles", "disparo_soltar", false)
 		soldados_3d = cfg.get_value("graficos", "soldados_3d", false)
 	_build_sounds()
+	_cargar_archivos()
+	# Limitador en la salida: con muchas explosiones juntas no se satura
+	if AudioServer.get_bus_effect_count(0) == 0:
+		var lim := AudioEffectHardLimiter.new()
+		lim.ceiling_db = -0.5
+		AudioServer.add_bus_effect(0, lim)
 	_crear_marcas()
 	for i in 10:
 		var p := AudioStreamPlayer.new()
@@ -238,11 +244,12 @@ func say(text: String, color: Color = COLOR_INFO) -> void:
 # ---------------------------------------------------------------- sonido
 
 func play(sound: String, volume_db := 0.0, pitch := 1.0) -> void:
-	if not _sounds.has(sound):
+	var st := _stream(sound)
+	if st == null:
 		return
 	var p := _players[_next_player]
 	_next_player = (_next_player + 1) % _players.size()
-	p.stream = _sounds[sound]
+	p.stream = st
 	p.volume_db = volume_db
 	p.pitch_scale = pitch
 	p.play()
@@ -252,7 +259,10 @@ func play(sound: String, volume_db := 0.0, pitch := 1.0) -> void:
 ## se reciclan (antes se creaba y borraba uno por disparo: en el navegador del
 ## celular eso cuesta y trababa el juego en los tiroteos).
 func play_at(sound: String, pos: Vector3, volume_db := 0.0) -> void:
-	if not _sounds.has(sound):
+	var cam := get_viewport().get_camera_3d()
+	var lejos := cam != null and cam.global_position.distance_to(pos) > 55.0
+	var st := _stream(sound, lejos)
+	if st == null:
 		return
 	if _players_3d.is_empty():
 		for i in 16:
@@ -270,11 +280,80 @@ func play_at(sound: String, pos: Vector3, volume_db := 0.0) -> void:
 			_next_3d = (_next_3d + i) % _players_3d.size()
 			break
 	_next_3d = (_next_3d + 1) % _players_3d.size()
-	p.stream = _sounds[sound]
+	p.stream = st
 	p.volume_db = volume_db
 	p.pitch_scale = _rng.randf_range(0.92, 1.06)
 	p.global_position = pos
 	p.play()
+
+
+## Sonidos grabados (ElevenLabs, tools/audio/sonidos.py): nombre -> variantes.
+## Si un sonido tiene archivo, se usa en vez del generado con código; con
+## varias variantes se elige una al azar. ALIAS: los nombres viejos que ahora
+## suenan con un archivo.
+const ARCHIVOS := {
+	"explosion_cerca": 3, "explosion_lejos": 2, "silbido_proyectil": 2, "bala_pasa": 3,
+	"impacto_arena": 2, "mg42_lejos": 1, "rampa": 1, "maquina_escribir": 1,
+	"grito_aleman": 4, "grito_medico": 3, "grito_herido": 3, "muerte": 3,
+}
+const ALIAS := {"explosion": "explosion_cerca", "silbido": "silbido_proyectil", "zumbido": "bala_pasa"}
+var _archivos := {}
+
+
+func _cargar_archivos() -> void:
+	for n in ARCHIVOS:
+		var lista: Array = []
+		var k: int = ARCHIVOS[n]
+		for i in k:
+			var ruta := "res://assets/sonidos/%s.ogg" % (n if k == 1 else "%s_%d" % [n, i + 1])
+			if ResourceLoader.exists(ruta):
+				lista.append(load(ruta))
+		if not lista.is_empty():
+			_archivos[n] = lista
+
+
+## El sonido a tocar: una variante grabada si hay, si no el generado.
+## `lejos`: para las explosiones, la versión lejana.
+func _stream(sound: String, lejos := false) -> AudioStream:
+	var n: String = ALIAS.get(sound, sound)
+	if n == "explosion_cerca" and lejos:
+		n = "explosion_lejos"
+	# Una variante en particular: "grito_aleman_3"
+	var corte := n.rfind("_")
+	if not _archivos.has(n) and corte > 0 and n.substr(corte + 1).is_valid_int():
+		var base := n.substr(0, corte)
+		var i := int(n.substr(corte + 1)) - 1
+		if _archivos.has(base) and i >= 0 and i < (_archivos[base] as Array).size():
+			return _archivos[base][i]
+	if _archivos.has(n):
+		var l: Array = _archivos[n]
+		return l[_rng.randi() % l.size()]
+	return _sounds.get(sound)
+
+
+## Puente de sonido: el ambiente de la cinemática sigue sonando mientras carga
+## la misión (si no, hay unos segundos de silencio); Fragor lo retoma.
+var puente: AudioStreamPlayer
+
+
+func seguir_sonando(origen: AudioStreamPlayer) -> void:
+	if puente == null:
+		puente = AudioStreamPlayer.new()
+		add_child(puente)
+	puente.stream = origen.stream
+	puente.volume_db = origen.volume_db
+	puente.play(origen.get_playback_position())
+
+
+## Música o ambiente (archivo entero, para las cinemáticas y el ambiente).
+func pista(nombre: String, bucle := false) -> AudioStream:
+	var ruta := "res://assets/sonidos/%s.ogg" % nombre
+	if not ResourceLoader.exists(ruta):
+		return null
+	var st: AudioStream = load(ruta)
+	if st is AudioStreamOggVorbis:
+		(st as AudioStreamOggVorbis).loop = bucle
+	return st
 
 
 func _build_sounds() -> void:

@@ -362,6 +362,7 @@ func _morir(dir: Vector3) -> void:
 	cuerpo.andar = ""
 	cuerpo.morir(dir, false)
 	Game.cuerpo_caido(self)
+	Fragor.muerte(global_position, true)
 	_soltar_arma(dir)
 	Game.caidos += 1
 	Red.murio(self, dir, false)

@@ -5,7 +5,8 @@ class_name Cinematica
 ## pixelada (assets/cinematicas/, con tools/arte/cinematicas.py) con un
 ## movimiento lento de cámara, efectos encima (lluvia, farol, fogonazos,
 ## sacudidas, grano), una tarjeta escrita a máquina con lugar y hora, y
-## subtítulos con el retrato de quien habla. El sonido se genera con código.
+## subtítulos con el retrato de quien habla. Música y ambientes grabados
+## (assets/sonidos/, ver tools/audio/sonidos.py) y efectos de Game.
 ##
 ## Se salta tocando dos veces. Al terminar va al mapa (prólogo) o empieza la
 ## misión. Solo jugando solo (en el cooperativo no hay cinemáticas).
@@ -19,7 +20,11 @@ class_name Cinematica
 ##   subs           [segundo, quién, texto]; quién "" = narrador; "@0".."@2" = los
 ##                  hombres que elegiste en la pantalla previa
 ##   fx             "lluvia", "farol", "fogonazos", "sacudida", "oscuro"
-##   amb            ambiente: {"lluvia": dB, "mar": dB, "motor": dB}
+##   amb            ambientes en bucle {nombre: dB}: assets/sonidos/amb_<nombre>.ogg
+##                  (lluvia_carpa, puerto, lancha, playa_batalla, campo_batalla)
+##   amb_rapido     los ambientes cambian de golpe (no con fundido)
+##   musica         [pista, dB]: pista nueva ("musica_prologo"), "" = sigue la
+##                  que suena (solo cambia el volumen), "corte" = se corta en seco
 ##   sonidos        [segundo, sonido de Game, dB, tono]
 
 const DATOS := {
@@ -28,40 +33,44 @@ const DATOS := {
 			"tarjeta": ["SUR DE INGLATERRA", "5 DE JUNIO DE 1944 - 18:40"],
 			"subs": [[3.0, "", "LLUEVE DESDE HACE TRES DÍAS."],
 				[6.0, "", "AYER EL MANDO APLAZÓ LA INVASIÓN 24 HORAS."]],
-			"fx": ["lluvia"], "amb": {"lluvia": -8.0}},
+			"fx": ["lluvia"], "amb": {"lluvia_carpa": -2.0}, "musica": ["musica_prologo", -10.0]},
 		{"img": "prologo_2", "dur": 12.0, "z": Vector2(1.15, 1.4), "c": [Vector2(0.6, 0.58), Vector2(0.64, 0.62)],
 			"subs": [[1.0, "MURPHY", "QUERIDA RUTH: NO PUEDO DECIRTE DÓNDE ESTOY."],
 				[4.5, "MURPHY", "LOS MUCHACHOS ESTÁN BIEN. DELUCA NO PARA DE HABLAR."],
 				[8.0, "MURPHY", "NO TE PREOCUPES POR MÍ. TE ESCRIBO PRONTO."]],
-			"fx": ["farol"], "amb": {"lluvia": -20.0}},
+			"fx": ["farol"], "amb": {"lluvia_carpa": -14.0}, "musica": ["", -6.0]},
 		{"img": "prologo_3", "dur": 10.0, "z": Vector2(1.3, 1.0), "c": [Vector2(0.72, 0.62), Vector2(0.5, 0.5)],
 			"tarjeta": ["PUERTO DE PORTLAND", "5 DE JUNIO DE 1944 - 21:30"],
 			"subs": [[3.0, "", "LLEGA LA ORDEN: EMBARCAR."],
 				[6.0, "CORONEL", "LA INVASIÓN ES MAÑANA, SEÑORES. BUENA SUERTE."]],
-			"amb": {"mar": -14.0}, "sonidos": [[1.5, "reload", -14.0, 0.5], [4.5, "reload", -16.0, 0.45]]},
+			"amb": {"puerto": -4.0}, "musica": ["", -12.0]},
 		{"img": "prologo_4", "dur": 11.0, "z": Vector2(1.0, 1.15), "c": [Vector2(0.5, 0.55), Vector2(0.6, 0.45)],
 			"tarjeta": ["EL CANAL DE LA MANCHA", "6 DE JUNIO DE 1944 - 02:15"],
 			"subs": [[2.5, "", "CINCO MIL BARCOS CRUZAN EN SILENCIO."], [6.5, "", "NADIE DUERME."]],
-			"amb": {"mar": -8.0, "motor": -18.0}},
-		{"img": "", "dur": 5.0, "logo": true, "amb": {"mar": -24.0}},
+			"amb": {"lancha": -14.0}, "musica": ["", -5.0]},
+		{"img": "", "dur": 6.0, "logo": true, "amb": {"lancha": -30.0}, "musica": ["", -4.0]},
 	],
 	"omaha": [
 		{"img": "prologo_5", "dur": 10.0, "z": Vector2(1.0, 1.12), "c": [Vector2(0.5, 0.42), Vector2(0.46, 0.48)],
 			"tarjeta": ["PLAYA OMAHA - SECTOR DOG GREEN", "6 DE JUNIO DE 1944 - 06:25"],
 			"subs": [[3.0, "", "EL BOMBARDEO NAVAL PASA SOBRE LAS LANCHAS."],
 				[6.5, "@0", "¿ESOS SON NUESTROS BARCOS? NO SE VE NADA EN LA PLAYA."]],
-			"fx": ["fogonazos"], "amb": {"mar": -6.0, "motor": -12.0},
-			"sonidos": [[1.2, "explosion", -18.0, 0.5], [4.0, "explosion", -16.0, 0.55], [7.5, "explosion", -18.0, 0.5]]},
+			"fx": ["fogonazos"], "amb": {"lancha": -4.0, "playa_batalla": -20.0}, "musica": ["musica_omaha", -9.0],
+			"sonidos": [[1.2, "explosion_lejos", -4.0, 1.0], [4.0, "explosion_lejos", -2.0, 0.9], [7.5, "explosion_lejos", -4.0, 1.0]]},
 		{"img": "prologo_5", "dur": 10.0, "z": Vector2(1.7, 1.9), "c": [Vector2(0.5, 0.8), Vector2(0.5, 0.78)],
 			"subs": [[0.5, "TIMONEL", "¡UN MINUTO!"],
 				[2.6, "MURPHY", "¡CABEZAS ABAJO! CUANDO BAJE LA RAMPA, NO SE DETENGAN."],
 				[5.8, "@1", "PADRE NUESTRO, QUE ESTÁS EN LOS CIELOS..."],
 				[8.0, "@2", "¡AGÁRRENSE!"]],
-			"fx": ["fogonazos", "sacudida"], "amb": {"mar": -4.0, "motor": -8.0},
-			"sonidos": [[1.0, "explosion", -12.0, 0.6], [4.6, "zumbido", -8.0, 1.0], [6.2, "hit", -4.0, 0.8],
-				[6.5, "hit", -6.0, 0.9], [6.9, "zumbido", -6.0, 1.1], [8.4, "explosion", -6.0, 0.7]]},
-		{"img": "", "dur": 3.0, "subs": [[0.2, "MURPHY", "¡RAMPA!"]], "amb": {"mar": -10.0},
-			"sonidos": [[0.9, "reload", 0.0, 0.4], [1.3, "rifle_far", -4.0, 0.9], [1.6, "rifle_far", -6.0, 1.0]]},
+			"fx": ["fogonazos", "sacudida"], "amb": {"lancha": -3.0, "playa_batalla": -9.0}, "musica": ["", -4.0],
+			"sonidos": [[0.2, "silbido_proyectil", -6.0, 1.0], [1.4, "explosion_cerca", -7.0, 1.0],
+				[3.2, "mg42_lejos", -6.0, 1.0], [4.6, "bala_pasa", -4.0, 1.0], [6.2, "hit", -4.0, 0.8],
+				[6.5, "hit", -6.0, 0.9], [6.9, "bala_pasa", -4.0, 1.1], [7.0, "grito_medico", -14.0, 1.0],
+				[7.6, "silbido_proyectil", -4.0, 1.0], [8.6, "explosion_cerca", -5.0, 1.0]]},
+		# "¡RAMPA!": la música se corta, la rampa cae y entra la playa de golpe
+		{"img": "", "dur": 3.0, "subs": [[0.2, "MURPHY", "¡RAMPA!"]], "amb": {"playa_batalla": 0.0},
+			"musica": ["corte", 0.0], "amb_rapido": true,
+			"sonidos": [[0.5, "rampa", 2.0, 1.0], [1.6, "mg42_lejos", -2.0, 1.0], [2.2, "bala_pasa", -4.0, 1.0]]},
 	],
 }
 
@@ -80,6 +89,10 @@ var _imagenes := {}
 var _retratos := {}
 var _equipo: Array = []
 var _amb := {}                   # nombre -> AudioStreamPlayer
+var _musica: AudioStreamPlayer
+var _musica_db := -60.0
+var _tecla: AudioStreamPlayer      # máquina de escribir de la tarjeta
+var _plano_visto := -1
 var _letras := 0
 var _sonados := {}
 var _saltar := 0.0
@@ -121,19 +134,27 @@ func _process(delta: float) -> void:
 	_saltar = maxf(_saltar - delta, 0.0)
 	_flash = maxf(_flash - delta * 3.0, 0.0)
 	var p: Dictionary = _planos[_i]
+	if _plano_visto != _i:
+		_plano_visto = _i
+		_empieza_plano(p)
 	# Letras de la tarjeta (con sonido de máquina de escribir)
 	var total := _total_letras(p)
 	var debe := mini(int(maxf(_t - 0.4, 0.0) / TECLA), total)
 	if debe > _letras:
-		Game.play("click", -16.0, _rng.randf_range(1.6, 2.2))
+		if _tecla.stream == null:
+			Game.play("click", -16.0, _rng.randf_range(1.6, 2.2))
+		elif not _tecla.playing:
+			_tecla.play()
 		_letras = debe
+	if _letras >= total and _tecla.playing and _t > 0.5:
+		_tecla.stop()
 	# Sonidos del plano
 	for k in p.get("sonidos", []).size():
 		var s: Array = p["sonidos"][k]
 		if _t >= s[0] and not _sonados.has(k):
 			_sonados[k] = true
 			Game.play(s[1], s[2], s[3])
-			if s[1] == "explosion" and "fogonazos" in p.get("fx", []):
+			if s[1].begins_with("explosion") and "fogonazos" in p.get("fx", []):
 				_flash = 0.5
 	# Fogonazos sueltos de los barcos
 	if "fogonazos" in p.get("fx", []) and _rng.randf() < delta * 0.5:
@@ -158,8 +179,13 @@ func _terminar() -> void:
 	if _terminada:
 		return
 	_terminada = true
+	# El ambiente de la playa sigue sonando mientras carga la misión
+	if despues == "mision" and _amb.has("playa_batalla") and _amb["playa_batalla"].volume_db > -20.0:
+		Game.seguir_sonando(_amb["playa_batalla"])
 	for a in _amb.values():
 		a.stop()
+	if _musica:
+		_musica.stop()
 	if despues == "mapa":
 		Game.ir_al_mapa()
 	else:
@@ -181,19 +207,46 @@ func _input(event: InputEvent) -> void:
 
 # ================================================================ sonido
 
-## Ambientes en bucle (lluvia, mar, motor de lancha), generados una vez.
+## Ambientes en bucle (grabados; si falta el archivo, uno generado con código).
 func _crear_ambientes() -> void:
 	var usados := {}
 	for p in _planos:
 		for k in p.get("amb", {}):
 			usados[k] = true
+	var viejo := {"lluvia_carpa": "lluvia", "puerto": "mar", "lancha": "motor", "playa_batalla": "mar"}
 	for k in usados:
 		var a := AudioStreamPlayer.new()
-		a.stream = _bucle(k)
+		a.stream = Game.pista("amb_" + k, true)
+		if a.stream == null:
+			a.stream = _bucle(viejo.get(k, "mar"))
 		a.volume_db = -60.0
 		add_child(a)
-		a.play()
+		a.play(_rng.randf() * 10.0)
 		_amb[k] = a
+	_musica = AudioStreamPlayer.new()
+	add_child(_musica)
+	_tecla = AudioStreamPlayer.new()
+	_tecla.stream = Game.pista("maquina_escribir")
+	_tecla.volume_db = -6.0
+	add_child(_tecla)
+
+
+## Al empezar cada plano: la música (nueva, sigue o se corta).
+func _empieza_plano(p: Dictionary) -> void:
+	if not p.has("musica"):
+		return
+	var m: Array = p["musica"]
+	match m[0]:
+		"":
+			pass
+		"corte":
+			_musica.stop()
+		_:
+			_musica.stream = Game.pista(m[0])
+			_musica.volume_db = m[1]
+			if _musica.stream:
+				_musica.play()
+	_musica_db = m[1]
 
 
 func _bucle(tipo: String) -> AudioStreamWAV:
@@ -235,10 +288,15 @@ func _volumenes(p: Dictionary, delta: float) -> void:
 	var fundido := _fundido(p)
 	for k in _amb:
 		var meta: float = amb.get(k, -60.0)
-		if fundido > 0.0 and _i == _planos.size() - 1:
+		if fundido > 0.0 and _i == _planos.size() - 1 and despues == "mapa":
 			meta = lerpf(meta, -60.0, fundido)
 		var a: AudioStreamPlayer = _amb[k]
-		a.volume_db = move_toward(a.volume_db, meta, delta * 30.0)
+		a.volume_db = meta if p.get("amb_rapido", false) else move_toward(a.volume_db, meta, delta * 30.0)
+	if _musica and _musica.playing:
+		var mm := _musica_db
+		if _i == _planos.size() - 1:       # último plano: la música se apaga despacio
+			mm = lerpf(_musica_db, -40.0, clampf(_t / p["dur"], 0.0, 1.0))
+		_musica.volume_db = move_toward(_musica.volume_db, mm, delta * 12.0)
 
 
 # ================================================================ dibujo

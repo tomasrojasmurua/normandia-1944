@@ -7,6 +7,8 @@ class_name Grenade
 @export var damage := 170.0
 
 var _bounces := 0
+var del_jugador := false     # la tiró el jugador (los alemanes cercanos gritan al verla caer)
+var _aviso := false
 var solo_vista := false      # cooperativo: copia de una granada del anfitrión (la explosión llega por la red)
 
 
@@ -56,6 +58,9 @@ func modelo_aleman() -> void:
 
 func _physics_process(delta: float) -> void:
 	fuse -= delta
+	if del_jugador and not _aviso and fuse < 2.6:
+		_aviso = true
+		Fragor.granada(global_position)
 	if fuse <= 0.0:
 		if solo_vista:
 			queue_free()

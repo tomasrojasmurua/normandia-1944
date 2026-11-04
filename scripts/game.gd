@@ -61,6 +61,7 @@ func _ready() -> void:
 		soldados_3d = cfg.get_value("graficos", "soldados_3d", false)
 	_build_sounds()
 	_cargar_archivos()
+	_solo_horizontal()
 	# Limitador en la salida: con muchas explosiones juntas no se satura
 	if AudioServer.get_bus_effect_count(0) == 0:
 		var lim := AudioEffectHardLimiter.new()
@@ -837,3 +838,58 @@ static func material(color: Color) -> StandardMaterial3D:
 	mat.albedo_color = color
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_PER_VERTEX
 	return mat
+
+
+# ---------------------------------------------------------------- solo horizontal
+
+## El juego se juega solo en horizontal. En el navegador no siempre se puede
+## bloquear el giro (iPhone no deja), así que con el celular vertical se tapa
+## todo con un aviso y se pausa hasta que se gire.
+var _aviso_giro: Control
+var _pausado_por_giro := false
+
+
+func _solo_horizontal() -> void:
+	if OS.has_feature("web"):
+		JavaScriptBridge.eval("try { screen.orientation.lock('landscape').catch(function(){}); } catch (e) {}", true)
+	var capa := CanvasLayer.new()
+	capa.layer = 120
+	add_child(capa)
+	_aviso_giro = Control.new()
+	_aviso_giro.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_aviso_giro.mouse_filter = Control.MOUSE_FILTER_STOP
+	_aviso_giro.visible = false
+	_aviso_giro.process_mode = Node.PROCESS_MODE_ALWAYS
+	_aviso_giro.draw.connect(_dibujar_aviso_giro)
+	capa.add_child(_aviso_giro)
+	get_window().size_changed.connect(_revisar_giro)
+	_revisar_giro()
+
+
+func _revisar_giro() -> void:
+	var t := get_window().size
+	var vertical := t.y > t.x
+	if vertical == _aviso_giro.visible:
+		return
+	_aviso_giro.visible = vertical
+	_aviso_giro.queue_redraw()
+	if vertical and not get_tree().paused:
+		get_tree().paused = true
+		_pausado_por_giro = true
+	elif not vertical and _pausado_por_giro:
+		get_tree().paused = false
+		_pausado_por_giro = false
+
+
+func _dibujar_aviso_giro() -> void:
+	var c := _aviso_giro
+	var s := c.size
+	c.draw_rect(Rect2(Vector2.ZERO, s), Estilo.OLIVA_0)
+	var centro := s / 2.0
+	# Un celular acostado, con una flecha de giro
+	var tel := Rect2(centro + Vector2(-34, -70), Vector2(68, 40))
+	c.draw_rect(tel, Estilo.AMBAR, false, 3.0)
+	c.draw_rect(Rect2(tel.position + Vector2(6, 6), tel.size - Vector2(12, 12)), Color(Estilo.AMBAR, 0.25))
+	c.draw_arc(centro + Vector2(0, -50), 48.0, deg_to_rad(200), deg_to_rad(330), 16, Estilo.AMBAR_CLARO, 2.0)
+	Estilo.texto_c(c, "GIRA EL CELULAR", centro.x, centro.y + 10, Estilo.AMBAR, Estilo.TAM_GRANDE)
+	Estilo.texto_c(c, "NORMANDY 1944 SE JUEGA EN HORIZONTAL", centro.x, centro.y + 34, Estilo.CREMA)

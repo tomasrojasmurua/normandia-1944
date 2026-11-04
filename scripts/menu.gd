@@ -8,6 +8,7 @@ const ANCHO := 200.0
 const ALTO := 26.0
 
 var pantalla := "inicio"
+var _confirmar := 0.0         # "NUEVA CAMPAÑA" pide un segundo toque si ya hay una
 var _codigo := ""             # código de sala que se está escribiendo
 var _tactil := DisplayServer.is_touchscreen_available()
 
@@ -22,7 +23,8 @@ func _ready() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
+	_confirmar = maxf(_confirmar - delta, 0.0)
 	queue_redraw()
 	# Esperando al servidor: al saber si eres el anfitrión, empieza la misión
 	if pantalla == "conectando" and Red.actual and Red.actual.mi_id != "":
@@ -34,12 +36,17 @@ func _botones() -> Array:
 	var paso := ALTO + 8.0
 	match pantalla:
 		"inicio":
+			# Un jugador: seguir la campaña guardada o empezar una nueva (con prólogo)
+			var hay := _hay_campana()
+			paso = ALTO + 6.0
 			return [
-				["jugar", Rect2(X, y0, ANCHO, ALTO), "UN JUGADOR", true, ""],
-				["coop", Rect2(X, y0 + paso, ANCHO, ALTO), "COOPERATIVO", true, "PRUEBA"],
-				["controles", Rect2(X, y0 + paso * 2, ANCHO, ALTO), "CONTROLES", true, ""],
-				["creditos", Rect2(X, y0 + paso * 3, ANCHO, ALTO), "CRÉDITOS", true, ""],
-				["carga", Rect2(X, y0 + paso * 4, ANCHO, ALTO), "PRUEBA DE CARGA", true, ""],
+				["seguir", Rect2(X, y0, ANCHO, ALTO), "CONTINUAR CAMPAÑA", hay, _resumen_campana() if hay else ""],
+				["nueva", Rect2(X, y0 + paso, ANCHO, ALTO),
+					"¿BORRAR LA ACTUAL?" if _confirmar > 0.0 else "NUEVA CAMPAÑA", true, ""],
+				["coop", Rect2(X, y0 + paso * 2, ANCHO, ALTO), "COOPERATIVO", true, "PRUEBA"],
+				["controles", Rect2(X, y0 + paso * 3, ANCHO, ALTO), "CONTROLES", true, ""],
+				["creditos", Rect2(X, y0 + paso * 4, ANCHO, ALTO), "CRÉDITOS", true, ""],
+				["carga", Rect2(X, y0 + paso * 5, ANCHO, ALTO), "PRUEBA DE CARGA", true, ""],
 			]
 		"controles":
 			var lista := [["volver", Rect2(X, size.y - 44, 120, ALTO), "VOLVER", true, ""]]
@@ -93,10 +100,22 @@ func _pulsado(id: String) -> void:
 			Game.modo_red = false
 			Game.prueba_carga = true
 			Game.empezar_mision()
-		"jugar":
+		"seguir":
 			Game.prueba_carga = false
 			Game.modo_red = false
 			Game.ir_al_mapa()
+		"nueva":
+			# Si ya hay una campaña, pide confirmar (se pierde lo avanzado)
+			if _hay_campana() and _confirmar <= 0.0:
+				_confirmar = 3.0
+				return
+			Game.prueba_carga = false
+			Game.modo_red = false
+			Campana.nueva()
+			Campana.prologo = true
+			Campana.tutorial = false      # el coronel vuelve a explicar el mapa
+			Campana.guardar()
+			Game.ver_cinematica("prologo", "mapa")
 		"controles", "creditos":
 			pantalla = id
 		"volver":
@@ -122,6 +141,9 @@ func _draw() -> void:
 		var a := 0.72 * (1.0 - i / 24.0)
 		draw_rect(Rect2(i * 14.0, 0, 14.0, s.y), Color(Estilo.NEGRO, a))
 
+	# Versión, abajo a la derecha (para saber si cargó la última)
+	var v := "V" + str(ProjectSettings.get_setting("application/config/version", "?"))
+	Estilo.texto(self, v, Vector2(s.x - 10 - Estilo.ancho_texto(v), s.y - 8), Color(Estilo.CREMA, 0.75))
 	match pantalla:
 		"inicio":
 			_titulo()
@@ -170,6 +192,16 @@ func _unirse() -> void:
 	for i in 4:
 		txt += (_codigo[i] if i < _codigo.length() else "_") + " "
 	Estilo.texto(self, txt, Vector2(X, 134), Estilo.AMBAR, 33)
+
+
+## ¿Hay una campaña empezada en este celular?
+func _hay_campana() -> bool:
+	Campana.cargar()
+	return Campana.prologo or Campana.turnos > 0
+
+
+func _resumen_campana() -> String:
+	return "TURNO %d" % (Campana.turnos + 1)
 
 
 func _titulo() -> void:

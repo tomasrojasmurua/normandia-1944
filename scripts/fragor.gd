@@ -44,8 +44,7 @@ func _exit_tree() -> void:
 
 
 func _base(nombre: String) -> AudioStreamPlayer:
-	var a := AudioStreamPlayer.new()
-	a.stream = Game.pista(nombre, true)
+	var a := Game.reproductor_largo(nombre, true)
 	a.volume_db = -60.0
 	add_child(a)
 	if a.stream:
@@ -61,6 +60,9 @@ func _process(delta: float) -> void:
 	var arriba := cam.global_position.y > 8.0
 	_playa.volume_db = move_toward(_playa.volume_db, -60.0 if arriba else BASE_DB, delta * 20.0)
 	_campo.volume_db = move_toward(_campo.volume_db, BASE_DB if arriba else -60.0, delta * 20.0)
+	# El que no se oye queda en pausa (no gasta en decodificarse)
+	for b in [_playa, _campo]:
+		b.stream_paused = b.volume_db <= -59.0
 	_t_voz -= delta
 	_t_muerte -= delta
 	if _inicio > 0.0:

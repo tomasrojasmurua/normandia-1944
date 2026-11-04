@@ -35,9 +35,41 @@ var _t_traza := 2.0
 var _bocanadas: Array = []       # humo de explosiones (reserva)
 var _fogonazos: Array = []
 var _mat_humo: StandardMaterial3D
+var _columnas: Array = []
+var _arriba_visto := -1
+static var actual: Telones
+static var _shader: Shader          # uno solo para los cinco telones (se compila una vez)
+
+
+func _exit_tree() -> void:
+	if actual == self:
+		actual = null
+
+
+## Para Game.warmup: un fogonazo y una bocanada frente a la cámara mientras
+## está la pantalla de "PREPARANDO" (así el navegador compila sus materiales).
+func calentar(p: Vector3) -> void:
+	var fl: MeshInstance3D = _fogonazos[0]
+	fl.global_position = p
+	fl.set_meta("t", 0.2)
+	fl.visible = true
+	var b: CPUParticles3D = _bocanadas[0]
+	b.global_position = p
+	b.restart()
+	var c: CPUParticles3D = _columnas[0]
+	var antes := c.global_position
+	c.global_position = p
+	c.visible = true
+	await get_tree().create_timer(0.3).timeout
+	c.global_position = antes
+	b.global_position = Vector3(0, -50, 0)
+	b.restart()
+	b.emitting = false
+	_arriba_visto = -1
 
 
 func _ready() -> void:
+	actual = self
 	_rng.randomize()
 	var datos := {}
 	var f := FileAccess.open("res://assets/telones/telones.json", FileAccess.READ)
@@ -65,16 +97,16 @@ func _ready() -> void:
 		mi.rotation_degrees.y = p[2]
 		add_child(mi)
 	_mat_humo = _material_humo()
-	# Columnas de humo que no paran (incendios lejanos)
+	# Columnas de humo que no paran (solo se ven las de donde anda el jugador)
 	for z in ZONAS:
 		for k in 2:
 			var pos: Vector3 = z[0] + Vector3(_rng.randf_range(-6, 6), 0, _rng.randf_range(-z[1] / 2.0, z[1] / 2.0))
-			_columna(pos)
+			_columna(pos, z[2] > 5.0)
 	# Reservas para las explosiones lejanas
 	for i in 4:
-		var b := _particulas(14, 3.5, 0.9)
+		var b := _particulas(14, 3.5, 0.9, Vector3(0, -50, 0), false)
 		b.one_shot = true
-		b.emitting = false
+		add_child(b)
 		_bocanadas.append(b)
 		var fl := MeshInstance3D.new()
 		var fq := QuadMesh.new()
@@ -93,6 +125,12 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
+	var cam := get_viewport().get_camera_3d()
+	var arriba := 1 if cam != null and cam.global_position.y > 8.0 else 0
+	if arriba != _arriba_visto:
+		_arriba_visto = arriba
+		for c in _columnas:
+			c.visible = bool(c.get_meta("arriba")) == (arriba == 1)
 	_t_boom -= delta
 	_t_rafaga -= delta
 	_t_traza -= delta
@@ -143,16 +181,22 @@ func _rafaga(pos: Vector3) -> void:
 	Game.play_at("mg42_lejos", pos, 4.0)
 
 
-func _columna(pos: Vector3) -> void:
-	var c := _particulas(10, 1.2, 0.35)
-	c.position = pos
+func _columna(pos: Vector3, arriba: bool) -> void:
+	var c := _particulas(7, 1.2, 0.35, pos, true)
 	c.lifetime = 12.0
-	c.emitting = true
 	c.preprocess = 12.0
+	c.set_meta("arriba", arriba)
+	add_child(c)
+	_columnas.append(c)
 
 
-func _particulas(n: int, vel: float, fuerza: float) -> CPUParticles3D:
+## Partículas de humo, YA configuradas y en su lugar antes de entrar al árbol
+## (si no, el primer cuadro sueltan humo en el origen del mundo, delante del
+## jugador: era la mancha negra al empezar la playa).
+func _particulas(n: int, vel: float, fuerza: float, pos: Vector3, emitir: bool) -> CPUParticles3D:
 	var p := CPUParticles3D.new()
+	p.emitting = emitir
+	p.position = pos
 	p.amount = n
 	p.lifetime = 4.0
 	var q := QuadMesh.new()
@@ -175,30 +219,31 @@ func _particulas(n: int, vel: float, fuerza: float) -> CPUParticles3D:
 	grad.set_color(0, Color(0.32, 0.31, 0.3, 0.85))
 	grad.set_color(1, Color(0.55, 0.55, 0.55, 0.0))
 	p.color_ramp = grad
-	add_child(p)
 	return p
 
 
 func _material(tex: Texture2D, niebla: Color, espejo: bool, corte: float) -> ShaderMaterial:
-	var sh := Shader.new()
-	sh.code = """
-shader_type spatial;
-render_mode unshaded, cull_disabled, fog_disabled;
-uniform sampler2D tex : source_color, filter_nearest;
-uniform vec3 niebla : source_color;
-uniform float cuanto = 0.45;
-uniform bool espejo = false;
-uniform float corte = 1.0;
-void fragment() {
-	vec2 uv = vec2(UV.x, UV.y * corte);
-	if (espejo) { uv.x = 1.0 - uv.x; }
-	vec4 c = texture(tex, uv);
-	if (c.a < 0.5) { discard; }
-	ALBEDO = mix(c.rgb, niebla, cuanto);
-}
-"""
+	if _shader == null:
+		_shader = Shader.new()
+		_shader.code = """
+	shader_type spatial;
+	render_mode unshaded, cull_disabled, fog_disabled;
+	uniform sampler2D tex : source_color, filter_nearest;
+	uniform vec3 niebla : source_color;
+	uniform float cuanto = 0.45;
+	uniform bool espejo = false;
+	uniform float corte = 1.0;
+	void fragment() {
+		vec2 uv = vec2(UV.x, UV.y * corte);
+		if (espejo) { uv.x = 1.0 - uv.x; }
+		vec4 c = texture(tex, uv);
+		if (c.a < 0.5) { discard; }
+		ALBEDO = mix(c.rgb, niebla, cuanto);
+	}
+	"""
+
 	var m := ShaderMaterial.new()
-	m.shader = sh
+	m.shader = _shader
 	m.set_shader_parameter("tex", tex)
 	m.set_shader_parameter("niebla", niebla)
 	m.set_shader_parameter("espejo", espejo)

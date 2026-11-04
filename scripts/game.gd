@@ -123,6 +123,7 @@ var carga_texto := ""         # para el medidor en la prueba de carga
 
 
 func _process(delta: float) -> void:
+	_preparar_sonidos(delta)
 	if not get_tree().paused:
 		elapsed += delta
 		# Los charcos crecen despacio
@@ -308,6 +309,8 @@ func _cargar_archivos() -> void:
 			var ruta := "res://assets/sonidos/%s.ogg" % (n if k == 1 else "%s_%d" % [n, i + 1])
 			if ResourceLoader.exists(ruta):
 				lista.append(load(ruta))
+				if OS.has_feature("web"):
+					_por_preparar.append(lista[-1])
 		if not lista.is_empty():
 			_archivos[n] = lista
 
@@ -339,10 +342,38 @@ var puente: AudioStreamPlayer
 func seguir_sonando(origen: AudioStreamPlayer) -> void:
 	if puente == null:
 		puente = AudioStreamPlayer.new()
+		puente.playback_type = AudioServer.PLAYBACK_TYPE_STREAM
 		add_child(puente)
 	puente.stream = origen.stream
 	puente.volume_db = origen.volume_db
 	puente.play(origen.get_playback_position())
+
+
+## En el navegador, cada sonido se decodifica entero la primera vez que suena
+## (eso trababa el juego). Aquí se preparan de a uno, en el menú y el mapa,
+## antes de que hagan falta.
+var _por_preparar: Array = []
+var _t_preparar := 1.0
+
+
+func _preparar_sonidos(delta: float) -> void:
+	if _por_preparar.is_empty():
+		return
+	_t_preparar -= delta
+	if _t_preparar > 0.0:
+		return
+	_t_preparar = 0.12
+	AudioServer.register_stream_as_sample(_por_preparar.pop_front())
+
+
+## Reproductor para música y ambientes largos: en el navegador se tocan como
+## "stream" (se decodifican de a poco) y no como muestra (habría que
+## decodificar 20–90 s de una vez y guardarlos sin comprimir en memoria).
+func reproductor_largo(nombre: String, bucle := false) -> AudioStreamPlayer:
+	var a := AudioStreamPlayer.new()
+	a.playback_type = AudioServer.PLAYBACK_TYPE_STREAM
+	a.stream = pista(nombre, bucle)
+	return a
 
 
 ## Música o ambiente (archivo entero, para las cinemáticas y el ambiente).
@@ -548,9 +579,12 @@ func warmup() -> void:
 	splash(p)
 	tracer(p + cam.global_basis.x, p - cam.global_basis.x)
 	_explosion_fx(p)
+	mancha(p, 0.5, false)
+	if Telones.actual:
+		Telones.actual.calentar(p)
 	for i in 4:
 		await get_tree().process_frame
-	await get_tree().create_timer(0.35).timeout
+	await get_tree().create_timer(1.2).timeout     # que caigan los escombros antes de mostrar la playa
 	warming = false
 
 

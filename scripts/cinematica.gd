@@ -189,6 +189,10 @@ func _terminar() -> void:
 	if despues == "mapa":
 		Game.ir_al_mapa()
 	else:
+		# Que se vea "PREPARANDO..." antes de que se trabe cargando la misión
+		queue_redraw()
+		await RenderingServer.frame_post_draw
+		await RenderingServer.frame_post_draw
 		Game.empezar_mision(Game.mision, true)
 
 
@@ -215,15 +219,15 @@ func _crear_ambientes() -> void:
 			usados[k] = true
 	var viejo := {"lluvia_carpa": "lluvia", "puerto": "mar", "lancha": "motor", "playa_batalla": "mar"}
 	for k in usados:
-		var a := AudioStreamPlayer.new()
-		a.stream = Game.pista("amb_" + k, true)
+		var a := Game.reproductor_largo("amb_" + k, true)
 		if a.stream == null:
+			a.playback_type = AudioServer.PLAYBACK_TYPE_DEFAULT
 			a.stream = _bucle(viejo.get(k, "mar"))
 		a.volume_db = -60.0
 		add_child(a)
 		a.play(_rng.randf() * 10.0)
 		_amb[k] = a
-	_musica = AudioStreamPlayer.new()
+	_musica = Game.reproductor_largo("")
 	add_child(_musica)
 	_tecla = AudioStreamPlayer.new()
 	_tecla.stream = Game.pista("maquina_escribir")
@@ -309,6 +313,8 @@ func _fundido(p: Dictionary) -> float:
 
 func _draw() -> void:
 	draw_rect(Rect2(Vector2.ZERO, size), Color.BLACK)
+	if _terminada and despues == "mision":
+		Estilo.texto_c(self, "PREPARANDO %s..." % Misiones.dato("nombre"), size.x / 2, size.y / 2, Estilo.AMBAR)
 	if _terminada or _i >= _planos.size():
 		return
 	var p: Dictionary = _planos[_i]

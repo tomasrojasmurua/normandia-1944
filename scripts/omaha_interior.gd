@@ -347,10 +347,20 @@ static func _armar_kit(d: Node3D) -> void:
 		mm.transform_format = MultiMesh.TRANSFORM_3D
 		mm.mesh = load("res://assets/decorado/%s.res" % tipo)
 		mm.instance_count = _kit[tipo].size()
+		# El nodo va al centro del pueblo (la distancia para dejar de dibujarlo
+		# se mide desde ahí); las piezas, relativas a ese centro.
+		var centro := Vector3.ZERO
+		for t: Transform3D in _kit[tipo]:
+			centro += t.origin
+		centro /= float(mm.instance_count)
 		for i in mm.instance_count:
-			mm.set_instance_transform(i, _kit[tipo][i])
+			var t: Transform3D = _kit[tipo][i]
+			mm.set_instance_transform(i, Transform3D(t.basis, t.origin - centro))
 		var mi := MultiMeshInstance3D.new()
 		mi.multimesh = mm
+		mi.position = centro
+		# Desde la playa el pueblo queda a más de 100 m y detrás del acantilado: no se dibuja
+		mi.visibility_range_end = 100.0
 		# las paredes, con la piedra; el techo quemado, con su propio color (madera)
 		mi.material_override = Ambiente.material_modelo() if tipo == "techo_quemado" else material_piedra()
 		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF

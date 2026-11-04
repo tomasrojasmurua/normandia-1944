@@ -19,6 +19,7 @@ var muerto := false
 var boca: Node3D                   # punta del cañón (fogonazo y trazadoras)
 
 const PIXEL := 0.025               # 40 píxeles por metro (como al hornear)
+const ANIM_POSE := {"pie": "apunta", "rodilla": "rodilla", "agachado": "agachado"}
 ## Armas sin sprites propios: se usa la más parecida.
 const PARECIDA := {"carbine": "garand", "springfield": "garand", "colt": "garand",
 	"bazooka": "garand", "luger": "kar98k"}
@@ -83,11 +84,13 @@ func _ready() -> void:
 
 # ================================================================ lo que piden los demás
 
+var _fogonazo_t := 0.0
+
+
 func disparo() -> void:
 	_fogonazo.visible = true
 	_fogonazo.scale = Vector3.ONE * randf_range(0.7, 1.2)
-	get_tree().create_timer(0.05).timeout.connect(func() -> void:
-		if is_instance_valid(_fogonazo): _fogonazo.visible = false)
+	_fogonazo_t = 0.05      # (antes, un temporizador nuevo por cada tiro)
 
 
 ## Sacudón al recibir un balazo (dir = dirección de la bala, global).
@@ -99,6 +102,8 @@ func impacto(dir: Vector3) -> void:
 func morir(dir: Vector3, _cabeza_tiro: bool) -> void:
 	muerto = true
 	_fogonazo.visible = false
+	_fogonazo_t = 0.0
+	_spr.visibility_range_end = 80.0    # tendido a lo lejos mide un par de píxeles
 	var local := global_basis.inverse() * dir
 	if pose == "rodilla" or pose == "agachado":
 		_muerte = "muere_rodilla"
@@ -129,6 +134,10 @@ func _process(delta: float) -> void:
 
 func _actualizar(delta: float) -> void:
 	_t += delta
+	if _fogonazo_t > 0.0:
+		_fogonazo_t -= delta
+		if _fogonazo_t <= 0.0:
+			_fogonazo.visible = false
 	var nombre: String
 	var info: Dictionary
 	var k := 0
@@ -143,7 +152,7 @@ func _actualizar(delta: float) -> void:
 		if andar != "":
 			nombre = "corre"
 		else:
-			nombre = {"pie": "apunta", "rodilla": "rodilla", "agachado": "agachado"}.get(pose, "reposo")
+			nombre = ANIM_POSE.get(pose, "reposo")
 		info = _set[nombre]
 		var n: int = info["cuadros"]
 		if n > 1:
@@ -154,9 +163,10 @@ func _actualizar(delta: float) -> void:
 	var d := _dir
 	var cam := get_viewport().get_camera_3d()
 	if cam:
-		var local := global_basis.inverse() * (cam.global_position - global_position)
+		var yo := global_transform
+		var local := yo.basis.inverse() * (cam.global_position - yo.origin)
 		d = posmod(roundi(atan2(local.x, -local.z) / (TAU / 8.0)), 8)
-		_escala_lejos(cam.global_position.distance_to(global_position))
+		_escala_lejos(cam.global_position.distance_to(yo.origin))
 
 	if nombre != _anim or d != _dir:
 		_anim = nombre
@@ -175,7 +185,9 @@ func _actualizar(delta: float) -> void:
 			boca.position = info["boca"][k]
 	if _sacudon != Vector3.ZERO:
 		_sacudon = _sacudon.move_toward(Vector3.ZERO, delta * 0.6)
-	_spr.position = _sacudon + Vector3(0, _bajar, 0)
+	var pos := _sacudon + Vector3(0, _bajar, 0)
+	if pos != _spr.position:      # tocar la posición (o el tamaño) obliga al motor a rehacer el dibujo
+		_spr.position = pos
 	if muerto and k == int(info["cuadros"]) - 1:
 		set_process(false)      # ya cayó: queda quieto para siempre
 
@@ -196,6 +208,9 @@ func _escala_lejos(dist: float) -> void:
 	var e := 1.0
 	if bando == "aleman" and not muerto:
 		e = clampf(dist / LEJOS, 1.0, MAX_ESCALA)
+	e = snappedf(e, 0.02)
+	if e == escala and _spr.pixel_size == PIXEL * e:
+		return
 	escala = e
 	_spr.pixel_size = PIXEL * e
 	_bajar = -1.1 * (e - 1.0)

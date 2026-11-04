@@ -40,13 +40,24 @@ func nombre() -> String:
 	return Armas.datos(arma)["name"]
 
 
+var _espera := 0
+
+
 func _process(_delta: float) -> void:
+	if _espera > 0:     # lejos del jugador: se revisa cada tanto, no en cada cuadro
+		_espera -= 1
+		return
 	if _player == null:
 		_player = get_tree().get_first_node_in_group("player") as Player
 		return
 	if _player.dead:
 		return
 	var dist := global_position.distance_to(_player.global_position)
+	if dist > 6.0:
+		_espera = mini(int(dist / 3.0), 30)
+		if _player.pickup_near == self:
+			_player.pickup_near = null
+		return
 	var w := _player.weapons
 	if arma in w.slots:
 		# Misma arma: tomar las balas al pasar encima
@@ -84,6 +95,7 @@ func tomar(p: Player) -> void:
 ## Modelo 3D del arma, acostado de lado en el suelo.
 func _build(_d: Dictionary) -> void:
 	var mi := Armas.modelo_3d(arma)
+	mi.visibility_range_end = 45.0     # de más lejos no se distingue (y es una llamada de dibujo menos)
 	add_child(mi)
 	var aabb := mi.mesh.get_aabb()
 	mi.rotation.z = PI / 2.0                 # de lado: el grosor queda hacia arriba

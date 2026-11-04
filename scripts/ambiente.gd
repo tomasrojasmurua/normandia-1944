@@ -236,17 +236,32 @@ static func material_modelo() -> StandardMaterial3D:
 	return m
 
 
+## Un solo material para todos los modelos (antes, uno nuevo por modelo: el
+## motor tenía que cambiar de material entre cada uno al dibujar).
+static var _compartido: StandardMaterial3D
+
+
+static func _mat_modelo() -> StandardMaterial3D:
+	if _compartido == null:
+		_compartido = material_modelo()
+	return _compartido
+
+
 ## Modelo de decorado con su caja de choque (y, si se pide, puntos de cobertura).
 static func modelo(padre: Node3D, nombre: String, pos: Vector3, giro_deg: float, escala: Vector3,
 		choque: bool, cobertura := false) -> MeshInstance3D:
 	var mesh: Mesh = load("res://assets/decorado/%s.res" % nombre)
 	var mi := MeshInstance3D.new()
 	mi.mesh = mesh
-	mi.material_override = material_modelo()
+	mi.material_override = _mat_modelo()
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	mi.position = pos
 	mi.rotation_degrees.y = giro_deg
 	mi.scale = escala
+	# Lejos no se dibuja: un modelo chico a más de ~30 veces su largo mide
+	# pocos píxeles y la niebla lo tapa (la iglesia se ve siempre).
+	var largo := (mesh.get_aabb().size * escala).length()
+	mi.visibility_range_end = clampf(largo * 22.0, 70.0, 260.0) if largo < 15.0 else 0.0
 	padre.add_child(mi)
 	if choque:
 		var caja := mesh.get_aabb()

@@ -350,6 +350,8 @@ func take_damage(amount: float, from_pos: Vector3) -> void:
 
 func _morir(dir: Vector3) -> void:
 	dead = true
+	set_process(false)            # un caído ya no piensa ni se mueve (no gasta cada cuadro)
+	set_physics_process(false)
 	moviendo = false
 	_rafaga = 0
 	Coberturas.liberar(self)

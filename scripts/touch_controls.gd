@@ -41,8 +41,18 @@ func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 
+## Se redibuja solo si cambió algo de lo que se ve (dedos, botones apretados,
+## el botón TOMAR): antes se redibujaba en cada cuadro.
+var _firma: Array = []
+
+
 func _process(_delta: float) -> void:
-	if visible:
+	if not visible or _player == null:
+		return
+	var f: Array = [size, _has_role("move"), _move_origin, _move_pos, _player.touch_sprint, _player.touch_aim,
+		_player.crouching, _player.pickup_near != null, Game.garra, _pressed.keys()]
+	if f != _firma:
+		_firma = f
 		queue_redraw()
 
 

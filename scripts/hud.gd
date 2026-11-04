@@ -20,12 +20,39 @@ var _messages: Array = []   # [texto, color, tiempo]
 var _slot_rects: Array[Rect2] = []
 
 
+## El HUD se dibuja en tres capas. La vista (arma en la mano, mira, efectos)
+## cambia en cada cuadro; los textos de arriba y la barra de abajo casi nunca:
+## esas dos capas se vuelven a dibujar solo cuando algo de lo que muestran
+## cambió (antes se redibujaba todo en cada cuadro y era el guion más caro).
+var _ci: CanvasItem = self        # dónde dibujan las funciones de abajo
+var _capa_textos: Control
+var _capa_barra: Control
+var _firma_textos: Array = []
+var _firma_barra: Array = []
+var _cuadro := 0
+
+
 func _ready() -> void:
 	add_to_group("hud")
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	Game.message.connect(_on_message)
 	_cargar_retratos()
+	_capa_textos = _capa(_dibujar_textos)
+	_capa_barra = _capa(_dibujar_barra)
 	Game.warmup.call_deferred()
+
+
+func _capa(dibujo: Callable) -> Control:
+	var c := Control.new()
+	c.set_anchors_preset(Control.PRESET_FULL_RECT)
+	c.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(c)
+	c.draw.connect(func() -> void:
+		_ci = c
+		if _player != null:
+			dibujo.call()
+		_ci = self)
+	return c
 
 
 func _cargar_retratos() -> void:
@@ -52,6 +79,61 @@ func _process(delta: float) -> void:
 		_expulsar(_player.weapons, delta)
 	_medir(delta)
 	queue_redraw()
+	_cuadro += 1
+	var tapar := Game.warming
+	_capa_textos.visible = not tapar
+	_capa_barra.visible = not tapar
+	if _player == null or _player.weapons == null or tapar:
+		return
+	var fb := _firma_de_barra()
+	if fb != _firma_barra:
+		_firma_barra = fb
+		_capa_barra.queue_redraw()
+	if _cuadro % 3 == 0 or _messages.size() != _n_mensajes:
+		var ft := _firma_de_textos()
+		if ft != _firma_textos:
+			_firma_textos = ft
+			_capa_textos.queue_redraw()
+
+
+var _n_mensajes := 0
+
+
+## Lo que muestra la barra de abajo. Si nada de esto cambió, no se redibuja.
+func _firma_de_barra() -> Array:
+	var p := _player
+	var w := p.weapons
+	var f: Array = [size, p.nombre, p.dead, p.crouching, roundi(clampf(p.health / p.max_health, 0.0, 1.0) * 40.0),
+		Game.clock_text(), roundi(rad_to_deg(atan2(p.global_basis.z.x, -p.global_basis.z.z))), p.grenades,
+		w.current, w.slots[0], w.slots[1], w.ammo[w.current], w.reserve[w.current], w.is_reloading(),
+		int(Time.get_ticks_msec() / 250) % 2 if w.is_reloading() else 0, Aliado.orden]
+	for a in Escuadras.ranuras_jugador():
+		if a == null or not is_instance_valid(a):
+			f.append(0)
+			continue
+		f.append_array([a.get_instance_id(), a.nombre, a.dead, a.moviendo,
+			roundi(clampf(a.health / a.max_health, 0.0, 1.0) * 20.0)])
+		if not a.dead and a is Aliado and a.esp == "radio":
+			f.append(int(Escuadras.apoyo_listo - Game.elapsed))
+	return f
+
+
+## Lo que muestran los textos de arriba a la izquierda y los mensajes.
+func _firma_de_textos() -> Array:
+	_n_mensajes = _messages.size()
+	var f: Array = [size, _med_texto, _med_desglose, _med_color]
+	if Game.prueba_carga:
+		f.append(Game.carga_texto)
+	if Game.modo_red:
+		f.append(Red.texto())
+	if Objetivos.actual and Objetivos.terminado == 0:
+		var foco := Objetivos.foco_mio()
+		var pr: float = Objetivos.progreso[foco] if foco >= 0 else 0.0
+		f.append_array([Objetivos.texto_fase(), Objetivos.texto(), foco, Objetivos.perdiendo > 0.0,
+			roundi(pr * 118.0) if pr < 1.0 else roundi(clampf((pr - 1.0) / 6.0, 0.0, 1.0) * 118.0) + 1000])
+	for m in _messages:
+		f.append_array([m[0], roundi(clampf(7.0 - m[2], 0.0, 1.0) * 12.0)])
+	return f
 
 
 # --- Medidor de fluidez (para comparar celulares): cuadros por segundo del
@@ -108,7 +190,7 @@ func _draw() -> void:
 
 	# --- Efectos sobre la vista
 	if _player.damage_flash > 0.0:
-		draw_rect(Rect2(Vector2.ZERO, s), Color(0.7, 0.0, 0.0, _player.damage_flash * 0.3))
+		_ci.draw_rect(Rect2(Vector2.ZERO, s), Color(0.7, 0.0, 0.0, _player.damage_flash * 0.3))
 	_draw_sangre(s, top)
 	if _player.supresion > 0.02 and not _player.dead:
 		_draw_supresion(s, _player.supresion)
@@ -119,11 +201,11 @@ func _draw() -> void:
 	if w.hit_marker > 0.0:
 		var c := Color(1, 1, 1, w.hit_marker)
 		for d in [Vector2(1, 1), Vector2(1, -1), Vector2(-1, 1), Vector2(-1, -1)]:
-			draw_line(center + d * 3, center + d * 7, c, 1.0)
+			_ci.draw_line(center + d * 3, center + d * 7, c, 1.0)
 	if _player.dead:
-		draw_rect(Rect2(Vector2.ZERO, s), Color(0, 0, 0, 0.45))
-		Estilo.texto_c(self, "HAS CAÍDO", s.x / 2, top / 2 + 2, Estilo.ROJO, Estilo.TAM_GRANDE)
-		Estilo.texto_c(self, "ESPERANDO RELEVO..." if _player.esperando_relevo else "TU ESCUADRA NO TIENE MÁS HOMBRES",
+		_ci.draw_rect(Rect2(Vector2.ZERO, s), Color(0, 0, 0, 0.45))
+		Estilo.texto_c(_ci, "HAS CAÍDO", s.x / 2, top / 2 + 2, Estilo.ROJO, Estilo.TAM_GRANDE)
+		Estilo.texto_c(_ci, "ESPERANDO RELEVO..." if _player.esperando_relevo else "TU ESCUADRA NO TIENE MÁS HOMBRES",
 			s.x / 2, top / 2 + 18, Estilo.CREMA)
 
 	if Game.warming:   # pantalla de espera mientras se preparan los efectos
@@ -131,28 +213,12 @@ func _draw() -> void:
 		# prepara cada letra la primera vez que se usa, y eso trababa un
 		# cuadro cuando aparecía un mensaje nuevo en medio del combate.
 		for tam in [Estilo.TAM, Estilo.TAM_GRANDE]:
-			Estilo.texto(self, "ABCDEFGHIJKLMNÑOPQRSTUVWXYZÁÉÍÓÚÜ0123456789[]:-.,!¡?¿+/|%()'", Vector2(0, 40), Estilo.CREMA, tam)
-		draw_rect(Rect2(Vector2.ZERO, s), Estilo.NEGRO)
-		Estilo.texto_c(self, "PREPARANDO LA PLAYA...", s.x / 2, s.y / 2, Estilo.AMBAR)
+			Estilo.texto(_ci, "ABCDEFGHIJKLMNÑOPQRSTUVWXYZÁÉÍÓÚÜ0123456789[]:-.,!¡?¿+/|%()'", Vector2(0, 40), Estilo.CREMA, tam)
+		_ci.draw_rect(Rect2(Vector2.ZERO, s), Estilo.NEGRO)
+		Estilo.texto_c(_ci, "PREPARANDO LA PLAYA...", s.x / 2, s.y / 2, Estilo.AMBAR)
 		return
-	Estilo.texto(self, "NORMANDY 1944  V%s" % ProjectSettings.get_setting("application/config/version"),
-		Vector2(4, 10), Color(Estilo.CREMA, 0.35))
-	Estilo.texto(self, _med_texto, Vector2(4, 21), Color(_med_color, 0.7))
-	Estilo.texto(self, _med_desglose, Vector2(4, 32), Color(Estilo.CREMA, 0.55))
-	if Game.prueba_carga:
-		Estilo.texto(self, Game.carga_texto, Vector2(4, 43), Color(Estilo.AMBAR_CLARO, 0.8))
-	if Game.modo_red:
-		Estilo.texto(self, Red.texto(), Vector2(4, 43), Color(Estilo.AMBAR_CLARO, 0.85))
-	# Objetivo de mi escuadra (y la barra de la carga / la toma, si va avanzando)
+
 	if Objetivos.actual and Objetivos.terminado == 0:
-		var oy := 57.0 if Game.modo_red else 43.0
-		var foco := Objetivos.foco_mio()
-		Estilo.texto(self, Objetivos.texto_fase(), Vector2(4, oy), Color(Estilo.CREMA, 0.6))
-		oy += 11.0
-		var propio: bool = foco >= 0 and Objetivos.mio() in Objetivos.LISTA[foco].get("esc", [])
-		var color := Estilo.ROJO if Objetivos.perdiendo > 0.0 else (Estilo.AMBAR_CLARO if propio else Estilo.VERDE_LED)
-		Estilo.texto(self, Objetivos.texto(), Vector2(4, oy), color)
-		var pr: float = Objetivos.progreso[foco] if foco >= 0 else 0.0
 		# Carga encendida: aviso grande si estás cerca (la explosión mata)
 		for i in Objetivos.LISTA.size():
 			var m := Objetivos.mecha(i)
@@ -160,38 +226,66 @@ func _draw() -> void:
 				var d: float = _player.global_position.distance_to(Objetivos.LISTA[i]["pos"])
 				if d < 14.0:
 					var parpadeo := 1.0 if fmod(m, 0.5) > 0.2 else 0.45
-					Estilo.texto_c(self, "¡CARGA PUESTA! ¡ALÉJATE! %d" % ceili(m), s.x / 2, s.y * 0.42,
+					Estilo.texto_c(_ci, "¡CARGA PUESTA! ¡ALÉJATE! %d" % ceili(m), s.x / 2, s.y * 0.42,
 						Color(Estilo.ROJO, parpadeo), Estilo.TAM_GRANDE)
 				if ceili(m) != _mecha_vista:
 					_mecha_vista = ceili(m)
 					Game.play("click", 4.0 if d < 14.0 else -6.0, 1.6)
-		if pr > 1.0:
-			var falta := clampf((pr - 1.0) / 6.0, 0.0, 1.0)
-			draw_rect(Rect2(4, oy + 4, 120, 5), Color(Estilo.NEGRO, 0.7))
-			draw_rect(Rect2(5, oy + 5, 118 * falta, 3), Estilo.ROJO)
-		elif pr > 0.0 and pr < 1.0:
-			draw_rect(Rect2(4, oy + 4, 120, 5), Color(Estilo.NEGRO, 0.7))
-			draw_rect(Rect2(5, oy + 5, 118 * pr, 3), Estilo.AMBAR)
 
 	# Título de la fase que empieza
 	if Objetivos.actual and Objetivos.banner_t > 0.0 and Objetivos.terminado == 0:
 		var a := clampf(Objetivos.banner_t, 0.0, 1.0)
 		var f := Objetivos.fase()
-		Estilo.texto_c(self, "FASE %d" % (f + 1), s.x / 2, s.y * 0.28, Color(Estilo.CREMA, 0.8 * a))
-		Estilo.texto_c(self, Misiones.fase(f)["nombre"], s.x / 2, s.y * 0.28 + 20, Color(Estilo.AMBAR, a), Estilo.TAM_GRANDE)
-		Estilo.texto_c(self, Game.clock_text(), s.x / 2, s.y * 0.28 + 38, Color(Estilo.CREMA, 0.6 * a))
+		Estilo.texto_c(_ci, "FASE %d" % (f + 1), s.x / 2, s.y * 0.28, Color(Estilo.CREMA, 0.8 * a))
+		Estilo.texto_c(_ci, Misiones.fase(f)["nombre"], s.x / 2, s.y * 0.28 + 20, Color(Estilo.AMBAR, a), Estilo.TAM_GRANDE)
+		Estilo.texto_c(_ci, Game.clock_text(), s.x / 2, s.y * 0.28 + 38, Color(Estilo.CREMA, 0.6 * a))
 
 	# Arma en el suelo para recoger
 	var suelta := _player.pickup_near as ArmaSuelta
 	if suelta and is_instance_valid(suelta) and not _player.dead:
 		var tecla := "[TOMAR]" if DisplayServer.is_touchscreen_available() else "[E]"
-		Estilo.texto_c(self, "%s RECOGER %s" % [tecla, suelta.nombre()], s.x / 2, top - 40, Estilo.AMBAR_CLARO)
+		Estilo.texto_c(_ci, "%s RECOGER %s" % [tecla, suelta.nombre()], s.x / 2, s.y - BAR_H - 40, Estilo.AMBAR_CLARO)
 
-	# --- Barra inferior
-	Estilo.marco(self, Rect2(0, top, s.x, BAR_H), "lisa")
+
+## Capa de textos: versión, medidor, objetivo y su barra, mensajes.
+func _dibujar_textos() -> void:
+	var s := size
+	var top := s.y - BAR_H
+	Estilo.texto(_ci, "NORMANDY 1944  V%s" % ProjectSettings.get_setting("application/config/version"),
+		Vector2(4, 10), Color(Estilo.CREMA, 0.35))
+	Estilo.texto(_ci, _med_texto, Vector2(4, 21), Color(_med_color, 0.7))
+	Estilo.texto(_ci, _med_desglose, Vector2(4, 32), Color(Estilo.CREMA, 0.55))
+	if Game.prueba_carga:
+		Estilo.texto(_ci, Game.carga_texto, Vector2(4, 43), Color(Estilo.AMBAR_CLARO, 0.8))
+	if Game.modo_red:
+		Estilo.texto(_ci, Red.texto(), Vector2(4, 43), Color(Estilo.AMBAR_CLARO, 0.85))
+	# Objetivo de mi escuadra (y la barra de la carga / la toma, si va avanzando)
+	if Objetivos.actual and Objetivos.terminado == 0:
+		var oy := 57.0 if Game.modo_red else 43.0
+		var foco := Objetivos.foco_mio()
+		Estilo.texto(_ci, Objetivos.texto_fase(), Vector2(4, oy), Color(Estilo.CREMA, 0.6))
+		oy += 11.0
+		var propio: bool = foco >= 0 and Objetivos.mio() in Objetivos.LISTA[foco].get("esc", [])
+		var color := Estilo.ROJO if Objetivos.perdiendo > 0.0 else (Estilo.AMBAR_CLARO if propio else Estilo.VERDE_LED)
+		Estilo.texto(_ci, Objetivos.texto(), Vector2(4, oy), color)
+		var pr: float = Objetivos.progreso[foco] if foco >= 0 else 0.0
+		if pr > 1.0:
+			var falta := clampf((pr - 1.0) / 6.0, 0.0, 1.0)
+			_ci.draw_rect(Rect2(4, oy + 4, 120, 5), Color(Estilo.NEGRO, 0.7))
+			_ci.draw_rect(Rect2(5, oy + 5, 118 * falta, 3), Estilo.ROJO)
+		elif pr > 0.0 and pr < 1.0:
+			_ci.draw_rect(Rect2(4, oy + 4, 120, 5), Color(Estilo.NEGRO, 0.7))
+			_ci.draw_rect(Rect2(5, oy + 5, 118 * pr, 3), Estilo.AMBAR)
+	_draw_messages(Vector2(4, top - 4))
+
+
+## Capa de la barra de abajo (escuadra, retrato, hora, granadas, munición, armas).
+func _dibujar_barra() -> void:
+	var s := size
+	var top := s.y - BAR_H
+	Estilo.marco(_ci, Rect2(0, top, s.x, BAR_H), "lisa")
 	var right_w := 486.0
 	var x := s.x - right_w
-	_draw_messages(Vector2(4, top - 4))
 	_draw_escuadra(Rect2(3, top + 2, x - 6, BAR_H - 4))
 	_draw_portrait(Rect2(x, top + 2, 60, BAR_H - 4))
 	_draw_status(Rect2(x + 62, top + 2, 76, BAR_H - 4))
@@ -247,9 +341,9 @@ func _expulsar(w: Weapons, delta: float) -> void:
 func _draw_volando() -> void:
 	for v in _volando:
 		var tex: Texture2D = v[0]
-		draw_set_transform(v[1].round(), v[3], Vector2.ONE * v[6])
-		draw_texture(tex, (-tex.get_size() / 2.0).round())
-	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+		_ci.draw_set_transform(v[1].round(), v[3], Vector2.ONE * v[6])
+		_ci.draw_texture(tex, (-tex.get_size() / 2.0).round())
+	_ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 const GRANADA_POS := Vector2(120, 40)
 
 
@@ -267,7 +361,7 @@ func _draw_viewmodel(w: Weapons) -> void:
 	var tp := w.throw_progress()
 	if tp >= 0.0 and w.sprite_granada:
 		var sube := sin(PI * clampf(tp * 1.4, 0.0, 1.0))
-		draw_texture(w.sprite_granada, GRANADA_POS + Vector2(-40.0 * sube, 230.0 * (1.0 - sube)).round())
+		_ci.draw_texture(w.sprite_granada, GRANADA_POS + Vector2(-40.0 * sube, 230.0 * (1.0 - sube)).round())
 		return
 	var a := w.ads_amount
 	var mira: Texture2D = w.sprite_mira[w.current]
@@ -275,7 +369,7 @@ func _draw_viewmodel(w: Weapons) -> void:
 		# Por la mira: la imagen sube desde abajo y queda fija con el poste al centro
 		var pos: Vector2 = _v(w, "mira_pos") + Vector2(0, roundf((1.0 - a) * 2.0 * 120.0)) + off * 0.5
 		pos += centro - Vector2(320, 180)
-		draw_texture(mira, pos.round())
+		_ci.draw_texture(mira, pos.round())
 		if w.flash_2d > 0.0:
 			_draw_flash_2d(pos + _v(w, "mira_poste") + Vector2(0, -3), 0.6)
 		return
@@ -318,20 +412,20 @@ func _draw_viewmodel(w: Weapons) -> void:
 				var sube := smoothstep(0.3, 0.6, rp)
 				pieza = Vector4(0, 0, 1, 1)
 				_cargador_pantalla = Vector2(446, 345 - 95.0 * sube).round()
-	draw_set_transform((VM_PIVOT + off + desliz).round(), giro, Vector2.ONE)
-	draw_texture(w.sprite_cadera[w.current], o.round())
+	_ci.draw_set_transform((VM_PIVOT + off + desliz).round(), giro, Vector2.ONE)
+	_ci.draw_texture(w.sprite_cadera[w.current], o.round())
 	if pieza.z > 0.0 and pieza.w == 0.0:
-		draw_texture(_CLIP, Vector2(pieza.x, pieza.y).round())
+		_ci.draw_texture(_CLIP, Vector2(pieza.x, pieza.y).round())
 	if pieza.z > 0.0 and pieza.w == 2.0:
 		var cg2 := Armas.imagen("pieza_cargador_" + w.id())
-		draw_texture(cg2 if cg2 else _CARGADOR, Vector2(pieza.x, pieza.y).round())
+		_ci.draw_texture(cg2 if cg2 else _CARGADOR, Vector2(pieza.x, pieza.y).round())
 	if pieza.z > 0.0 and pieza.w == 1.0:   # cargador del Colt subiendo hacia la empuñadura, al doble
-		draw_set_transform(_cargador_pantalla, deg_to_rad(12.0), Vector2.ONE)
+		_ci.draw_set_transform(_cargador_pantalla, deg_to_rad(12.0), Vector2.ONE)
 		var cargador := Armas.imagen("pieza_cargador_" + w.id())
-		draw_texture(cargador if cargador else _CARGADOR, Vector2.ZERO)
+		_ci.draw_texture(cargador if cargador else _CARGADOR, Vector2.ZERO)
 	if w.flash_2d > 0.0:
 		_draw_flash_2d(o + _v(w, "vm_boca"), 1.0)
-	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	_ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
 ## Fogonazo de píxeles: estrella amarilla con centro blanco, al azar cada vez.
@@ -340,21 +434,21 @@ func _draw_flash_2d(c: Vector2, escala: float) -> void:
 	for i in 5:
 		var a := -PI * 0.85 + i * 0.35 + randf_range(-0.1, 0.1)
 		var d := Vector2(cos(a), sin(a))
-		draw_line(c, c + d * largo * (1.0 if i % 2 == 0 else 0.6), Color(1.0, 0.75, 0.25), 3.0)
-	draw_circle(c, 5.0 * escala, Color(1.0, 0.85, 0.4))
-	draw_circle(c, 2.5 * escala, Color(1.0, 1.0, 0.85))
+		_ci.draw_line(c, c + d * largo * (1.0 if i % 2 == 0 else 0.6), Color(1.0, 0.75, 0.25), 3.0)
+	_ci.draw_circle(c, 5.0 * escala, Color(1.0, 0.85, 0.4))
+	_ci.draw_circle(c, 2.5 * escala, Color(1.0, 1.0, 0.85))
 
 
 ## Mira telescópica (Springfield): todo negro salvo un círculo, con retícula.
 func _draw_scope(c: Vector2, top: float) -> void:
 	var r := minf(c.y, top / 2.0) * 0.95
-	draw_arc(c, r + 300.0, 0, TAU, 72, Estilo.NEGRO, 600.0)
-	draw_arc(c, r, 0, TAU, 72, Color(0.02, 0.02, 0.02), 3.0)
+	_ci.draw_arc(c, r + 300.0, 0, TAU, 72, Estilo.NEGRO, 600.0)
+	_ci.draw_arc(c, r, 0, TAU, 72, Color(0.02, 0.02, 0.02), 3.0)
 	var neg := Color(0.02, 0.02, 0.02)
-	draw_line(c - Vector2(r, 0), c - Vector2(6, 0), neg, 1.0)
-	draw_line(c + Vector2(6, 0), c + Vector2(r, 0), neg, 1.0)
-	draw_rect(Rect2(c.x - 1, c.y + 2, 3, r - 2), neg)          # poste grueso desde abajo
-	draw_line(c - Vector2(0, r), c - Vector2(0, 6), neg, 1.0)
+	_ci.draw_line(c - Vector2(r, 0), c - Vector2(6, 0), neg, 1.0)
+	_ci.draw_line(c + Vector2(6, 0), c + Vector2(r, 0), neg, 1.0)
+	_ci.draw_rect(Rect2(c.x - 1, c.y + 2, 3, r - 2), neg)          # poste grueso desde abajo
+	_ci.draw_line(c - Vector2(0, r), c - Vector2(0, 6), neg, 1.0)
 
 
 ## ¿La mira está sobre un alemán? (un rayo desde la cámara: escenario y alemanes)
@@ -372,8 +466,8 @@ func _draw_crosshair(c: Vector2, spread_deg: float, enemigo := false) -> void:
 	for d in [Vector2.RIGHT, Vector2.LEFT, Vector2.UP, Vector2.DOWN]:
 		var a: Vector2 = c + d * gap
 		var b: Vector2 = c + d * (gap + 5)
-		draw_line(a + Vector2(1, 1), b + Vector2(1, 1), sombra, 1.0)
-		draw_line(a, b, col, 1.0)
+		_ci.draw_line(a + Vector2(1, 1), b + Vector2(1, 1), sombra, 1.0)
+		_ci.draw_line(a, b, col, 1.0)
 
 
 ## Supresión: los bordes de la vista se oscurecen (marco de bandas, barato).
@@ -383,16 +477,16 @@ func _draw_supresion(s: Vector2, f: float) -> void:
 		var a := f * 0.13 * (6 - i) / 6.0
 		var m := 8.0 + i * 10.0
 		var c := Color(0, 0, 0, a)
-		draw_rect(Rect2(0, 0, s.x, m), c)
-		draw_rect(Rect2(0, top - m, s.x, m), c)
-		draw_rect(Rect2(0, m, m * 1.4, top - 2 * m), c)
-		draw_rect(Rect2(s.x - m * 1.4, m, m * 1.4, top - 2 * m), c)
+		_ci.draw_rect(Rect2(0, 0, s.x, m), c)
+		_ci.draw_rect(Rect2(0, top - m, s.x, m), c)
+		_ci.draw_rect(Rect2(0, m, m * 1.4, top - 2 * m), c)
+		_ci.draw_rect(Rect2(s.x - m * 1.4, m, m * 1.4, top - 2 * m), c)
 
 
 func _draw_hit_indicator(c: Vector2, angle: float, alpha: float) -> void:
 	# Arco rojo alrededor del centro apuntando hacia quien te disparó
 	var a := angle - PI / 2.0
-	draw_arc(c, 46, a - 0.35, a + 0.35, 8, Color(Estilo.ROJO, 0.85 * alpha), 3.0)
+	_ci.draw_arc(c, 46, a - 0.35, a + 0.35, 8, Color(Estilo.ROJO, 0.85 * alpha), 3.0)
 
 
 ## Mensajes encima de la barra, a la izquierda (el más nuevo abajo).
@@ -402,8 +496,8 @@ func _draw_messages(abajo: Vector2) -> void:
 		var col: Color = m[1]
 		col.a = clampf(7.0 - m[2], 0.0, 1.0)
 		var sombra := Color(0, 0, 0, col.a * 0.8)
-		Estilo.texto(self, m[0], Vector2(abajo.x + 1, y + 1), sombra)
-		Estilo.texto(self, m[0], Vector2(abajo.x, y), col)
+		Estilo.texto(_ci, m[0], Vector2(abajo.x + 1, y + 1), sombra)
+		Estilo.texto(_ci, m[0], Vector2(abajo.x, y), col)
 		y += 10
 
 
@@ -462,7 +556,7 @@ func _draw_escuadra(r: Rect2) -> void:
 		paso = maxf(26.0, floorf((r.size.x - 3 * 24) / 3.0))
 	for i in 3:
 		var col := Rect2(r.position.x + i * paso, r.position.y, paso - 1, r.size.y)
-		Estilo.marco(self, col, "chapa")
+		Estilo.marco(_ci, col, "chapa")
 		if i >= aliados.size() or aliados[i] == null or not is_instance_valid(aliados[i]):
 			continue
 		var a = aliados[i]    # Aliado (o su títere, en un invitado del cooperativo)
@@ -470,7 +564,7 @@ func _draw_escuadra(r: Rect2) -> void:
 		_nombre_angosto(a.nombre, col.position.x + col.size.x / 2, col.position.y + 9,
 			Estilo.ROJO if a.dead else Estilo.CREMA, col.size.x - 6)
 		var face := Rect2(col.position + Vector2(1, 11), Vector2(col.size.x - 2, 35))
-		Estilo.marco(self, face, "hundido")
+		Estilo.marco(_ci, face, "hundido")
 		var hp := clampf(a.health / a.max_health, 0.0, 1.0)
 		var tinte := Color.WHITE.lerp(Color(1.0, 0.35, 0.3), (1.0 - hp) * 0.9)
 		if a.dead:
@@ -478,11 +572,11 @@ func _draw_escuadra(r: Rect2) -> void:
 		var tex := _retrato_de(a.nombre)
 		var ancho := minf(tex.get_width(), face.size.x - 2)
 		var fuente := Rect2((tex.get_width() - ancho) / 2.0, 0, ancho, tex.get_height())
-		draw_texture_rect_region(tex, Rect2(face.position + Vector2(1, 1), fuente.size), fuente, tinte)
+		_ci.draw_texture_rect_region(tex, Rect2(face.position + Vector2(1, 1), fuente.size), fuente, tinte)
 		if a.dead:   # una cruz roja sobre el retrato
 			var c := face.get_center()
-			draw_line(c + Vector2(-8, -8), c + Vector2(8, 8), Estilo.ROJO, 2.0)
-			draw_line(c + Vector2(8, -8), c + Vector2(-8, 8), Estilo.ROJO, 2.0)
+			_ci.draw_line(c + Vector2(-8, -8), c + Vector2(8, 8), Estilo.ROJO, 2.0)
+			_ci.draw_line(c + Vector2(8, -8), c + Vector2(-8, 8), Estilo.ROJO, 2.0)
 		elif a.moviendo:
 			_flecha(face.position + Vector2(face.size.x - 7, face.size.y - 6))
 		# Especialidad: el de radio muestra si la artillería está lista (tocar = pedirla)
@@ -493,7 +587,7 @@ func _draw_escuadra(r: Rect2) -> void:
 				var falta := Escuadras.apoyo_listo - Game.elapsed
 				etiqueta = "RADIO" if falta <= 0.0 else str(int(falta))
 				col_e = Estilo.VERDE_LED if falta <= 0.0 else Estilo.AMBAR
-			Estilo.texto(self, etiqueta, Vector2(face.position.x + 2, face.end.y - 2), col_e)
+			Estilo.texto(_ci, etiqueta, Vector2(face.position.x + 2, face.end.y - 2), col_e)
 	# Órdenes: » síganme, → avancen, ‖ alto
 	_orden_rects.clear()
 	var x0 := r.position.x + 3 * paso
@@ -502,9 +596,9 @@ func _draw_escuadra(r: Rect2) -> void:
 		var b := Rect2(x0 + i * ancho_b, r.position.y, ancho_b - 1, r.size.y)
 		_orden_rects.append(b)
 		var activa: bool = Aliado.orden == ORDENES[i]
-		Estilo.marco(self, b, "hundido" if activa else "chapa")
+		Estilo.marco(_ci, b, "hundido" if activa else "chapa")
 		if activa:
-			draw_rect(b.grow(-3), Estilo.AMBAR, false, 1.0)
+			_ci.draw_rect(b.grow(-3), Estilo.AMBAR, false, 1.0)
 		var c := b.get_center().floor() + Vector2(0.5, 0.5)
 		var col := Estilo.AMBAR_CLARO if activa else Estilo.OLIVA_5
 		var k := clampf((b.size.x - 8.0) / 20.0, 0.6, 1.0)   # dibujo más chico si el botón es angosto
@@ -512,39 +606,39 @@ func _draw_escuadra(r: Rect2) -> void:
 		match i:
 			0:
 				for dx in [-5, 3]:
-					draw_polyline([c + Vector2(dx - 3, -6) * k, c + Vector2(dx + 3, 0) * k, c + Vector2(dx - 3, 6) * k], col, g)
+					_ci.draw_polyline([c + Vector2(dx - 3, -6) * k, c + Vector2(dx + 3, 0) * k, c + Vector2(dx - 3, 6) * k], col, g)
 			1:
-				draw_line(c + Vector2(-8, 0) * k, c + Vector2(7, 0) * k, col, g)
-				draw_polyline([c + Vector2(1, -6) * k, c + Vector2(7, 0) * k, c + Vector2(1, 6) * k], col, g)
+				_ci.draw_line(c + Vector2(-8, 0) * k, c + Vector2(7, 0) * k, col, g)
+				_ci.draw_polyline([c + Vector2(1, -6) * k, c + Vector2(7, 0) * k, c + Vector2(1, 6) * k], col, g)
 			2:
-				draw_rect(Rect2(c + Vector2(-5, -6) * k, Vector2(3, 13) * k), col)
-				draw_rect(Rect2(c + Vector2(2, -6) * k, Vector2(3, 13) * k), col)
+				_ci.draw_rect(Rect2(c + Vector2(-5, -6) * k, Vector2(3, 13) * k), col)
+				_ci.draw_rect(Rect2(c + Vector2(2, -6) * k, Vector2(3, 13) * k), col)
 
 
 ## Nombre centrado; si no cabe, junta las letras un píxel (y si aun así no
 ## cabe, lo corta).
 func _nombre_angosto(t: String, cx: float, y: float, col: Color, ancho: float) -> void:
 	if Estilo.ancho_texto(t) <= ancho:
-		Estilo.texto_c(self, t, cx, y, col)
+		Estilo.texto_c(_ci, t, cx, y, col)
 		return
 	var paso := 5.0
 	if t.length() * paso - 1.0 > ancho:   # ni así cabe: se corta (DELUCA → DELU)
 		t = t.substr(0, int((ancho + 1.0) / paso))
 	var x := floorf(cx - (t.length() * paso - 1.0) / 2.0)
 	for ch in t:
-		Estilo.texto(self, ch, Vector2(x, y), col)
+		Estilo.texto(_ci, ch, Vector2(x, y), col)
 		x += paso
 
 
 ## Flechita ámbar: el compañero va corriendo a otra posición.
 func _flecha(c: Vector2) -> void:
-	draw_rect(Rect2(c + Vector2(-3, -1), Vector2(5, 2)), Estilo.NEGRO)
-	draw_polyline([c + Vector2(-3, 0), c + Vector2(2, 0)], Estilo.AMBAR_CLARO, 1.0)
-	draw_polyline([c + Vector2(0, -2), c + Vector2(2, 0), c + Vector2(0, 2)], Estilo.AMBAR_CLARO, 1.0)
+	_ci.draw_rect(Rect2(c + Vector2(-3, -1), Vector2(5, 2)), Estilo.NEGRO)
+	_ci.draw_polyline([c + Vector2(-3, 0), c + Vector2(2, 0)], Estilo.AMBAR_CLARO, 1.0)
+	_ci.draw_polyline([c + Vector2(0, -2), c + Vector2(2, 0), c + Vector2(0, 2)], Estilo.AMBAR_CLARO, 1.0)
 
 
 func _draw_portrait(r: Rect2) -> void:
-	Estilo.marco(self, r, "chapa")
+	Estilo.marco(_ci, r, "chapa")
 	if _player.nombre.to_lower() != soldado:   # tomaste el lugar de otro: su nombre y su cara
 		soldado = _player.nombre.to_lower()
 		_cargar_retratos()
@@ -552,7 +646,7 @@ func _draw_portrait(r: Rect2) -> void:
 	var hp := clampf(_player.health / _player.max_health, 0.0, 1.0)
 	# Retrato: se tiñe de rojo con el daño y queda gris al morir
 	var face := Rect2(r.position + Vector2(4, 11), Vector2(40, 35))
-	Estilo.marco(self, face, "hundido")
+	Estilo.marco(_ci, face, "hundido")
 	var tex := _retrato
 	var herido := hp < 0.5 and _retrato_herido != null
 	if herido:
@@ -561,36 +655,36 @@ func _draw_portrait(r: Rect2) -> void:
 	var tinte := Color.WHITE.lerp(Color(1.0, 0.35, 0.3), (1.0 - hp) * (0.35 if herido else 0.9))
 	if _player.dead:
 		tinte = Color(0.45, 0.45, 0.45)
-	draw_texture(tex, face.position + Vector2(1, 1), tinte)
+	_ci.draw_texture(tex, face.position + Vector2(1, 1), tinte)
 	if _player.crouching:
-		Estilo.icono(self, Estilo.ICONO_AGACHADO, face.position + Vector2(7, face.size.y - 6))
+		Estilo.icono(_ci, Estilo.ICONO_AGACHADO, face.position + Vector2(7, face.size.y - 6))
 	# Vida: barra vertical de LEDs al lado del retrato
 	var bar := Rect2(r.position + Vector2(46, 11), Vector2(9, 35))
-	Estilo.marco(self, bar, "hundido")
+	Estilo.marco(_ci, bar, "hundido")
 	var segs := 10
 	var col_on := Estilo.VERDE_LED if hp > 0.35 else Estilo.ROJO
 	for i in segs:
 		var filled := float(i) < hp * segs
 		var y := bar.end.y - 3 - (i + 1) * 3
-		draw_rect(Rect2(bar.position.x + 2, y + 1, bar.size.x - 4, 2),
+		_ci.draw_rect(Rect2(bar.position.x + 2, y + 1, bar.size.x - 4, 2),
 			col_on if filled else Color(Estilo.OLIVA_2, 1.0))
 
 
 func _draw_status(r: Rect2) -> void:
-	Estilo.marco(self, r, "chapa")
+	Estilo.marco(_ci, r, "chapa")
 	# Clima
-	Estilo.icono(self, Estilo.ICONO_NIEBLA, r.position + Vector2(14, 8))
-	Estilo.texto(self, "NIEBLA", r.position + Vector2(24, 12), Estilo.CREMA)
+	Estilo.icono(_ci, Estilo.ICONO_NIEBLA, r.position + Vector2(14, 8))
+	Estilo.texto(_ci, "NIEBLA", r.position + Vector2(24, 12), Estilo.CREMA)
 	# Hora
 	var clock := Rect2(r.position + Vector2(5, 15), Vector2(r.size.x - 10, 15))
-	Estilo.marco(self, clock, "hundido")
+	Estilo.marco(_ci, clock, "hundido")
 	var t := Game.clock_text()
 	var tw := t.length() * 9   # 9 px por dígito mediano
-	Estilo.numero(self, t, Vector2(roundf(clock.position.x + (clock.size.x - tw) / 2.0), clock.position.y + 1),
+	Estilo.numero(_ci, t, Vector2(roundf(clock.position.x + (clock.size.x - tw) / 2.0), clock.position.y + 1),
 		Estilo.DIG_MEDIANO)
 	# Brújula (norte = el mar, como en la playa de Omaha)
 	var comp := Rect2(r.position + Vector2(5, 31), Vector2(r.size.x - 10, 13))
-	Estilo.marco(self, comp, "hundido")
+	Estilo.marco(_ci, comp, "hundido")
 	var fwd := -_player.global_basis.z
 	var bearing := fmod(rad_to_deg(atan2(-fwd.x, fwd.z)) + 360.0, 360.0)
 	var names := ["N", "NE", "E", "SE", "S", "SO", "O", "NO"]
@@ -603,30 +697,30 @@ func _draw_status(r: Rect2) -> void:
 		var px := roundf(mid + diff / 60.0 * (comp.size.x / 2 - 7))
 		if i % 2 == 0:
 			var col := Estilo.CREMA if i != 0 else Estilo.AMBAR_CLARO
-			Estilo.texto_c(self, names[i / 2], px, comp.position.y + 11, col)
+			Estilo.texto_c(_ci, names[i / 2], px, comp.position.y + 11, col)
 		else:
-			draw_line(Vector2(px, comp.position.y + 7), Vector2(px, comp.position.y + 10), Estilo.OLIVA_4, 1.0)
-	draw_rect(Rect2(mid, comp.position.y + 1, 1, 3), Estilo.AMBAR)
+			_ci.draw_line(Vector2(px, comp.position.y + 7), Vector2(px, comp.position.y + 10), Estilo.OLIVA_4, 1.0)
+	_ci.draw_rect(Rect2(mid, comp.position.y + 1, 1, 3), Estilo.AMBAR)
 
 
 func _draw_grenades(r: Rect2) -> void:
-	Estilo.marco(self, r, "chapa")
+	Estilo.marco(_ci, r, "chapa")
 	var n := _player.grenades
 	var inner := Rect2(r.position + Vector2(5, 5), r.size - Vector2(10, 10))
-	Estilo.marco(self, inner, "hundido")
+	Estilo.marco(_ci, inner, "hundido")
 	var dy := roundf(inner.position.y + (inner.size.y - Estilo.alto_numero()) / 2.0)
-	Estilo.numero(self, str(n), Vector2(inner.position.x + 9, dy), Estilo.DIG_GRANDE, 1,
+	Estilo.numero(_ci, str(n), Vector2(inner.position.x + 9, dy), Estilo.DIG_GRANDE, 1,
 		Color.WHITE if n > 0 else Color(1, 1, 1, 0.0))
-	Estilo.icono(self, Estilo.ICONO_GRANADA, inner.position + Vector2(39, inner.size.y / 2.0),
+	Estilo.icono(_ci, Estilo.ICONO_GRANADA, inner.position + Vector2(39, inner.size.y / 2.0),
 		Color.WHITE if n > 0 else Color(0.4, 0.42, 0.38))
 	if n > 0:
-		draw_rect(Rect2(inner.position.x + 9, inner.end.y - 4, 13, 2), Estilo.AMBAR)
+		_ci.draw_rect(Rect2(inner.position.x + 9, inner.end.y - 4, 13, 2), Estilo.AMBAR)
 
 
 func _draw_ammo(r: Rect2) -> void:
-	Estilo.marco(self, r, "chapa")
+	Estilo.marco(_ci, r, "chapa")
 	var inner := Rect2(r.position + Vector2(5, 5), r.size - Vector2(10, 10))
-	Estilo.marco(self, inner, "hundido")
+	Estilo.marco(_ci, inner, "hundido")
 	var w := _player.weapons
 	var mag := w.ammo[w.current]
 	var res := w.reserve[w.current]
@@ -635,19 +729,19 @@ func _draw_ammo(r: Rect2) -> void:
 	var x := roundf(inner.position.x + (inner.size.x - ancho) / 2.0)
 	var y := inner.position.y + 3
 	var rojo := Color(1.0, 0.45, 0.4)
-	x += Estilo.numero(self, str(mag), Vector2(x, y), Estilo.DIG_GRANDE, 2, Color.WHITE if mag > 0 else rojo)
-	draw_rect(Rect2(x + 3, y + 3, 2, Estilo.alto_numero() - 6), Estilo.AMBAR)
+	x += Estilo.numero(_ci, str(mag), Vector2(x, y), Estilo.DIG_GRANDE, 2, Color.WHITE if mag > 0 else rojo)
+	_ci.draw_rect(Rect2(x + 3, y + 3, 2, Estilo.alto_numero() - 6), Estilo.AMBAR)
 	x += 9
-	Estilo.numero(self, str(res), Vector2(x, y), Estilo.DIG_GRANDE, 3,
+	Estilo.numero(_ci, str(res), Vector2(x, y), Estilo.DIG_GRANDE, 3,
 		Color.WHITE if res > 0 else Color(1, 1, 1, 0.25))
 	var by := inner.end.y - 11
 	if w.is_reloading():
 		if int(Time.get_ticks_msec() / 250) % 2 == 0:
-			Estilo.texto_c(self, "RECARGANDO", inner.get_center().x, inner.end.y - 3, Estilo.CREMA)
+			Estilo.texto_c(_ci, "RECARGANDO", inner.get_center().x, inner.end.y - 3, Estilo.CREMA)
 	elif w.def().get("recarga", "") == "clip" and mag > 0:
 		# Balas del clip del Garand
 		for i in mag:
-			draw_texture(Estilo.ICONO_BALA, Vector2(roundf(inner.get_center().x - mag * 2.5) + i * 5, by + 1))
+			_ci.draw_texture(Estilo.ICONO_BALA, Vector2(roundf(inner.get_center().x - mag * 2.5) + i * 5, by + 1))
 
 
 func _draw_slots(r: Rect2) -> void:
@@ -657,22 +751,22 @@ func _draw_slots(r: Rect2) -> void:
 	for i in 2:
 		var sr := Rect2(r.position + Vector2(i * (sw + 2), 0), Vector2(sw, r.size.y))
 		_slot_rects.append(sr)
-		Estilo.marco(self, sr, "chapa")
+		Estilo.marco(_ci, sr, "chapa")
 		var inner := Rect2(sr.position + Vector2(5, 5), sr.size - Vector2(10, 10))
-		Estilo.marco(self, inner, "hundido")
+		Estilo.marco(_ci, inner, "hundido")
 		var selected := i == w.current
-		Estilo.texto(self, str(i + 1), inner.position + Vector2(3, 10),
+		Estilo.texto(_ci, str(i + 1), inner.position + Vector2(3, 10),
 			Estilo.AMBAR if selected else Estilo.OLIVA_4)
 		var tex := Armas.imagen("perfil_" + w.slots[i])
 		var tinte := Color.WHITE if selected else Color(0.45, 0.5, 0.42)
 		if tex:
-			Estilo.icono(self, tex, inner.get_center() + Vector2(1, 1), tinte)
+			Estilo.icono(_ci, tex, inner.get_center() + Vector2(1, 1), tinte)
 		else:   # sin foto todavía: el nombre del arma
 			var nombre: String = Armas.datos(w.slots[i])["name"]
-			Estilo.texto_c(self, nombre.split(" ")[0], inner.get_center().x + 3, inner.get_center().y + 4,
+			Estilo.texto_c(_ci, nombre.split(" ")[0], inner.get_center().x + 3, inner.get_center().y + 4,
 				Estilo.CREMA if selected else Estilo.OLIVA_4)
 		if selected:
-			draw_rect(Rect2(inner.position.x + 3, inner.end.y - 4, inner.size.x - 6, 2), Estilo.AMBAR)
+			_ci.draw_rect(Rect2(inner.position.x + 3, inner.end.y - 4, inner.size.x - 6, 2), Estilo.AMBAR)
 
 
 ## Sangre en la pantalla al recibir un tiro: salpicaduras hacia los bordes que
@@ -703,5 +797,5 @@ func _draw_sangre(s: Vector2, top: float) -> void:
 			continue
 		var a := minf(m[2] * 1.4, 0.85)
 		for g in m[1]:
-			draw_circle((m[0] + g[0]).floor(), g[1], Color(0.36, 0.01, 0.01, a))
-			draw_circle((m[0] + g[0] * 0.92).floor(), g[1] * 0.55, Color(0.5, 0.03, 0.02, a))
+			_ci.draw_circle((m[0] + g[0]).floor(), g[1], Color(0.36, 0.01, 0.01, a))
+			_ci.draw_circle((m[0] + g[0] * 0.92).floor(), g[1] * 0.55, Color(0.5, 0.03, 0.02, a))

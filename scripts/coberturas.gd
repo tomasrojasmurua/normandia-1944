@@ -10,16 +10,33 @@ class_name Coberturas
 ##   parcial = solo tapa una parte (erizo checo): ayuda, pero no del todo.
 
 static var puntos: Array[Dictionary] = []
+## Los mismos puntos repartidos en una grilla de CELDA m: para buscar cerca de
+## un lugar se miran solo las celdas de alrededor, no los más de mil puntos
+## (eso trababa un cuadro cada vez que un soldado buscaba dónde cubrirse).
+const CELDA := 8.0
+static var _celdas := {}           # Vector2i → Array[Dictionary]
+static var _de := {}               # id del soldado → el punto que ocupa
 
 
 static func limpiar() -> void:
 	puntos.clear()
+	_celdas.clear()
+	_de.clear()
+
+
+static func _celda(pos: Vector3) -> Vector2i:
+	return Vector2i(floori(pos.x / CELDA), floori(pos.z / CELDA))
 
 
 static func _agregar(pos: Vector3, n: Vector3, bajo: bool, parcial: bool) -> void:
 	if pos.y > 0.3 and pos.z < -56.3 and pos.z > -80.5:   # en la ladera: a la altura del terreno
 		pos.y = Ambiente.alto_acantilado(pos.z)
-	puntos.append({"pos": pos, "n": n.normalized(), "bajo": bajo, "parcial": parcial, "ocupado": null})
+	var p := {"pos": pos, "n": n.normalized(), "bajo": bajo, "parcial": parcial, "ocupado": null}
+	puntos.append(p)
+	var k := _celda(pos)
+	if not _celdas.has(k):
+		_celdas[k] = []
+	_celdas[k].append(p)
 
 
 ## Muro (sacos de arena, concreto): puntos a lo largo de los dos lados.
@@ -59,7 +76,17 @@ static func mejor(quien: Node, puntaje: Callable, cerca := Vector3.ZERO, radio :
 	var mejor_p: Dictionary = {}
 	var mejor_v := -INF
 	var r2 := radio * radio
-	for p in puntos:
+	var lista: Array = puntos
+	if radio < INF:
+		lista = []
+		var a := _celda(cerca - Vector3(radio, 0, radio))
+		var b := _celda(cerca + Vector3(radio, 0, radio))
+		for cx in range(a.x, b.x + 1):
+			for cz in range(a.y, b.y + 1):
+				var c: Variant = _celdas.get(Vector2i(cx, cz))
+				if c != null:
+					lista.append_array(c)
+	for p in lista:
 		if radio < INF and (p["pos"] as Vector3).distance_squared_to(cerca) > r2:
 			continue
 		var ocupante: Variant = p["ocupado"]
@@ -76,12 +103,16 @@ static func ocupar(p: Dictionary, quien: Node) -> void:
 	liberar(quien)
 	if not p.is_empty():
 		p["ocupado"] = quien
+		_de[quien.get_instance_id()] = p
 
 
 static func liberar(quien: Node) -> void:
-	for p in puntos:
+	var id := quien.get_instance_id()
+	var p: Variant = _de.get(id)
+	if p != null:
 		if p["ocupado"] == quien:
 			p["ocupado"] = null
+		_de.erase(id)
 
 
 ## El punto libre más cercano a `pos` (a menos de `radio` m), o vacío.

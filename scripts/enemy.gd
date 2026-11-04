@@ -362,6 +362,8 @@ func hit(amount: float, headshot: bool, pos: Vector3, dir: Vector3, por_jugador 
 
 func _die(dir: Vector3, headshot: bool, por_jugador := true) -> void:
 	dead = true
+	set_process(false)            # un caído ya no piensa ni se mueve (no gasta cada cuadro)
+	set_physics_process(false)
 	_rafaga = 0
 	moviendo = false
 	Coberturas.liberar(self)

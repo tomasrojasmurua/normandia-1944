@@ -14,8 +14,16 @@ func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 
+var _firma: Array = []
+
+
+## Solo se redibuja si cambió algo (abierta/cerrada, tamaño, ajustes).
 func _process(_delta: float) -> void:
-	queue_redraw()
+	var f: Array = [abierta, size, Game.warming, Objetivos.terminado, Game.garra, Game.disparo_soltar,
+		Game.soldados_3d, _encima]
+	if f != _firma:
+		_firma = f
+		queue_redraw()
 
 
 func pausar(si: bool) -> void:

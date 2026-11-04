@@ -30,10 +30,12 @@ var _ultima_pos := Vector3.ZERO
 var _capsula: CapsuleShape3D
 var _col_cuerpo: CollisionShape3D
 var _col_cabeza: CollisionShape3D
+var _es_sprite := false
 
 
 func _crear_cuerpo(bando: String) -> void:
 	cuerpo = Soldado.new() if Game.soldados_3d else SoldadoSprite.new()
+	_es_sprite = cuerpo is SoldadoSprite
 	cuerpo.bando = bando
 	cuerpo.arma = arma
 	add_child(cuerpo)
@@ -58,13 +60,16 @@ func _crear_cuerpo(bando: String) -> void:
 ## Las formas de choque siguen al cuerpo (agachado no se le puede pegar igual).
 ## Cambiar una forma de choque obliga al motor de física a rehacerla, así que
 ## solo se tocan cuando la pose cambió de verdad (antes: en cada paso).
+const ALTO_POSE := {"reposo": 1.48, "pie": 1.48, "rodilla": 1.12, "agachado": 0.8}
+
+
 func _seguir_pose() -> void:
-	var alto: float = {"reposo": 1.48, "pie": 1.48, "rodilla": 1.12, "agachado": 0.8}[cuerpo.pose]
+	var alto: float = ALTO_POSE[cuerpo.pose]
 	if absf(_capsula.height - alto) > 0.02:
 		_capsula.height = lerpf(_capsula.height, alto, 0.15)
 		_col_cuerpo.position.y = _capsula.height / 2.0
 	# A lo lejos el dibujo es más grande (soldado_sprite.gd): la caja también
-	var e: float = cuerpo.get("escala") if cuerpo.get("escala") != null else 1.0
+	var e: float = cuerpo.escala if _es_sprite else 1.0
 	var r := minf(0.3 * e, _capsula.height / 2.0)
 	if absf(_capsula.radius - r) > 0.03:
 		_capsula.radius = r
@@ -105,22 +110,30 @@ func veo(blanco: Node3D, alcance: float) -> bool:
 
 ## Al más cercano que veo de un grupo ("americanos" o "enemies").
 ## `preferido` cuenta como más cerca (el jugador atrae más fuego).
+##
+## Primero ordena por distancia (barato) y después mira con rayos desde el más
+## cercano: el primero que ve es el elegido. Antes se tiraban rayos a casi
+## todos (era lo más caro de la IA); el resultado es el mismo.
 func elegir_objetivo(grupo: String, alcance: float, preferido: Node = null, excluir: Node = null) -> Node3D:
-	var mejor: Node3D = null
-	var mejor_d := INF
+	var yo := global_position
+	var lista: Array = []
 	for n in get_tree().get_nodes_in_group(grupo):
 		var b := n as Node3D
 		if b == null or b.dead or b == excluir:
 			continue
-		var d := global_position.distance_to(b.global_position)
+		var d := yo.distance_to(b.global_position)
 		if b == preferido:
 			d *= 0.75
 		if b == objetivo:
 			d *= 0.85      # no cambia de blanco a cada rato
-		if d < mejor_d and d < alcance and veo(b, alcance):
-			mejor_d = d
-			mejor = b
-	return mejor
+		if d < alcance:
+			lista.append([d, b])
+	if lista.size() > 1:
+		lista.sort_custom(func(x: Array, y: Array) -> bool: return x[0] < y[0])
+	for par in lista:
+		if veo(par[1], alcance):
+			return par[1]
+	return null
 
 
 # ================================================================ moverse

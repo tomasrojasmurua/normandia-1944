@@ -89,7 +89,7 @@ func _ready() -> void:
 	for i in 10:
 		var p := Vector3(rng.randf_range(-area.x / 2, area.x / 2), 0, rng.randf_range(-9, 0))
 		var tilt := Vector3(rng.randf_range(-25, -10), 0, rng.randf_range(-12, 12))
-		_add_box(p + Vector3(0, 1.0, 0), Vector3(0.22, 2.6, 0.22), _wood, tilt)
+		_poste(p + Vector3(0, 1.0, 0), tilt, true)
 
 	_add_bluffs()
 	# Tierra adentro: alambre, ladera, casamata, setos y Vierville (fases 2–4)
@@ -136,6 +136,7 @@ func _ready() -> void:
 	_costados(rng2)
 	_build_bags()
 	_dibujar_erizos()
+	_dibujar_postes()
 
 	# Cooperativo: la IA (alemanes, escuadras, defensa) solo existe en el
 	# anfitrión; los invitados ven títeres que él manda. Cada jugador manda la
@@ -256,6 +257,42 @@ func _add_hedgehog(pos: Vector3, yaw: float, choque := true) -> void:
 		root.add_child(col)
 
 
+## Poste de madera clavado en la arena (`tilt` en grados, como rotation_degrees).
+## Se dibujan todos juntos (MultiMesh); `choque` = con caja de choque.
+var _postes: Array[Transform3D] = []
+
+
+func _poste(pos: Vector3, tilt: Vector3, choque: bool) -> void:
+	var t := Transform3D(Basis.from_euler(tilt * PI / 180.0), pos)
+	_postes.append(t)
+	if not choque:
+		return
+	var body := StaticBody3D.new()
+	body.transform = t
+	add_child(body)
+	var col := CollisionShape3D.new()
+	var shape := BoxShape3D.new()
+	shape.size = Vector3(0.22, 2.6, 0.22)
+	col.shape = shape
+	body.add_child(col)
+
+
+func _dibujar_postes() -> void:
+	var caja := BoxMesh.new()
+	caja.size = Vector3(0.22, 2.6, 0.22)
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.mesh = caja
+	mm.instance_count = _postes.size()
+	for i in _postes.size():
+		mm.set_instance_transform(i, _postes[i])
+	var mi := MultiMeshInstance3D.new()
+	mi.multimesh = mm
+	mi.material_override = _wood
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(mi)
+
+
 ## La malla de un erizo (tres vigas en L y las cartelas), hecha una vez.
 func _malla_erizo() -> Mesh:
 	var largo := 2.3
@@ -347,22 +384,83 @@ func _sandbag_wall(center: Vector3, length: float, courses: int, rows: int, yaw_
 	body.add_child(col)
 
 
+## Los sacos se dibujan por trozos del mapa (TROZO m de lado): así la tarjeta
+## de video dibuja solo los trozos que están en pantalla y cerca (antes eran
+## los ~5.000 sacos en cada cuadro, el 74 % de todos los triángulos).
+const TROZO := 36.0
+## Más allá de esto un trozo no se dibuja (a esa distancia la niebla ya tapa
+## casi todo y un saco mide un par de píxeles).
+const LEJOS_SACOS := 150.0
+
+
 func _build_bags() -> void:
-	var mesh := CapsuleMesh.new()   # radio 0,5 y alto 2: se escala por saco
-	mesh.radius = 0.5
-	mesh.height = 2.0
-	mesh.radial_segments = 8
-	mesh.rings = 2
-	var mm := MultiMesh.new()
-	mm.transform_format = MultiMesh.TRANSFORM_3D
-	mm.mesh = mesh
-	mm.instance_count = _bags.size()
-	for i in _bags.size():
-		mm.set_instance_transform(i, _bags[i])
-	var inst := MultiMeshInstance3D.new()
-	inst.multimesh = mm
-	inst.material_override = _burlap
-	add_child(inst)
+	var mesh := malla_saco()
+	var trozos := {}
+	for t in _bags:
+		var k := Vector2i(floori(t.origin.x / TROZO), floori(t.origin.z / TROZO))
+		if not trozos.has(k):
+			trozos[k] = []
+		trozos[k].append(t)
+	for k: Vector2i in trozos:
+		var lista: Array = trozos[k]
+		var centro := Vector3((k.x + 0.5) * TROZO, 0.0, (k.y + 0.5) * TROZO)
+		var mm := MultiMesh.new()
+		mm.transform_format = MultiMesh.TRANSFORM_3D
+		mm.mesh = mesh
+		mm.instance_count = lista.size()
+		for i in lista.size():
+			var t: Transform3D = lista[i]
+			mm.set_instance_transform(i, Transform3D(t.basis, t.origin - centro))
+		var inst := MultiMeshInstance3D.new()
+		inst.multimesh = mm
+		inst.material_override = _burlap
+		inst.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		inst.visibility_range_end = LEJOS_SACOS
+		inst.position = centro
+		add_child(inst)
+
+
+## Saco de arena liviano: un "cojín" de sección hexagonal con las puntas
+## cerradas (24 triángulos; la cápsula de antes tenía 144). Mismo tamaño que
+## la cápsula de radio 0,5 y alto 2 (a lo largo de Y), que se escala por saco.
+static func malla_saco() -> ArrayMesh:
+	var v := PackedVector3Array()
+	var n := PackedVector3Array()
+	var anillo := []   # [y] -> índices
+	# Dos anillos hexagonales (algo más anchos que la cápsula, para que el
+	# hexágono no deje huecos entre sacos) y una punta en cada extremo. Las
+	# normales imitan las de la cápsula: los bordes se oscurecen como antes.
+	for y in [-0.74, 0.74]:
+		var fila := []
+		for k in 6:
+			var a := deg_to_rad(30.0 + 60.0 * k)
+			fila.append(v.size())
+			v.append(Vector3(cos(a) * 0.53, y, sin(a) * 0.53))
+			n.append(Vector3(cos(a) * 0.85, signf(y) * 0.5, sin(a) * 0.85).normalized())
+		anillo.append(fila)
+	var punta := [v.size(), v.size() + 1]
+	v.append(Vector3(0, -1.0, 0))
+	n.append(Vector3.DOWN)
+	v.append(Vector3(0, 1.0, 0))
+	n.append(Vector3.UP)
+	var idx := PackedInt32Array()
+	for k in 6:
+		var k2 := (k + 1) % 6
+		var a0: int = anillo[0][k]
+		var a1: int = anillo[0][k2]
+		var b0: int = anillo[1][k]
+		var b1: int = anillo[1][k2]
+		idx.append_array([a0, a1, b0, a1, b1, b0])          # costado
+		idx.append_array([punta[0], a1, a0])                # punta de abajo
+		idx.append_array([punta[1], b0, b1])                # punta de arriba
+	var arr := []
+	arr.resize(Mesh.ARRAY_MAX)
+	arr[Mesh.ARRAY_VERTEX] = v
+	arr[Mesh.ARRAY_NORMAL] = n
+	arr[Mesh.ARRAY_INDEX] = idx
+	var m := ArrayMesh.new()
+	m.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arr)
+	return m
 
 
 func _add_box(pos: Vector3, box_size: Vector3, mat: Material, rot_deg := Vector3.ZERO) -> StaticBody3D:
@@ -413,7 +511,7 @@ func _costados(rng: RandomNumberGenerator) -> void:
 		for i in 5:
 			var p := Vector3(lado * rng.randf_range(22.0, 38.0), 0, rng.randf_range(-9.0, 2.0))
 			var tilt := Vector3(rng.randf_range(-25, -10), 0, rng.randf_range(-12, 12))
-			_add_box(p + Vector3(0, 1.0, 0), Vector3(0.22, 2.6, 0.22), _wood, tilt)
+			_poste(p + Vector3(0, 1.0, 0), tilt, true)
 		_sandbag_wall(Vector3(lado * 31.0, 0, -14.0), 3.0, 5, 2, lado * 12.0, rng)
 		_sandbag_wall(Vector3(lado * 36.0, 0, -24.0), 3.0, 5, 2, -lado * 8.0, rng)
 		_sandbag_wall(Vector3(lado * 27.0, 0, -6.0), 2.5, 4, 2, lado * 5.0, rng)
@@ -425,7 +523,7 @@ func _costados(rng: RandomNumberGenerator) -> void:
 		for i in 10:
 			var p := Vector3(lado * rng.randf_range(LIMITE_X + 2.0, 90.0), 0, rng.randf_range(-12.0, 3.0))
 			var tilt := Vector3(rng.randf_range(-25, -10), 0, rng.randf_range(-12, 12))
-			Game.box(self, Vector3(0.22, 2.6, 0.22), p + Vector3(0, 1.0, 0), _wood, tilt)
+			_poste(p + Vector3(0, 1.0, 0), tilt, false)
 		for k in 4:
 			var c := Vector3(lado * rng.randf_range(48.0, 85.0), 0, rng.randf_range(-48.0, -30.0))
 			_sandbag_wall(c, rng.randf_range(4.0, 7.0), 5, 2, rng.randf_range(-15.0, 15.0), rng, false)

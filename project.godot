@@ -7,7 +7,7 @@ config_version=5
 
 config/name="Normandy 1944"
 config/description="FPS cooperativo retro de la Segunda Guerra Mundial."
-config/version="0.28.3"
+config/version="0.29.0"
 run/main_scene="res://scenes/menu.tscn"
 config/features=PackedStringArray("4.7", "GL Compatibility")
 config/icon="res://assets/icons/icon_512.png"
@@ -110,6 +110,10 @@ order_hold={
 
 pointing/emulate_touch_from_mouse=false
 pointing/emulate_mouse_from_touch=false
+
+[physics]
+
+3d/physics_engine="Jolt Physics"
 
 [rendering]
 

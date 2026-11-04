@@ -128,16 +128,23 @@ func _process(delta: float) -> void:
 	if not get_tree().paused:
 		elapsed += delta
 		# Los charcos crecen despacio
-		for m in _creciendo.duplicate():
+		for i in range(_creciendo.size() - 1, -1, -1):
+			var m: MeshInstance3D = _creciendo[i]
 			var t: float = minf(float(m.get_meta("t", 1.0)) + delta / 7.0, 1.0)
 			m.set_meta("t", t)
 			m.scale = Vector3.ONE * float(m.get_meta("tam", 1.0)) * (0.25 + 0.75 * sqrt(t))
 			if t >= 1.0:
-				_creciendo.erase(m)
-	for f in _fogonazos:
-		if f.visible and Time.get_ticks_msec() >= int(f.get_meta("hasta", 0)) \
-				and Engine.get_frames_drawn() >= int(f.get_meta("cuadro", 0)):
-			f.visible = false
+				_creciendo.remove_at(i)
+	if _fogonazos_vivos > 0:
+		var ahora := Time.get_ticks_msec()
+		var cuadro := Engine.get_frames_drawn()
+		_fogonazos_vivos = 0
+		for f in _fogonazos:
+			if f.visible:
+				if ahora >= int(f.get_meta("hasta", 0)) and cuadro >= int(f.get_meta("cuadro", 0)):
+					f.visible = false
+				else:
+					_fogonazos_vivos += 1
 
 
 ## Se llama al empezar una misión (y al reiniciar tras morir).
@@ -583,8 +590,20 @@ func warmup() -> void:
 	mancha(p, 0.5, false)
 	if Telones.actual:
 		Telones.actual.calentar(p)
+	# Lo que se deja de dibujar a lo lejos (ruinas de Vierville, sacos, modelos)
+	# se dibuja igual estos cuadros: el navegador prepara su sombreador ahora y
+	# no en medio de la misión, cuando aparece por primera vez.
+	var rangos := {}
+	for n in get_tree().current_scene.find_children("*", "GeometryInstance3D", true, false):
+		var g := n as GeometryInstance3D
+		if g.visibility_range_end > 0.0:
+			rangos[g] = g.visibility_range_end
+			g.visibility_range_end = 0.0
 	for i in 4:
 		await get_tree().process_frame
+	for g: GeometryInstance3D in rangos:
+		if is_instance_valid(g):
+			g.visibility_range_end = rangos[g]
 	await get_tree().create_timer(1.2).timeout     # que caigan los escombros antes de mostrar la playa
 	warming = false
 
@@ -663,6 +682,7 @@ func explode(pos: Vector3, radius: float, damage: float, desde_red := false) -> 
 ## bocanada de humo. Así se ve de dónde vienen los tiros. Los alemanes, más
 ## grande y blanco amarillento; los compañeros, más chico y anaranjado.
 var _fogonazos: Array = []
+var _fogonazos_vivos := 0     # cuántos están encendidos (si no hay, no se revisan)
 var _next_fogonazo := 0
 var _tex_fogonazo: ImageTexture
 
@@ -694,6 +714,7 @@ func fogonazo(pos: Vector3, aleman: bool) -> void:
 	# celular lento, un temporizador lo apagaría antes de que se llegue a ver)
 	f.set_meta("hasta", Time.get_ticks_msec() + 70)
 	f.set_meta("cuadro", Engine.get_frames_drawn() + 2)
+	_fogonazos_vivos += 1
 	if aleman:
 		_burst(pos, Color(0.6, 0.6, 0.58), 1, 0.4, 0.9, 0.22, Vector3.UP, -0.04)
 

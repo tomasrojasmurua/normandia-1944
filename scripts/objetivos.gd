@@ -63,6 +63,7 @@ func _ready() -> void:
 	for x in LISTA:
 		x["tras_i"] = ids.get(x.get("tras", ""), -1)
 	hecho = []
+	_fase_memo = -1
 	progreso = []
 	_hecho_visto = []
 	for x in LISTA:
@@ -105,11 +106,20 @@ static func n_fases() -> int:
 
 
 ## La fase en curso: la primera que tiene algún objetivo sin cumplir.
+## Se guarda (se pide muchísimas veces por cuadro) y se recalcula solo cuando
+## cambia `hecho` (_cumplir, recibir y al empezar).
+static var _fase_memo := -1
+
+
 static func fase() -> int:
+	if _fase_memo >= 0:
+		return _fase_memo
+	_fase_memo = maxi(n_fases() - 1, 0)
 	for i in LISTA.size():
 		if not hecho[i]:
-			return LISTA[i]["fase"]
-	return maxi(n_fases() - 1, 0)
+			_fase_memo = LISTA[i]["fase"]
+			break
+	return _fase_memo
 
 
 ## ¿Este objetivo se puede hacer ahora? (de la fase en curso, sin cumplir y
@@ -467,6 +477,7 @@ func _jugadores() -> Array:
 
 func _cumplir(i: int) -> void:
 	hecho[i] = true
+	_fase_memo = -1
 	progreso[i] = 1.0
 	_aplicar_efectos()
 	var c := cuenta_fase()
@@ -520,6 +531,7 @@ static func recibir(o: Array) -> void:
 	for i in n:
 		hecho[i] = int(o[i]) == 1
 		progreso[i] = float(o[n + i])
+	_fase_memo = -1
 	if actual:
 		actual._aplicar_efectos()
 

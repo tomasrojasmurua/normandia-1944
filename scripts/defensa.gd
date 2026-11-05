@@ -29,6 +29,8 @@ var _t_ola := 8.0
 var _olas := 0
 var _t_bengala := 7.0
 var _avisos_bengala := 0
+var _gran := false              # ya salió el gran contraataque de esta defensa
+var _mgs_ola: Array = []        # MG42 que trajeron las olas (máx. 2 vivas)
 var _cola: Array = []           # alemanes por aparecer: [pos, arma, rol, meta] (de a uno, para no trabar)
 var _t_cola := 0.0
 
@@ -80,7 +82,7 @@ func _process(delta: float) -> void:
 	_t_mortero -= delta
 	if mort != null and _t_mortero <= 0.0:
 		var ritmo := 0.6 if Objetivos.pendiente("casamata") else 1.0
-		_t_mortero = _rng.randf_range(mort.x, mort.y) * ritmo
+		_t_mortero = _rng.randf_range(mort.x, mort.y) * ritmo * Campana.factor_morteros()
 		_mortero()
 	# Bengalas (de noche, hasta que empieza a clarear)
 	var beng = d.get("bengalas", null)
@@ -97,15 +99,18 @@ func _process(delta: float) -> void:
 		var usados: Array = []
 		for i in mini(3, restantes):
 			restantes -= 1
-			_nuevo(_lugar(r["zona"], usados, 30.0), Armas.botin_aleman(_rng), "flanqueador" if _rng.randf() < 0.25 else "defensor")
+			_nuevo(_lugar(r["zona"], usados, 30.0), Armas.botin_aleman(_rng), "flanqueador" if _rng.randf() < 0.35 else "defensor")
 		Red.anunciar("[REFUERZOS ALEMANES]", Game.COLOR_BAD)
 	# Olas del contraataque
 	if ola >= 0:
 		_t_ola -= delta
+		var o: Dictionary = Objetivos.LISTA[ola]["olas"]
 		if _t_ola <= 0.0:
-			var o: Dictionary = Objetivos.LISTA[ola]["olas"]
 			_t_ola = _rng.randf_range(o["cada"].x, o["cada"].y)
 			_ola(ola, o)
+		if o.has("gran") and not _gran and Objetivos.progreso[ola] >= float(o["gran"]):
+			_gran = true
+			_gran_contraataque(ola, o)
 
 
 ## Arma la fase: sus alemanes, los nidos de MG42 y los refuerzos.
@@ -118,14 +123,16 @@ func _empezar(f: int) -> void:
 	_t_refuerzo = _rng.randf_range(30.0, 45.0)
 	_t_mortero = 22.0 if primera else 14.0
 	_olas = 0
-	_t_ola = 6.0
+	_t_ola = 5.0
+	_gran = false
+	_mgs_ola = []
 	var usados: Array = []
 	if d.has("retirar_z") and not primera:
 		_retirar(float(d["retirar_z"]))
 	for g in d.get("alemanes", []):
 		for pos in _lugares(g[0], int(g[1]), usados, 25.0):
 			_cola.append([pos, Armas.botin_aleman(_rng),
-				"flanqueador" if _rng.randf() < 0.2 else "defensor", Vector3.ZERO])
+				"flanqueador" if _rng.randf() < 0.3 else "defensor", Vector3.ZERO])
 	for i in Objetivos.LISTA.size():
 		var o: Dictionary = Objetivos.LISTA[i]
 		if o["fase"] == f and o["tipo"] == "mg" and not Objetivos.hecho[i]:
@@ -160,21 +167,86 @@ func _defensa_activa() -> int:
 	return -1
 
 
-## Una ola del contraataque: alemanes que salen de un borde y avanzan sobre el
-## lugar. Si ya hay muchos vivos, esa ola no sale (que se pueda aguantar).
+## Una ola del contraataque: alemanes que salen de uno o dos bordes y avanzan
+## sobre el lugar. Si ya hay muchos vivos, esa ola no sale (que se pueda
+## aguantar). Opciones de la misión (v0.32):
+##   pueblo   con la primera ola, los alemanes que quedaban en el pueblo también
+##            salen al contraataque (antes se quedaban quietos en sus casas)
+##   mg       desde la 2.a ola, cada dos olas llega un equipo de MG42 que se
+##            instala a ~36 m del lugar y lo barre (máx. 2 a la vez)
+##   gran     al llegar a esa fracción del reloj sale el gran contraataque
+##   crece    cuántos hombres más trae cada ola, como máximo (2 por defecto)
 func _ola(i: int, o: Dictionary) -> void:
+	var meta: Vector3 = Objetivos.LISTA[i]["pos"]
+	if _olas == 0 and o.get("pueblo", false):
+		_sale_el_pueblo(meta)
 	if get_tree().get_nodes_in_group("enemies").size() >= int(o.get("max_vivos", 16)):
 		return
 	_olas += 1
 	var desde: Array = o["desde"]
-	var base: Vector3 = desde[_rng.randi() % desde.size()]
-	var meta: Vector3 = Objetivos.LISTA[i]["pos"]
-	var n := int(o["n"]) + mini(_olas - 1, 2)
+	var n := int(o["n"]) + mini(_olas - 1, int(o.get("crece", 2)))
+	# Desde la 2.a ola atacan por dos lados a la vez (hay que repartirse)
+	var bases := [desde[_rng.randi() % desde.size()]]
+	if _olas >= 2 and desde.size() > 1:
+		var otra: Vector3 = desde[_rng.randi() % desde.size()]
+		while otra == bases[0]:
+			otra = desde[_rng.randi() % desde.size()]
+		bases.append(otra)
 	for k in n:
-		var p := Navegacion.cerca_de(base + Vector3(_rng.randf_range(-6, 6), 0, _rng.randf_range(-4, 4)))
-		_cola.append([p, ["kar98k", "kar98k", "mp40", "stg44"][_rng.randi() % 4], "asalto",
-			meta + Vector3(_rng.randf_range(-8, 8), 0, _rng.randf_range(-8, 8))])
+		_asalto(bases[k % bases.size()], meta)
+	if o.get("mg", false) and _olas >= 2 and _olas % 2 == 0:
+		_mg_de_ola(bases[0], meta)
 	Red.anunciar("[¡CONTRAATAQUE ALEMÁN! - OLA %d]" % _olas, Game.COLOR_BAD)
+
+
+func _asalto(base: Vector3, meta: Vector3) -> void:
+	var p := Navegacion.cerca_de(base + Vector3(_rng.randf_range(-6, 6), 0, _rng.randf_range(-4, 4)))
+	_cola.append([p, ["kar98k", "kar98k", "mp40", "stg44"][_rng.randi() % 4], "asalto",
+		meta + Vector3(_rng.randf_range(-8, 8), 0, _rng.randf_range(-8, 8))])
+
+
+## Los alemanes que siguen en el pueblo (no los de las MG42) salen sobre el lugar.
+func _sale_el_pueblo(meta: Vector3) -> void:
+	var n := 0
+	for e in get_tree().get_nodes_in_group("enemies"):
+		if e is Enemy and not e.dead and e.rol != "fijo" and e.rol != "asalto" \
+				and e.global_position.distance_to(meta) > 14.0:
+			e.rol = "asalto"
+			e.meta = meta + Vector3(_rng.randf_range(-8, 8), 0, _rng.randf_range(-8, 8))
+			e._alert = maxf(e._alert, 0.5)
+			n += 1
+	if n > 0:
+		Red.anunciar("[¡LOS DEL PUEBLO SALEN AL CONTRAATAQUE!]", Game.COLOR_BAD)
+
+
+## Un equipo de MG42 se instala a ~36 m del lugar, del lado de donde vino la ola.
+func _mg_de_ola(base: Vector3, meta: Vector3) -> void:
+	_mgs_ola = _mgs_ola.filter(func(e: Variant) -> bool: return is_instance_valid(e) and not e.dead)
+	if _mgs_ola.size() >= 2:
+		return
+	var dir := base - meta
+	dir.y = 0.0
+	var punto := meta + dir.normalized() * 36.0 + Vector3(_rng.randf_range(-8, 8), 0, 0)
+	var pos := _cobertura_cerca(Navegacion.cerca_de(punto), 10.0)
+	var e := _aleman(pos, "mg42", "fijo")
+	e._alert = 0.5
+	_mgs_ola.append(e)
+	Red.anunciar("[¡UNA MG42 SE INSTALA FRENTE AL CRUCE!]", Game.COLOR_BAD)
+
+
+## El gran contraataque: por todos los lados a la vez, con más hombres de lo normal.
+func _gran_contraataque(i: int, o: Dictionary) -> void:
+	var meta: Vector3 = Objetivos.LISTA[i]["pos"]
+	var desde: Array = o["desde"]
+	var vivos := get_tree().get_nodes_in_group("enemies").size()
+	var n := mini(int(o["n"]) * 2 + 2, int(o.get("max_vivos", 16)) + 8 - vivos)
+	for k in maxi(n, 4):
+		_asalto(desde[k % desde.size()], meta)
+	if o.get("mg", false):
+		_mg_de_ola(desde[0], meta)
+	_t_mortero = 2.0
+	_t_ola = maxf(_t_ola, 20.0)
+	Red.anunciar("[¡GRAN CONTRAATAQUE ALEMÁN! ¡AGUANTEN!]", Game.COLOR_BAD)
 
 
 func _nuevo(pos: Vector3, arma: String, rol: String) -> Enemy:

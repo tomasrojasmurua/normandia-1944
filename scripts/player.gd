@@ -14,8 +14,8 @@ class_name Player
 @export var touch_look_sensitivity := 0.006
 @export var aim_friction := 0.55      # 1 = sin asistencia al apuntar en el celular
 @export var max_health := 100.0
-@export var regen_delay := 5.0        # segundos sin recibir daño antes de recuperarse
-@export var regen_per_second := 8.0   # 0 = sin recuperación
+@export var regen_delay := 8.0        # segundos sin recibir daño antes de recuperarse (v0.32: antes 5)
+@export var regen_per_second := 4.0   # 0 = sin recuperación (v0.32: antes 8)
 ## Daño máximo de un solo tiro: un balazo de fusil te deja grave (30 de vida),
 ## el segundo te mata. Los alemanes, en cambio, caen de un tiro.
 const DANO_MAX_TIRO := 70.0
@@ -274,10 +274,12 @@ func factor_blanco() -> float:
 		f *= 0.35
 	elif crouching:
 		f *= 0.6
+	# Correr al descubierto ya casi no protege (v0.32: antes 0,6): lo que
+	# salva es ir de cobertura en cobertura
 	if sprinting:
-		f *= 0.6
+		f *= 0.88
 	elif Vector2(velocity.x, velocity.z).length() > 2.0:
-		f *= 0.75   # moverse también ayuda
+		f *= 0.92
 	return f
 
 

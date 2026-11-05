@@ -18,8 +18,8 @@ class_name Enemy
 
 @export var sight_range := 55.0
 @export var damage := 12.0                  # daño de un tiro que acierta (fusil)
-@export var reaction_time := 1.4            # segundos que tarda en disparar tras verte
-@export var fire_interval := Vector2(3.0, 5.0)
+@export var reaction_time := 1.0            # segundos que tarda en disparar tras verte
+@export var fire_interval := Vector2(2.2, 3.6)
 @export var accuracy := 1.0                 # multiplicador de puntería (1 = normal)
 @export var granadas := -1                  # -1 = al azar (0 o 1)
 ## "defensor" (se mueve entre coberturas y se repliega), "flanqueador"
@@ -169,8 +169,14 @@ func _pensar() -> void:
 	var dist := global_position.distance_to(amenaza)
 	var presion := Game.elapsed - _ultimo_dano < 4.0
 
-	# 1. Sin cobertura (o lo flanquearon): buscar una que lo tape
-	if cobertura.is_empty() or Coberturas.protege(cobertura, amenaza) < 0.35:
+	# 1. Sin cobertura (o lo flanquearon): buscar una que lo tape. Si el que
+	# lo flanquea está cerca y a la vista, correr sería morir de espaldas: se
+	# da vuelta y le dispara (v0.32)
+	var flanqueado := not cobertura.is_empty() and Coberturas.protege(cobertura, amenaza) < 0.35
+	if flanqueado and _sees and dist < 22.0 and randf() < 0.75:
+		_reaccionar()
+		return
+	if cobertura.is_empty() or flanqueado:
 		if _ir(_buscar(18.0, 0.0)):
 			return
 	# 2. Presionado y cerca: replegarse hacia el búnker
@@ -213,7 +219,28 @@ func _asaltar() -> void:
 		return
 	var dir := meta - yo
 	dir.y = 0.0
-	ir_a({"pos": Navegacion.cerca_de(yo + dir.normalized() * minf(randf_range(7.0, 11.0), falta))})
+	if not ir_a({"pos": Navegacion.cerca_de(yo + dir.normalized() * minf(randf_range(7.0, 11.0), falta))}):
+		# Sin camino (una trinchera o un patio cerrado): defiende desde donde está
+		rol = "defensor"
+		_alert = maxf(_alert, 0.2)
+
+
+## Lo sorprendieron de cerca: apunta y dispara ya (sin esperar su turno).
+func _reaccionar() -> void:
+	_alert = maxf(_alert, reaction_time)
+	_fire_timer = minf(_fire_timer, randf_range(0.15, 0.5))
+	_asomado = maxf(_asomado, 1.5)
+
+
+## Un compañero cayó cerca: los vecinos que ven al tirador reaccionan (así no
+## se puede barrer una trinchera de costado uno por uno sin respuesta).
+func alertar_por_caido(desde: Vector3) -> void:
+	if dead:
+		return
+	amenaza = desde
+	_alert = maxf(_alert, reaction_time * 0.75)
+	_fire_timer = minf(_fire_timer, randf_range(0.4, 1.0))
+	_pensar_t = minf(_pensar_t, 0.2)
 
 
 ## Mensaje en el HUD, sin repetirlo a cada rato.
@@ -302,13 +329,17 @@ func _empezar_rafaga() -> void:
 func _shoot() -> void:
 	var auto: bool = Armas.datos(arma)["auto"]
 	var dist := global_position.distance_to(objetivo.global_position)
-	var chance := lerpf(0.35, 0.05, clampf(dist / sight_range, 0.0, 1.0)) * accuracy
+	var jugador := objetivo is Player or objetivo is JugadorRemoto
+	var t := clampf(dist / sight_range, 0.0, 1.0)
+	# Contra un jugador al descubierto la puntería es más dura (v0.32): correr
+	# por el campo abierto ya no sirve; lo que salva es la cobertura
+	var chance := (lerpf(0.45, 0.08, t) if jugador else lerpf(0.35, 0.05, t)) * accuracy
 	if auto:
-		chance *= 0.4      # las ráfagas son menos precisas, pero son muchas balas
+		chance *= 0.5 if jugador else 0.4   # las ráfagas son menos precisas, pero son muchas balas
 	chance *= objetivo.factor_blanco()
 	# Los primeros tiros a un blanco nuevo pasan cerca (avisan): la puntería
-	# llega a su máximo después de ~3 s siguiéndolo. Da tiempo a cubrirse.
-	chance *= clampf((Game.elapsed - _blanco_desde - 0.5) / 2.0, 0.2, 1.0)
+	# llega a su máximo después de ~1,8 s siguiéndolo. Da tiempo a cubrirse.
+	chance *= clampf((Game.elapsed - _blanco_desde - 0.3) / 1.5, 0.3, 1.0)
 	if tiro_ia(objetivo, chance, 2.0):
 		# Letal: un tiro de fusil (Kar98k: 115) mata; las automáticas, 2 o 3 balas
 		objetivo.take_damage(Armas.datos(arma)["damage"], global_position)
@@ -368,6 +399,7 @@ func _die(dir: Vector3, headshot: bool, por_jugador := true) -> void:
 	moviendo = false
 	Coberturas.liberar(self)
 	remove_from_group("enemies")
+	_avisar_vecinos(dir, por_jugador)
 	collision_layer = 0
 	collision_mask = 0
 	if por_jugador:   # los que abaten las escuadras con IA no se anuncian (serían demasiados)
@@ -381,3 +413,12 @@ func _die(dir: Vector3, headshot: bool, por_jugador := true) -> void:
 	_soltar_arma(dir)
 	Red.murio(self, dir, headshot)
 	Game.bajas += 1
+
+
+func _avisar_vecinos(dir: Vector3, por_jugador: bool) -> void:
+	var desde := global_position - dir.normalized() * 20.0
+	if por_jugador and _player and is_instance_valid(_player):
+		desde = _player.global_position
+	for e in get_tree().get_nodes_in_group("enemies"):
+		if e is Enemy and e.global_position.distance_to(global_position) < 18.0:
+			e.alertar_por_caido(desde)

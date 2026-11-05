@@ -151,7 +151,10 @@ const DATOS := {
 					{"id": "resistir", "n": "RESISTIR EL CONTRAATAQUE", "corto": "RESISTIR",
 						"pos": Vector3(0, 14, -152), "tipo": "defender", "seg": 240.0, "radio": 18.0,
 						"tras": "cruce", "esc": [0, 1, 2, 3], "carril": Vector2(-22, 22),
-						"olas": {"cada": Vector2(28.0, 36.0), "n": 4, "max_vivos": 16, "morteros": Vector2(14.0, 22.0),
+						# v0.32: contraataque de verdad (antes 4 por ola cada ~32 s, máx. 16
+						# vivos contando a los del pueblo que no se movían: casi no salían)
+						"olas": {"cada": Vector2(22.0, 28.0), "n": 5, "crece": 3, "max_vivos": 20,
+							"morteros": Vector2(9.0, 15.0), "pueblo": true, "mg": true, "gran": 0.7,
 							"desde": [Vector3(-30, 14, -198), Vector3(0, 14, -200), Vector3(30, 14, -198),
 								Vector3(-35, 14, -172), Vector3(35, 14, -172)]}},
 				],

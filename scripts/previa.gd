@@ -58,6 +58,14 @@ func _botones() -> Array:
 		l.append(["a:" + eq[k][0], r, eq[k][0], Compania.ESPECIALIDADES[eq[k][2]]["armas"].size() > 1, ""])
 	l.append(["f:MURPHY", Rect2(x0, 250, 92, 46), "MURPHY", true, ""])
 	var by := size.y - 34
+	# Apoyo para la misión (v0.32): se compra con suministros, solo en la campaña
+	if _visto == "" and _con_compras():
+		var k := 0
+		for id in Campana.COMPRAS:
+			var c: Dictionary = Campana.COMPRAS[id]
+			var puede: bool = id in Campana.compras or Campana.disponibles() >= int(c["costo"])
+			l.append(["c:" + id, Rect2(136 + k * 166, by, 160, 26), c["n"], puede, str(c["costo"])])
+			k += 1
 	if _visto != "":
 		l.append(["mision", Rect2(maxf(_x0() - 112, 136), by, 100, 26), "LA MISIÓN", true, ""])
 	l.append(["volver", Rect2(8, by, 120, 26), "AL MAPA", true, ""])
@@ -78,6 +86,11 @@ func _pulsado(id: String) -> void:
 	if id.begins_with("a:"):
 		Compania.otra_arma(id.substr(2))
 		return
+	if id.begins_with("c:"):
+		var c := id.substr(2)
+		if Campana.alternar_compra(c):
+			_info = Campana.COMPRAS[c]["info"] if c in Campana.compras else ""
+		return
 	match id:
 		"mision":
 			_visto = ""
@@ -87,6 +100,12 @@ func _pulsado(id: String) -> void:
 			Game.prueba_carga = false
 			Game.modo_red = false
 			Game.empezar_mision(Game.mision)
+
+
+## ¿Se puede comprar apoyo? Solo en una misión de la campaña que todavía no se ganó.
+func _con_compras() -> bool:
+	return Campana.activa() and Campana.estado == "en_curso" and not Campana.hecha(Game.mision) \
+		and Campana.mision(Game.mision).size() > 0
 
 
 func _retrato(nombre: String) -> Texture2D:
@@ -197,8 +216,12 @@ func _mision(izq: Rect2, m: Dictionary) -> void:
 		Estilo.texto(self, "%d. %s" % [f + 1, fases[f]["nombre"]], Vector2(24 + (f % 2) * 100, y), Estilo.CREMA)
 		if f % 2 == 1:
 			y += 12.0
-	Estilo.texto(self, "MISIONES DE LA COMPAÑÍA: %d" % Compania.misiones_jugadas, Vector2(16, izq.end.y - 10),
-		Color(Estilo.CREMA, 0.55))
+	if _con_compras():
+		Estilo.texto(self, "APOYO ABAJO - SUMINISTROS: %d" % Campana.disponibles(), Vector2(16, izq.end.y - 10),
+			Estilo.AMBAR_CLARO)
+	else:
+		Estilo.texto(self, "MISIONES DE LA COMPAÑÍA: %d" % Compania.misiones_jugadas, Vector2(16, izq.end.y - 10),
+			Color(Estilo.CREMA, 0.55))
 	Estilo.texto(self, "TOCA A UN HOMBRE PARA LEER SU FICHA", Vector2(16, izq.end.y - 22), Color(Estilo.AMBAR_CLARO, 0.7))
 
 
@@ -225,7 +248,12 @@ func _derecha() -> void:
 		Estilo.texto(self, _info, Vector2(x0, 312), Estilo.AMBAR_CLARO)
 	for b in _botones():
 		var id: String = b[0]
-		if not id.begins_with("h:") and not id.begins_with("a:") and not id.begins_with("f:"):
+		if id.begins_with("c:"):        # apoyo comprable: encendido si está comprado
+			var comprada: bool = id.substr(2) in Campana.compras
+			Estilo.boton(self, b[1], b[2], "encima" if comprada or id == _encima else ("normal" if b[3] else "apagado"), b[4])
+			if comprada:
+				draw_rect(b[1].grow(-2), Estilo.AMBAR, false, 1.0)
+		if not id.begins_with("h:") and not id.begins_with("a:") and not id.begins_with("f:") and not id.begins_with("c:"):
 			var estado := "normal"
 			if not b[3]:
 				estado = "apagado"

@@ -43,6 +43,9 @@ static var terminado := 0          # 0 = en curso, 1 = cumplida, -1 = fracasada
 static var actual: Objetivos
 static var banner_t := 0.0         # >0: se muestra el título de la fase que empieza
 static var perdiendo := 0.0        # segundos que los alemanes llevan ocupando el lugar a defender
+## Cómo va la defensa en curso (para el HUD; los invitados lo reciben en estado()):
+## 0 = el reloj corre, 2 = disputado (hay alemanes encima), 3 = sin un jugador cerca (más lento)
+static var defensa_estado := 0
 
 var _marcas: Array = []
 var _t_fracaso := 2.0
@@ -59,6 +62,7 @@ func _ready() -> void:
 	terminado = 0
 	banner_t = 0.0
 	perdiendo = 0.0
+	defensa_estado = 0
 	LISTA = []
 	var ids := {}
 	var fases := Misiones.fases()
@@ -319,6 +323,7 @@ func _empezar_fase(f: int) -> void:
 	_fase_vista = f
 	var d := Misiones.fase(f)
 	perdiendo = 0.0
+	defensa_estado = 0
 	Game.start_minutes = int(d.get("hora", Game.start_minutes)) - int(Game.elapsed / 60.0)
 	if primera and f == 0:
 		return
@@ -433,34 +438,51 @@ func _tomar(i: int, delta: float, segundos: float, radio: float) -> void:
 	progreso[i] += delta / segundos * ritmo
 
 
-## Defender: el tiempo corre mientras haya americanos en el lugar (más lento
-## sin un jugador). Si solo hay alemanes, se va perdiendo.
+## Defender: el reloj corre parejo mientras el lugar siga en manos americanas
+## (v0.32: antes bajaba a la mitad apenas el jugador salía del círculo y
+## parecía que la barra se frenaba sola). Se detiene si los alemanes llegan
+## encima y son tantos como los nuestros (DISPUTADO), y va a la mitad solo si
+## no hay ningún jugador en los alrededores (la IA sola aguanta a medias).
+## Si solo quedan alemanes en el lugar, se va perdiendo.
+const DEF_ALREDEDOR := 25.0     # metros más allá del radio en que un jugador sigue "defendiendo"
+
 func _defender(i: int, delta: float) -> void:
 	var o: Dictionary = LISTA[i]
 	var pos: Vector3 = o["pos"]
 	var radio: float = o.get("radio", 15.0)
-	var ritmo := 0.0
+	var nuestros := 0
+	for a in get_tree().get_nodes_in_group("americanos"):
+		if not a.dead and a.global_position.distance_to(pos) < radio:
+			nuestros += 1
+	var jugador_cerca := false
 	for j in _jugadores():
-		if j.global_position.distance_to(pos) < radio:
-			ritmo = 1.0
-	if ritmo == 0.0:
-		for a in get_tree().get_nodes_in_group("americanos"):
-			if not a.dead and a.global_position.distance_to(pos) < radio:
-				ritmo = 0.5
-				break
+		var d: float = j.global_position.distance_to(pos)
+		if d < radio:
+			nuestros += 1          # un jugador vale por dos
+		if d < radio + DEF_ALREDEDOR:
+			jugador_cerca = true
 	var alemanes := 0
 	for e in get_tree().get_nodes_in_group("enemies"):
 		if e.global_position.distance_to(pos) < radio * 0.6:
 			alemanes += 1
-	if ritmo == 0.0 and alemanes > 0:
+	if nuestros == 0 and alemanes > 0:
 		if perdiendo == 0.0:
 			Red.anunciar(o.get("txt_toman", "[¡LOS ALEMANES TOMAN EL CRUCE! ¡RECUPÉRENLO!]"), Game.COLOR_BAD)
 		perdiendo += delta
+		defensa_estado = 2
 		if perdiendo > SEG_PERDER:
 			Red.anunciar(o.get("txt_perdido", "[PERDIMOS VIERVILLE]"), Game.COLOR_BAD)
 			terminar(-1)
 		return
 	perdiendo = maxf(perdiendo - delta * 2.0, 0.0)
+	var ritmo := 1.0
+	defensa_estado = 0
+	if alemanes > 0 and alemanes > nuestros:
+		ritmo = 0.0
+		defensa_estado = 2
+	elif nuestros == 0 or not jugador_cerca:
+		ritmo = 0.5
+		defensa_estado = 3
 	var antes: float = progreso[i]
 	progreso[i] += delta / float(o.get("seg", 120.0)) * ritmo
 	for marca in [0.5, 0.8]:
@@ -468,6 +490,7 @@ func _defender(i: int, delta: float) -> void:
 			var falta := int((1.0 - progreso[i]) * float(o.get("seg", 120.0)))
 			Red.anunciar(o.get("txt_llegan", "[RADIO: LOS TANQUES LLEGAN EN %d S. ¡AGUANTEN!]") % falta, Game.COLOR_INFO)
 	if progreso[i] >= 1.0:
+		defensa_estado = 0
 		Red.anunciar(o.get("txt_fin", "[¡LLEGAN LOS SHERMAN! ¡VIERVILLE ES NUESTRA!]"), Game.COLOR_GOOD)
 		_cumplir(i)
 
@@ -592,8 +615,11 @@ static func recibir(o: Array) -> void:
 	var n := o.size() / 2
 	if n != LISTA.size():
 		return
+	defensa_estado = 0
 	for i in n:
 		hecho[i] = int(o[i]) == 1
+		if int(o[i]) >= 2:      # la defensa en curso: 2 = disputada, 3 = lenta
+			defensa_estado = int(o[i])
 		progreso[i] = float(o[n + i])
 	_fase_memo = -1
 	if actual:
@@ -603,7 +629,10 @@ static func recibir(o: Array) -> void:
 static func estado() -> Array:
 	var o := []
 	for i in LISTA.size():
-		o.append(1 if hecho[i] else 0)
+		var v := 1 if hecho[i] else 0
+		if v == 0 and LISTA[i]["tipo"] == "defender" and defensa_estado != 0 and activo(i):
+			v = defensa_estado
+		o.append(v)
 	for i in LISTA.size():
 		o.append(snappedf(progreso[i], 0.01))
 	return o
@@ -636,6 +665,13 @@ static func texto() -> String:
 			txt = "%s: QUEDAN ALEMANES CERCA" % o["corto"]
 	if o["tipo"] == "carga" and progreso[f] > 1.0:
 		txt = "¡CARGA PUESTA! ALÉJATE: %d S" % ceili(progreso[f] - 1.0)
+	if o["tipo"] == "defender" and activo(f):
+		var falta := int(ceil((1.0 - minf(progreso[f], 1.0)) * float(o.get("seg", 120.0))))
+		var reloj := "%d:%02d" % [falta / 60, falta % 60]
+		match defensa_estado:
+			2: txt = "%s: DISPUTADO - ¡SÁCALOS DE AHÍ! (%s)" % [o["corto"], reloj]
+			3: txt = "%s: %s - VUELVE, SIN TI AGUANTAN A MEDIAS" % [o["corto"], reloj]
+			_: txt = "%s: AGUANTA %s" % [o["corto"], reloj]
 	if o["tipo"] == "defender" and perdiendo > 0.0:
 		txt = "%s %d S" % [o.get("txt_recupera", "¡RECUPERA EL CRUCE!"), int(SEG_PERDER - perdiendo)]
 	if o["tipo"] == "reunir":

@@ -64,7 +64,7 @@ const TUTORIAL := [
 	["", "BIENVENIDO A NORMANDÍA, SARGENTO. DESDE ESTE CUARTEL VAMOS A LLEVAR LA CAMPAÑA, DEL 6 DE JUNIO HASTA FINES DE JULIO. LE EXPLICO CÓMO FUNCIONA."],
 	["mapa", "ESTE ES EL SECTOR AMERICANO. LAS MARCAS ROJAS SON POSICIONES ALEMANAS Y LOS PUNTITOS, CUÁN FUERTES SON. LAS VERDES YA SON NUESTRAS. LA QUE PARPADEA ES SU PRÓXIMA ORDEN."],
 	["fecha", "ARRIBA VA LA FECHA. CADA MISIÓN OCURRE EN SU DÍA DE LA HISTORIA: AL ELEGIRLA, EL CALENDARIO SALTA HASTA AHÍ."],
-	["suministros", "LOS SUMINISTROS SIRVEN PARA RECLUTAR HOMBRES. CADA MISIÓN CUMPLIDA TRAE UN PREMIO, Y LAS ZONAS TOMADAS MANDAN MÁS EN CADA TURNO."],
+	["suministros", "LOS SUMINISTROS NO SOBRAN, SARGENTO. CADA HOMBRE COME Y GASTA MUNICIÓN EN CADA TURNO; ADEMÁS SIRVEN PARA RECLUTAR Y PARA PEDIR ARTILLERÍA O REFUERZOS ANTES DE UNA MISIÓN. ENTRAN CON LAS VICTORIAS Y LAS ZONAS TOMADAS."],
 	["apoyo", "ESTO ES EL APOYO DEL MANDO: LA CONFIANZA QUE NOS TIENEN. SUBE CON CADA VICTORIA Y BAJA CON LAS DERROTAS, LAS BAJAS Y LA DEMORA. SI LLEGA A CERO, LO RELEVAN."],
 	["cartas", "AQUÍ LE DOY MIS ÓRDENES. A VECES LE OFRECERÉ DOS MISIONES: ELIJA EL ORDEN, PERO LA QUE DEJE PARA DESPUÉS SE REFUERZA. TODAS HAY QUE HACERLAS."],
 	["ir", "CON ESTE BOTÓN ELIGE A LOS TRES HOMBRES QUE LO ACOMPAÑAN Y SALE AL COMBATE."],
@@ -490,6 +490,8 @@ func _panel(ci: CanvasItem) -> void:
 	for linea in _envolver(texto, ancho).slice(0, 3):
 		Estilo.texto(ci, linea, Vector2(tx, ly), col)
 		ly += 12.0
+	if Campana.estado == "en_curso" and ly + 30 < size.y - 94:   # si cabe sobre los botones
+		_balance(ci, tx, ly + 4)
 	_botones_panel(ci)
 
 
@@ -516,11 +518,22 @@ func _carta(ci: CanvasItem, m: Dictionary, r: Rect2) -> void:
 		Estilo.texto(ci, nota, Vector2(r.end.x - 8 - Estilo.ancho_texto(nota), r.position.y + 14), Estilo.AMBAR)
 
 
+## Cuánto entra y cuánto se gasta en cada turno.
+func _balance(ci: CanvasItem, x: float, y: float) -> void:
+	var neto := Campana.ingreso() - Campana.gasto()
+	Estilo.texto(ci, "CADA TURNO: +%d ENTRA, -%d GASTO" % [Campana.ingreso(), Campana.gasto()], Vector2(x, y),
+		Color(Estilo.CREMA, 0.65))
+	Estilo.texto(ci, "BALANCE %s%d" % ["+" if neto >= 0 else "", neto], Vector2(x, y + 12),
+		Estilo.VERDE_LED if neto >= 0 else Estilo.ROJO)
+
+
 func _panel_compania(ci: CanvasItem, tx: float, ancho: float) -> void:
 	Estilo.texto(ci, "LA COMPAÑÍA", Vector2(tx, 44), Estilo.AMBAR)
 	var vivos := Compania.vivos().size()
 	var muertos := Compania.hombres.size() - vivos
 	Estilo.texto(ci, "HOMBRES %d/%d - CAÍDOS %d" % [vivos, Compania.MAXIMO, muertos], Vector2(tx, 58), Color(Estilo.CREMA, 0.75))
+	var g := "GASTO -%d/TURNO" % Campana.gasto()
+	Estilo.texto(ci, g, Vector2(tx + ancho - Estilo.ancho_texto(g), 58), Estilo.AMBAR_CLARO)
 	var y := 74.0
 	for esp in Compania.ESPECIALIDADES:
 		var listos := 0

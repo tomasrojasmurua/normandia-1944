@@ -55,7 +55,7 @@ func pos_cabeza() -> Vector3:
 func factor_blanco() -> float:
 	var f := 1.0
 	if _fotos.size() > 0 and float(_fotos[-1][4]) > 0.6:
-		f *= 0.7       # corriendo
+		f *= 0.88      # corriendo (como el jugador local, v0.32)
 	elif cuerpo and cuerpo.pose == "agachado":
 		f *= 0.6
 	return f

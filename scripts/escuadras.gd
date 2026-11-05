@@ -57,7 +57,7 @@ func _ready() -> void:
 		Aliado.orden = "seguir"
 	for i in 4:
 		datos.append({"ranuras": [null, null, null], "lider": null,
-			"refuerzos": 1000000 if Game.prueba_carga else int(Misiones.fase(0).get("refuerzos_us", REFUERZOS_POR_ESCUADRA)),
+			"refuerzos": 1000000 if Game.prueba_carga else int(Misiones.fase(0).get("refuerzos_us", REFUERZOS_POR_ESCUADRA)) + Campana.refuerzos_extra(),
 			"llegan": []})
 	_fase_lista = Objetivos.fase() if not adoptar.is_empty() and Objetivos.actual else 0
 	if not adoptar.is_empty():
@@ -368,7 +368,7 @@ func _process(delta: float) -> void:
 		while _fase_lista < f:
 			_fase_lista += 1
 			for i in 4:
-				datos[i]["refuerzos"] += int(Misiones.fase(_fase_lista).get("refuerzos_us", 0))
+				datos[i]["refuerzos"] += int(Misiones.fase(_fase_lista).get("refuerzos_us", 0)) + Campana.refuerzos_extra()
 	for i in 4:
 		var d: Dictionary = datos[i]
 		# Si cayó el sargento, asciende el primero que siga vivo

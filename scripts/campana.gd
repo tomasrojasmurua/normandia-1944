@@ -14,20 +14,36 @@ class_name Campana
 ## Se guarda junto a la compañía en user://campana.cfg. Solo jugando solo.
 
 const ARCHIVO := "user://campana.cfg"
-const SUMINISTROS_INICIO := 400
-const APOYO_INICIO := 100
+## v0.32: recursos más escasos. Antes sobraban (una campaña simulada terminaba
+## con ~4.400 suministros sin haber bajado nunca de 400): solo servían para
+## reclutar. Ahora la compañía cuesta mantenerla cada turno y antes de cada
+## misión se puede comprar apoyo; no alcanza para todo.
+const SUMINISTROS_INICIO := 200
+const APOYO_INICIO := 80
 const APOYO_MAX := 150
 const INGRESO_BASE := 40          # suministros que llegan cada turno, más el valor de las zonas
-const APOYO_GANAR := 15
-const APOYO_PERDER := 15
-const APOYO_POR_MUERTO := 3
+const GASTO_POR_HOMBRE := 10      # raciones y munición de cada hombre vivo, cada turno
+const APOYO_GANAR := 12
+const APOYO_PERDER := 20
+const APOYO_POR_MUERTO := 4
 const APOYO_DESCANSAR := 8
 const APOYO_OTRA_UNIDAD := 5
-const PRESION_PROB := 0.35        # probabilidad de presión alemana tras cada turno (desde la etapa II)
-const PRESION_COSTO := 60
-const PRESION_APOYO := 10
+const FALTA_POR_APOYO := 10       # si no alcanza para el gasto: -1 de apoyo por cada 10 que falten
+const PRESION_PROB := 0.4         # probabilidad de presión alemana tras cada turno (desde la etapa II)
+const PRESION_COSTO := 80
+const PRESION_APOYO := 12
 
-const COSTO_RECLUTA := {"fusilero": 50, "bar": 80, "medico": 100, "radio": 100, "ingeniero": 100, "bazuca": 120}
+const COSTO_RECLUTA := {"fusilero": 60, "bar": 90, "medico": 120, "radio": 120, "ingeniero": 120, "bazuca": 140}
+
+## Apoyo que se compra en la pantalla previa, solo para esa misión:
+##   artilleria  los alemanes reciben 40 % menos refuerzos y sus morteros caen más espaciados
+##   refuerzos   +2 refuerzos americanos por escuadra en cada fase
+const COMPRAS := {
+	"artilleria": {"n": "ARTILLERÍA", "costo": 100,
+		"info": "ARTILLERÍA: 40 % MENOS REFUERZOS ALEMANES Y MENOS MORTEROS."},
+	"refuerzos": {"n": "REFUERZOS", "costo": 80,
+		"info": "REFUERZOS: +2 HOMBRES DE RELEVO POR ESCUADRA EN CADA FASE."},
+}
 
 const ETAPAS := ["DÍA D", "LA CABEZA DE PLAYA", "LA TORMENTA Y EL PUERTO", "LOS SETOS", "LA RUPTURA"]
 
@@ -41,34 +57,34 @@ const ETAPAS := ["DÍA D", "LA CABEZA DE PLAYA", "LA TORMENTA Y EL PUERTO", "LOS
 ##   valor      suministros que da cada turno una vez tomada (playas y puertos, más)
 const LISTA := [
 	{"id": "omaha", "img": Vector2(0.750, 0.474), "n": "PLAYA OMAHA", "sub": "DESEMBARCO", "etapa": 0, "dia": 6, "pos": Vector2(-0.90, 49.37),
-		"fuerza": 3, "premio": 200, "valor": 60, "clima": "NUBLADO", "hora": "06:30",
+		"fuerza": 3, "premio": 120, "valor": 30, "clima": "NUBLADO", "hora": "06:30",
 		"resumen": "VOLAR EL BÚNKER, SUBIR EL ACANTILADO Y TOMAR VIERVILLE."},
 	{"id": "planeador", "img": Vector2(0.461, 0.396), "n": "SAINTE-MÈRE-ÉGLISE", "sub": "PLANEADOR", "etapa": 0, "dia": 7, "fecha": "NOCHE DEL 6 AL 7 DE JUNIO",
-		"pos": Vector2(-1.32, 49.41), "fuerza": 2, "premio": 150, "valor": 20, "clima": "NOCHE", "hora": "23:00",
+		"pos": Vector2(-1.32, 49.41), "fuerza": 2, "premio": 90, "valor": 10, "clima": "NOCHE", "hora": "23:00",
 		"resumen": "EL PLANEADOR SE ESTRELLA ENTRE SETOS. REÚNA A LOS PARACAIDISTAS."},
 	{"id": "pointe", "img": Vector2(0.660, 0.431), "n": "POINTE DU HOC", "sub": "RELEVAR A LOS RANGERS", "etapa": 1, "dia": 8, "pos": Vector2(-0.99, 49.40),
-		"fuerza": 2, "premio": 150, "valor": 20, "clima": "NUBLADO", "hora": "08:00",
+		"fuerza": 2, "premio": 90, "valor": 10, "clima": "NUBLADO", "hora": "08:00",
 		"resumen": "LOS RANGERS LLEVAN DOS DÍAS AISLADOS EN EL ACANTILADO."},
 	{"id": "lafiere", "img": Vector2(0.396, 0.482), "n": "PUENTE DE LA FIÈRE", "sub": "LA CALZADA", "etapa": 1, "dia": 9, "pos": Vector2(-1.37, 49.39),
-		"fuerza": 2, "premio": 150, "valor": 30, "clima": "NUBLADO", "hora": "10:30",
+		"fuerza": 2, "premio": 90, "valor": 15, "clima": "NUBLADO", "hora": "10:30",
 		"resumen": "CRUZAR LA CALZADA SOBRE EL PANTANO DEL MERDERET."},
 	{"id": "carentan", "img": Vector2(0.476, 0.504), "n": "CARENTAN", "sub": "UNIR LAS PLAYAS", "etapa": 1, "dia": 12, "pos": Vector2(-1.25, 49.30),
-		"fuerza": 3, "premio": 200, "valor": 40, "clima": "DESPEJADO", "hora": "05:00",
+		"fuerza": 3, "premio": 120, "valor": 20, "clima": "DESPEJADO", "hora": "05:00",
 		"resumen": "TOMAR CARENTAN PARA UNIR UTAH Y OMAHA."},
 	{"id": "tormenta", "img": Vector2(0.415, 0.287), "n": "SETOS DE MONTEBOURG", "sub": "BAJO LA TORMENTA", "etapa": 2, "dia": 20, "pos": Vector2(-1.38, 49.49),
-		"fuerza": 2, "premio": 150, "valor": 20, "clima": "TORMENTA", "hora": "07:00",
+		"fuerza": 2, "premio": 90, "valor": 10, "clima": "TORMENTA", "hora": "07:00",
 		"resumen": "AVANZAR ENTRE SETOS SIN APOYO AÉREO."},
 	{"id": "cherbourg", "img": Vector2(0.257, 0.142), "n": "CHERBOURG", "sub": "EL PUERTO", "etapa": 2, "dia": 26, "pos": Vector2(-1.62, 49.63),
-		"fuerza": 3, "premio": 250, "valor": 100, "clima": "NUBLADO", "hora": "09:00",
+		"fuerza": 3, "premio": 150, "valor": 50, "clima": "NUBLADO", "hora": "09:00",
 		"resumen": "TOMAR LOS FUERTES Y EL PUERTO ANTES DE QUE LO DESTRUYAN."},
 	{"id": "colina192", "img": Vector2(0.702, 0.706), "n": "COLINA 192", "sub": "LOS SETOS", "etapa": 3, "dia": 42, "pos": Vector2(-0.97, 49.15),
-		"fuerza": 3, "premio": 200, "valor": 30, "clima": "DESPEJADO", "hora": "06:00",
+		"fuerza": 3, "premio": 120, "valor": 15, "clima": "DESPEJADO", "hora": "06:00",
 		"resumen": "LA COLINA VIGILA TODO EL VALLE HASTA SAINT-LÔ."},
 	{"id": "saintlo", "img": Vector2(0.582, 0.815), "n": "SAINT-LÔ", "sub": "LA CIUDAD EN RUINAS", "etapa": 3, "dia": 48, "pos": Vector2(-1.09, 49.115),
-		"fuerza": 3, "premio": 250, "valor": 50, "clima": "NUBLADO", "hora": "06:30",
+		"fuerza": 3, "premio": 150, "valor": 25, "clima": "NUBLADO", "hora": "06:30",
 		"resumen": "ENTRAR A SAINT-LÔ Y LIMPIARLA CASA POR CASA."},
 	{"id": "cobra", "img": Vector2(0.486, 0.793), "n": "OPERACIÓN COBRA", "sub": "LA RUPTURA", "etapa": 4, "dia": 55, "pos": Vector2(-1.19, 49.085),
-		"fuerza": 3, "premio": 300, "valor": 0, "clima": "DESPEJADO", "hora": "11:00",
+		"fuerza": 3, "premio": 180, "valor": 0, "clima": "DESPEJADO", "hora": "11:00",
 		"resumen": "DESPUÉS DEL BOMBARDEO, ROMPER EL FRENTE ALEMÁN."},
 ]
 
@@ -92,6 +108,9 @@ static var _cargada := false
 # --- La misión en curso
 static var en_mision := false
 static var _ofrecidas: Array = []
+static var compras: Array = []            # apoyo comprado para la misión que viene (COMPRAS)
+static var ultimo_gasto := 0              # lo que costó mantener la compañía el último turno
+static var falto := 0                     # suministros que faltaron el último turno
 
 
 static func activa() -> bool:
@@ -227,7 +246,45 @@ static func fuerza(id: String) -> int:
 static func factor_refuerzos() -> float:
 	if not activa():
 		return 1.0
-	return 1.0 + 0.25 * float(refuerzo.get(Game.mision, 0))
+	var f := 1.0 + 0.25 * float(refuerzo.get(Game.mision, 0))
+	if en_mision and "artilleria" in compras:
+		f *= 0.6
+	return f
+
+
+## Morteros alemanes: con artillería propia caen más espaciados (lo usa Defensa).
+static func factor_morteros() -> float:
+	return 1.5 if activa() and en_mision and "artilleria" in compras else 1.0
+
+
+## Refuerzos americanos extra por escuadra y fase (lo usa Escuadras).
+static func refuerzos_extra() -> int:
+	return 2 if activa() and en_mision and "refuerzos" in compras else 0
+
+
+## Comprar o devolver un apoyo antes de la misión (pantalla previa). Se paga
+## al salir al ataque; mientras tanto solo se reserva.
+static func alternar_compra(id: String) -> bool:
+	if id in compras:
+		compras.erase(id)
+		return true
+	if disponibles() < int(COMPRAS[id]["costo"]):
+		return false
+	compras.append(id)
+	return true
+
+
+## Suministros que quedan sin lo reservado en compras.
+static func disponibles() -> int:
+	var total := suministros
+	for id in compras:
+		total -= int(COMPRAS[id]["costo"])
+	return total
+
+
+## Lo que cuesta mantener la compañía cada turno.
+static func gasto() -> int:
+	return GASTO_POR_HOMBRE * Compania.vivos().size()
 
 
 static func ingreso() -> int:
@@ -266,6 +323,13 @@ static func elegir(id: String) -> void:
 ## Al empezar la misión (Game.empezar_mision).
 static func empezar_mision() -> void:
 	en_mision = activa() and estado == "en_curso" and mision(Game.mision).size() > 0 and not hecha(Game.mision)
+	if en_mision:
+		for id in compras:          # el apoyo comprado se paga al salir
+			suministros -= int(COMPRAS[id]["costo"])
+		suministros = maxi(suministros, 0)
+		guardar()
+	else:
+		compras = []
 
 
 ## Fin de la misión. Se llama después de Compania.cerrar_mision (usa sus caídos).
@@ -285,6 +349,7 @@ static func cerrar_mision(resultado: int) -> void:
 	else:
 		apoyo -= APOYO_PERDER
 	apoyo -= APOYO_POR_MUERTO * muertos.size()
+	compras = []
 	_fin_de_turno()
 	_edicion(m, resultado > 0, muertos, Compania.ultimos_heridos, apoyo - antes)
 	_revisar_final()
@@ -304,6 +369,8 @@ static func descansar() -> void:
 	var cuerpo: Array = ["EL MANDO PIDE MÁS EMPUJE.", "LOS ALEMANES APROVECHAN LA PAUSA", "PARA REFORZARSE."]
 	if sanos.size() > 0:
 		cuerpo.append("VUELVEN DEL HOSPITAL: " + ", ".join(sanos.slice(0, 3)))
+	if falto > 0:
+		cuerpo.append("FALTARON %d SUMINISTROS." % falto)
 	_publicar({"fecha": fecha_texto(dia), "titular": ["LA COMPAÑÍA", "DESCANSA"],
 		"bajada": ["UN DÍA DE CALMA EN EL FRENTE"], "cuerpo": cuerpo, "foto": "descanso",
 		"apoyo": -APOYO_DESCANSAR})
@@ -345,7 +412,13 @@ static func _dejadas(elegida: String) -> void:
 
 static func _fin_de_turno() -> void:
 	turnos += 1
-	suministros += ingreso()
+	ultimo_gasto = gasto()
+	suministros += ingreso() - ultimo_gasto
+	falto = 0
+	if suministros < 0:            # no alcanzó: la tropa pasa hambre y el mando lo nota
+		falto = -suministros
+		suministros = 0
+		apoyo -= ceili(float(falto) / FALTA_POR_APOYO)
 	apoyo = mini(apoyo, APOYO_MAX)
 	# Presión alemana sobre una zona tomada (no la última)
 	presion = ""
@@ -403,6 +476,9 @@ static func _edicion(m: Dictionary, gano: bool, muertos: Array, heridos: Array, 
 		e["titular"] = ["REVÉS EN", m["n"]]
 		e["bajada"] = ["LA COMPAÑÍA SE RETIRA", "EL OBJETIVO SIGUE EN MANOS ALEMANAS"]
 		e["cuerpo"] = ["EL MANDO EXIGE VOLVER A INTENTARLO."]
+	e["cuerpo"].append("RACIONES Y MUNICIÓN: -%d SUMINISTROS." % ultimo_gasto)
+	if falto > 0:
+		e["cuerpo"].append("FALTARON %d: LA TROPA PASA HAMBRE." % falto)
 	if not muertos.is_empty():
 		e["caidos"] = muertos
 	if not heridos.is_empty():

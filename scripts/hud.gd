@@ -88,6 +88,7 @@ func _process(delta: float) -> void:
 	_medir(delta)
 	queue_redraw()
 	_capa_arma.queue_redraw()
+	_capa_arma.visible = not Salto.activo      # colgando del paracaídas: las manos en las bandas
 	if _player:
 		_capa_arma.modulate = Noche.tinte_vista(_player)
 	_cuadro += 1
@@ -209,7 +210,7 @@ func _draw() -> void:
 		_draw_supresion(s, _player.supresion)
 	if _player.hit_indicator > 0.0 and not _player.dead:
 		_draw_hit_indicator(center, _player.hit_angle, minf(_player.hit_indicator, 1.0))
-	if not _player.dead and w.ads_amount < 0.5 and not _player.sprinting:
+	if not _player.dead and w.ads_amount < 0.5 and not _player.sprinting and not Salto.activo:
 		_draw_crosshair(center, w.spread_now, _apunta_a_aleman())
 	if w.hit_marker > 0.0:
 		var c := Color(1, 1, 1, w.hit_marker)

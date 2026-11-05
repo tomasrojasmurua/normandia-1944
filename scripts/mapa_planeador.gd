@@ -105,6 +105,13 @@ func _ready() -> void:
 		if Game.modo_red and Red.actual:
 			p.nombre = Red.actual.mi_nombre
 	_hornear_navegacion.call_deferred()
+	# El salto en paracaídas: el comienzo jugable (salto.gd)
+	var salto: Dictionary = Misiones.actual().get("salto", {})
+	if not salto.is_empty() and p and not Game.prueba_carga and not Game.modo_red:
+		var s := Salto.new()
+		s.desde = salto["desde"]
+		s.viento = salto["viento"]
+		get_parent().add_child.call_deferred(s)
 
 
 func _exit_tree() -> void:

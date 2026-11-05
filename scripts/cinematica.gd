@@ -74,32 +74,33 @@ const DATOS := {
 	],
 }
 
-# Misión 2: imágenes provisorias (planeador_1/2 dibujadas con código, planeador_3
-# sacada del mapa del juego) hasta que lleguen las de ChatGPT (ver docs/09).
+# Misión 2 (el salto): imágenes provisorias dibujadas con código hasta que
+# lleguen las de ChatGPT (salto_1..4, ver docs/11). Termina en la puerta del
+# avión: el salto mismo se juega (salto.gd).
 const _PLANEADOR := [
-	{"img": "planeador_1", "dur": 9.0, "z": Vector2(1.0, 1.14), "c": [Vector2(0.45, 0.5), Vector2(0.55, 0.46)],
-		"tarjeta": ["SOBRE NORMANDÍA - PLANEADOR WACO CG-4A", "6 DE JUNIO DE 1944 - 22:58"],
-		"subs": [[2.0, "", "LOS C-47 REMOLCAN LOS PLANEADORES SOBRE LA COSTA."],
-			[5.6, "@0", "¿ESO DE ALLÁ ABAJO ES LA ANTIAÉREA?"]],
-		"fx": ["fogonazos", "sacudida"], "amb": {"lancha": -10.0, "campo_batalla": -24.0},
+	{"img": "salto_1", "dur": 8.0, "z": Vector2(1.0, 1.14), "c": [Vector2(0.45, 0.5), Vector2(0.55, 0.46)],
+		"tarjeta": ["SOBRE NORMANDÍA - 82.A AEROTRANSPORTADA", "6 DE JUNIO DE 1944 - 22:58"],
+		"subs": [[1.8, "", "LOS C-47 CRUZAN LA COSTA. SEIS MINUTOS PARA LA ZONA DE SALTO."],
+			[5.2, "@0", "¿ESO DE ALLÁ ABAJO ES LA ANTIAÉREA?"]],
+		"fx": ["fogonazos", "sacudida"], "amb": {"lancha": -8.0, "campo_batalla": -24.0},
 		"musica": ["musica_omaha", -12.0],
-		"sonidos": [[1.5, "explosion_lejos", -8.0, 1.2], [4.2, "explosion_lejos", -6.0, 1.0], [7.4, "explosion_lejos", -5.0, 1.1]]},
-	{"img": "planeador_2", "dur": 9.5, "z": Vector2(1.08, 1.3), "c": [Vector2(0.5, 0.5), Vector2(0.52, 0.56)],
-		"subs": [[0.5, "PILOTO", "¡SOLTAMOS EL CABLE! ¡AGÁRRENSE, VAMOS A BAJAR!"],
-			[3.6, "MURPHY", "¡CASCOS PUESTOS! ¡PIES ARRIBA, BRAZOS ADENTRO!"],
-			[6.6, "@1", "DIOS MÍO... NO SE VE NADA AHÍ AFUERA."]],
-		"fx": ["sacudida", "farol"], "amb": {"lancha": -16.0, "campo_batalla": -18.0}, "musica": ["", -7.0],
-		"sonidos": [[1.0, "throw", -4.0, 0.4], [4.8, "bala_pasa", -4.0, 0.9], [5.0, "hit", -2.0, 0.6],
-			[5.3, "bala_pasa", -6.0, 1.1], [8.0, "explosion_lejos", -4.0, 0.9]]},
-	{"img": "planeador_3", "dur": 6.0, "z": Vector2(1.0, 1.5), "c": [Vector2(0.5, 0.4), Vector2(0.48, 0.62)],
-		"subs": [[0.8, "@2", "¡ÁRBOLES! ¡ÁRBOLES!"], [3.4, "PILOTO", "¡SUJÉTENSE!"]],
-		"fx": ["sacudida", "fogonazos"], "amb": {"lancha": -12.0, "campo_batalla": -10.0}, "musica": ["", -3.0],
-		"sonidos": [[2.0, "mg42_lejos", -4.0, 1.0], [4.0, "bala_pasa", -2.0, 1.0]]},
-	# El choque contra el seto, a oscuras. Después, el silencio y el grillo.
-	{"img": "", "dur": 5.0, "subs": [[2.6, "MURPHY", "...¿DELUCA? ¿HAYES? ¿BRENNAN?"]],
-		"amb": {"campo_batalla": -12.0}, "musica": ["corte", 0.0], "amb_rapido": true,
-		"sonidos": [[0.1, "explosion_cerca", 0.0, 0.7], [0.2, "hit", 2.0, 0.5], [0.45, "hit", 0.0, 0.4],
-			[0.7, "bounce", 0.0, 0.6], [4.2, "grillo", -2.0, 1.0]]},
+		"sonidos": [[1.5, "explosion_lejos", -8.0, 1.2], [4.2, "explosion_lejos", -6.0, 1.0], [6.8, "explosion_lejos", -5.0, 1.1]]},
+	{"img": "salto_2", "dur": 8.5, "z": Vector2(1.06, 1.24), "c": [Vector2(0.5, 0.5), Vector2(0.56, 0.5)],
+		"subs": [[0.4, "JEFE DE SALTO", "¡DE PIE! ¡ENGÁNCHENSE!"],
+			[3.0, "MURPHY", "¡REVISEN EL EQUIPO DEL DE ADELANTE!"],
+			[5.8, "@1", "LUZ ROJA... TODAVÍA NO. TODAVÍA NO..."]],
+		"fx": ["sacudida", "farol"], "amb": {"lancha": -10.0, "campo_batalla": -18.0}, "musica": ["", -7.0],
+		"sonidos": [[2.0, "explosion_lejos", -4.0, 1.0], [4.6, "bala_pasa", -4.0, 0.9], [4.8, "hit", -2.0, 0.6],
+			[7.2, "explosion_lejos", -2.0, 0.9]]},
+	{"img": "salto_3", "dur": 5.5, "z": Vector2(1.1, 1.35), "c": [Vector2(0.5, 0.45), Vector2(0.42, 0.55)],
+		"subs": [[0.9, "@2", "¡NOS DIERON! ¡EL MOTOR IZQUIERDO ARDE!"], [3.0, "PILOTO", "¡NO LO SOSTENGO! ¡SALTEN, SALTEN!"]],
+		"fx": ["sacudida", "fogonazos"], "amb": {"lancha": -6.0, "campo_batalla": -10.0}, "musica": ["", -3.0],
+		"sonidos": [[0.2, "explosion_cerca", 2.0, 0.8], [0.3, "hit", 2.0, 0.5], [0.5, "hit", 0.0, 0.6],
+			[2.4, "explosion_cerca", 0.0, 0.9], [4.2, "bala_pasa", 0.0, 1.0]]},
+	{"img": "salto_4", "dur": 4.5, "z": Vector2(1.0, 1.6), "c": [Vector2(0.5, 0.5), Vector2(0.5, 0.52)],
+		"subs": [[0.3, "JEFE DE SALTO", "¡LUZ VERDE! ¡VAMOS, VAMOS, VAMOS!"], [2.5, "MURPHY", "¡GERÓNIMO!"]],
+		"fx": ["sacudida"], "amb": {"lancha": -4.0, "campo_batalla": -8.0}, "musica": ["", -3.0],
+		"sonidos": [[1.0, "explosion_lejos", 0.0, 1.0], [3.2, "tela", 0.0, 0.7]]},
 ]
 
 const LOGO := preload("res://assets/ui/logo.png")

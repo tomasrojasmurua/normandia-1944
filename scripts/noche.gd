@@ -26,6 +26,8 @@ static var luces: Array = []
 ## Materiales "unshaded" teñidos: [material, color de día]
 static var _tenidos: Array = []
 static var tinte := Color.WHITE      # color por el que se multiplican
+## Multiplica la niebla (el salto en paracaídas la baja: desde arriba se ve lejos)
+static var niebla_mult := 1.0
 
 # --- Los dos extremos (se mezclan con `amanecer`)
 const NOCHE := {
@@ -107,6 +109,7 @@ func _exit_tree() -> void:
 		activa = false
 		luces.clear()
 		_tenidos.clear()
+		niebla_mult = 1.0
 
 
 func _process(_delta: float) -> void:
@@ -154,7 +157,7 @@ func _aplicar(t: float) -> void:
 		_env.ambient_light_color = c.call("ambiente")
 		_env.ambient_light_energy = c.call("ambiente_e")
 		_env.fog_light_color = c.call("niebla")
-		_env.fog_density = c.call("niebla_d")
+		_env.fog_density = c.call("niebla_d") * niebla_mult
 	if _luz:
 		_luz.light_color = c.call("luz")
 		_luz.light_energy = c.call("luz_e")
@@ -251,3 +254,11 @@ static func tinte_vista(p: Node3D) -> Color:
 	if Game.elapsed - float(p.get_meta("disparo_t", -100.0)) < 0.07:
 		c = Color.WHITE
 	return c
+
+
+## Cambia solo la niebla (barato: se llama en cada cuadro durante el salto).
+static func niebla(mult: float) -> void:
+	niebla_mult = mult
+	if actual and actual._env:
+		var d: float = lerpf(NOCHE["niebla_d"], ALBA["niebla_d"], amanecer)
+		actual._env.fog_density = d * mult

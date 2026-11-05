@@ -59,7 +59,7 @@ const LISTA := [
 	{"id": "omaha", "img": Vector2(0.750, 0.474), "n": "PLAYA OMAHA", "sub": "DESEMBARCO", "etapa": 0, "dia": 6, "pos": Vector2(-0.90, 49.37),
 		"fuerza": 3, "premio": 120, "valor": 30, "clima": "NUBLADO", "hora": "06:30",
 		"resumen": "VOLAR EL BÚNKER, SUBIR EL ACANTILADO Y TOMAR VIERVILLE."},
-	{"id": "planeador", "img": Vector2(0.461, 0.396), "n": "SAINTE-MÈRE-ÉGLISE", "sub": "PLANEADOR", "etapa": 0, "dia": 7, "fecha": "NOCHE DEL 6 AL 7 DE JUNIO",
+	{"id": "planeador", "img": Vector2(0.461, 0.396), "n": "SAINTE-MÈRE-ÉGLISE", "sub": "PARACAÍDAS", "etapa": 0, "dia": 7, "fecha": "NOCHE DEL 6 AL 7 DE JUNIO",
 		"pos": Vector2(-1.32, 49.41), "fuerza": 2, "premio": 90, "valor": 10, "clima": "NOCHE", "hora": "23:00",
 		"resumen": "EL PLANEADOR SE ESTRELLA ENTRE SETOS. REÚNA A LOS PARACAIDISTAS."},
 	{"id": "pointe", "img": Vector2(0.660, 0.431), "n": "POINTE DU HOC", "sub": "RELEVAR A LOS RANGERS", "etapa": 1, "dia": 8, "pos": Vector2(-0.99, 49.40),
@@ -453,7 +453,7 @@ static func _revisar_final() -> void:
 ## Titulares históricos al cumplir cada misión (en español).
 const TITULARES := {
 	"omaha": [["CABEZA DE PLAYA", "EN OMAHA"], ["VIERVILLE, EN MANOS AMERICANAS", "DURAS BAJAS EN LA PRIMERA OLA"]],
-	"planeador": [["LLEGAN LOS", "PLANEADORES"], ["SAINTE-MÈRE-ÉGLISE RESISTE", "LA 82.A SE REAGRUPA EN LA NOCHE"]],
+	"planeador": [["PARACAIDISTAS", "SOBRE EL PUEBLO"], ["SAINTE-MÈRE-ÉGLISE RESISTE", "LA 82.A SE REAGRUPA EN LA NOCHE"]],
 	"pointe": [["RELEVADOS LOS", "RANGERS"], ["POINTE DU HOC RESISTIÓ DOS DÍAS", "LOS CAÑONES NO ESTABAN EN SU LUGAR"]],
 	"lafiere": [["CRUZAN LA CALZADA", "DE LA FIÈRE"], ["EL PUENTE DEL MERDERET ES NUESTRO"]],
 	"carentan": [["CAE", "CARENTAN"], ["UTAH Y OMAHA SE DAN LA MANO", "EL FRENTE AMERICANO YA ES UNO SOLO"]],

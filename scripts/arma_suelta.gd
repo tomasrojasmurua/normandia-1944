@@ -86,8 +86,9 @@ func tomar(p: Player) -> void:
 	Game.say("[RECOGISTE %s]" % nombre(), Game.COLOR_GOOD)
 	Game.play("reload", -4.0, 1.2)
 	var frente := -p.global_basis.z
-	ArmaSuelta.soltar(get_parent(), p.global_position + frente * 1.4 + Vector3(0, 0.05, 0),
-		vieja["id"], vieja["mag"], vieja["reserve"])
+	if vieja["id"] != "nada":          # la ranura vacía (arma perdida en el salto) no se deja en el suelo
+		ArmaSuelta.soltar(get_parent(), p.global_position + frente * 1.4 + Vector3(0, 0.05, 0),
+			vieja["id"], vieja["mag"], vieja["reserve"])
 	p.pickup_near = null
 	queue_free()
 

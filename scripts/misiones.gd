@@ -162,35 +162,37 @@ const DATOS := {
 		],
 	},
 	"planeador": {
-		"nombre": "EL PLANEADOR",
+		"nombre": "EL SALTO",
 		"lugar": "SAINTE-MÈRE-ÉGLISE",
 		"fecha": "NOCHE DEL 6 AL 7 DE JUNIO DE 1944",
 		"escena": "res://scenes/planeador.tscn",
 		"hora": 23 * 60 + 10,
 		"clima": "noche",
-		"entrada": "planeador",
+		"entrada": "paracaidas",
 		"suelo": 0.0,               # altura del terreno (Omaha: la meseta a 14 m)
 		"briefing": [
-			"SARGENTO, SU COMPAÑÍA LLEGA EN",
-			"PLANEADOR AL SUR DE SAINTE-MÈRE-",
+			"SARGENTO, SU COMPAÑÍA SALTA EN",
+			"PARACAÍDAS AL SUR DE SAINTE-MÈRE-",
 			"ÉGLISE. REÚNA A SUS HOMBRES,",
 			"CRUCE LOS SETOS Y ENTRE AL PUEBLO.",
 			"LA 82.A LO TIENE: HAY QUE",
 			"AGUANTARLO HASTA QUE AMANEZCA.",
 		],
-		# El jugador y la escuadra 0 en el potrero del medio (su planeador, de
-		# nariz en el seto); Kowalski y Cole en el de la izquierda (la granja);
-		# Reyes en el de la derecha.
+		# El comienzo jugable: el salto desde el C-47 alcanzado (salto.gd). El
+		# viento empuja hacia el norte; se cae en los potreros de la fase 1.
+		"salto": {"desde": Vector3(-8, 135, 24), "viento": Vector3(0.35, 0, -0.75)},
+		# La escuadra 0 cae dispersa por los potreros; Kowalski y Cole en el de la
+		# izquierda (la granja); Reyes en el de la derecha.
 		"sectores": [Vector2(-16, 14), Vector2(-44, -30), Vector2(22, 42), Vector2(-32, -22)],
-		"escuadra_jugador": [[Vector3(-3, 0, -16), "thompson", "DELUCA"],
+		"escuadra_jugador": [[Vector3(28, 0, -22), "thompson", "DELUCA"],
 			[Vector3(16.4, 0, -6), "garand", "HAYES"], [Vector3(-18.4, 0, 7), "bar", "BRENNAN"]],
-		"perdidos": [1, 2],         # dispersos tras el choque (objetivo "reunir")
+		"perdidos": [0, 1, 2],      # todos dispersos tras el salto (objetivo "reunir")
 		"lider_z": 8.0,
 		"hombres_z": Vector2(8.0, 11.0),
 		"refuerzos_z": Vector2(8.0, 11.5),
 		"fases": [
 			{
-				"nombre": "EL CHOQUE",
+				"nombre": "EL SALTO",
 				"hora": 23 * 60 + 10,
 				"radio": "",
 				"ancla": Vector3(0, 0, -60),

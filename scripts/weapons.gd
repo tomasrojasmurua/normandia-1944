@@ -94,6 +94,18 @@ func equip(arma_id: String, mag: int, res: int) -> Dictionary:
 	return vieja
 
 
+## Se pierde el arma principal (el tirón del paracaídas, misión 2): queda la pistola.
+func perder_principal() -> String:
+	var perdida := slots[0]
+	_set_slot(0, "nada")
+	ammo[0] = 0
+	reserve[0] = 0
+	_reload_t = -1.0
+	_switch_t = -1.0
+	current = 1
+	return perdida
+
+
 func is_reloading() -> bool:
 	return _reload_t >= 0.0
 
@@ -105,7 +117,7 @@ func busy() -> bool:
 # ------------------------------------------------------------ acciones
 
 func pull_trigger() -> void:
-	if _player.dead or busy() or _player.sprinting or _cooldown > 0.0:
+	if _player.dead or busy() or _player.sprinting or _cooldown > 0.0 or Salto.activo:
 		return
 	if ammo[current] <= 0:
 		Game.play("click")
@@ -124,6 +136,9 @@ func reload() -> void:
 func select(index: int) -> void:
 	if index == current or index < 0 or index >= slots.size() or _switch_t >= 0.0 or _throw_t >= 0.0 \
 			or granada_en_mano:
+		return
+	if slots[index] == "nada":
+		Game.say("[PERDISTE TU ARMA EN EL SALTO: RECOGE OTRA]", Game.COLOR_INFO)
 		return
 	_reload_t = -1.0  # cambiar de arma cancela la recarga
 	_switch_t = 0.0

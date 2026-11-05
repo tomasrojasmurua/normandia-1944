@@ -49,6 +49,18 @@ const DATOS := {
 		"mira_pos": Vector2(-3, 33), "mira_poste": Vector2(323, 147),
 		"recarga": "cargador", "recarga_punto": Vector2(409, 350), "expulsion": Vector2(371, 165),
 	},
+	# Ranura vacía: el arma principal se perdió en el salto (misión 2). No se
+	# puede elegir; al recoger cualquier arma principal, la reemplaza.
+	"nada": {
+		"name": "PERDIDA", "ranura": 0, "bando": "aliado", "tipo": "nada",
+		"mag": 0, "reserve": 0, "damage": 0.0, "interval": 0.5, "auto": false,
+		"reload": 1.0, "spread_hip": 1.5, "spread_ads": 0.5, "recoil": 0.0,
+		"sound": "pistol", "pitch": 1.0, "ads_fov": 55.0,
+		"hip": Vector3(0.1, -0.06, -0.22), "ads": Vector3(0, 0, -0.26),
+		"vm_cadera": Vector2(-63, 17), "vm_pos": Vector2(70, 30), "vm_boca": Vector2(326, 142), "vm_mira": Vector2(334, 136),
+		"mira_pos": Vector2(-3, 33), "mira_poste": Vector2(323, 147),
+		"recarga": "cargador", "recarga_punto": Vector2(409, 350), "expulsion": Vector2(371, 165),
+	},
 	"carbine": {
 		"name": "M1 CARBINE", "ranura": 0, "bando": "aliado", "tipo": "fusil",
 		"mag": 15, "reserve": 75, "damage": 60.0, "interval": 0.12, "auto": false,

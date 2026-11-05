@@ -321,7 +321,7 @@ const ARCHIVOS := {
 	"resp_ok": 3, "resp_medico": 2, "resp_bazuca": 1, "resp_radio": 1, "resp_fuego": 2, "resp_ingeniero": 1,
 	# Misión 2: el grillo (uno = clic-clac, dos = la respuesta) y la bengala.
 	# Mientras no estén grabados suenan los hechos con código.
-	"grillo": 1, "grillo2": 1, "bengala": 1,
+	"grillo": 1, "grillo2": 1, "bengala": 1, "tela": 1, "latido": 1,
 }
 const ALIAS := {"explosion": "explosion_cerca", "silbido": "silbido_proyectil", "zumbido": "bala_pasa"}
 var _archivos := {}
@@ -429,6 +429,7 @@ func _build_sounds() -> void:
 		"throw": [0.35, 0.25], "bounce": [0.08, 0.5],
 		"zumbido": [0.22, 0.9], "silbido": [1.3, 1.0],
 		"grillo": [0.3, 1.0], "grillo2": [0.75, 1.0], "bengala": [1.6, 0.8],
+		"tela": [0.9, 0.5], "latido": [0.45, 0.2],
 	}
 	for sound in specs:
 		_sounds[sound] = _make(sound, specs[sound][0], specs[sound][1])
@@ -471,6 +472,10 @@ func _sample(sound: String, t: float, n: float) -> float:
 		"bengala":   # pistola de señales: estampido seco y el silbido de la bengala que sube
 			return n * exp(-t * 40.0) * 0.8 + sin(TAU * 70.0 * t) * exp(-t * 30.0) * 0.5 \
 				+ n * clampf(t * 4.0, 0.0, 1.0) * exp(-t * 1.6) * 0.18
+		"tela":      # el paracaídas que se abre: un chasquido de tela y un golpe de aire
+			return n * 2.2 * exp(-t * 4.0) * clampf(t * 30.0, 0.0, 1.0) + sin(TAU * 55.0 * t) * exp(-t * 9.0) * 0.6
+		"latido":    # el corazón: dos golpes graves
+			return sin(TAU * 52.0 * t) * (exp(-t * 28.0) + exp(-maxf(t - 0.17, 0.0) * 30.0) * 0.75 * float(t > 0.17)) * 0.9
 		"grillo":    # el grillo de los paracaidistas: clic-clac (lámina de metal)
 			return _clic(t) + _clic(t - 0.11) * 0.8
 		"grillo2":   # la respuesta: dos clic-clac

@@ -23,7 +23,7 @@ NIVEL = {"grito": -17.0, "muerte": -17.0, "explosion_cerca": -14.0, "explosion_l
          "mg42": -18.0, "bala": -18.0, "impacto": -20.0, "silbido": -17.0, "rampa": -14.0,
          "maquina": -20.0, "amb": -24.0, "musica": -20.0,
          "orden": -16.0, "pedir": -16.0, "resp": -18.0,   # voces del sargento y su escuadra
-         "grillo": -16.0, "bengala": -16.0}               # misión 2 (el planeador)
+         "grillo": -16.0, "bengala": -16.0, "tela": -14.0, "latido": -16.0}               # misión 2 (el planeador)
 
 
 def leer(f, canales):

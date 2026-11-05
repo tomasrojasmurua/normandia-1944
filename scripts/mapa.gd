@@ -566,24 +566,31 @@ func _diario(ci: CanvasItem, e: Dictionary) -> void:
 	ci.draw_rect(Rect2(Vector2.ZERO, size), Color(Estilo.NEGRO, 0.75))
 	var w := 420.0
 	var h := minf(size.y - 16, 344.0)
-	var p := Rect2((size.x - w) / 2.0, (size.y - h) / 2.0, w, h)
-	ci.draw_rect(p.grow(2), Estilo.NEGRO)
-	ci.draw_rect(p, PAPEL)
-	# Manchas del papel
+	var p := Rect2(floorf((size.x - w) / 2.0), floorf((size.y - h) / 2.0), w, h)
 	var rng := RandomNumberGenerator.new()
 	rng.seed = hash(e.get("fecha", ""))
-	for i in 60:
-		var q := Vector2(rng.randf_range(p.position.x, p.end.x - 3), rng.randf_range(p.position.y, p.end.y - 2)).floor()
-		ci.draw_rect(Rect2(q, Vector2(rng.randi_range(1, 3), 1)), Color(TINTA, 0.08))
+	_papel(ci, p, rng)
 	var cx := p.get_center().x
 	var x := p.position.x + 12
 	var y := p.position.y + 26
-	_tinta_c(ci, "THE NORMANDY DISPATCH", cx, y, Estilo.TAM_GRANDE)
+	# Cabecera: imagen de ChatGPT si está (assets/campana/cabecera_diario.png), si no, letras
+	var cabecera := _textura_opcional("cabecera_diario")
+	if cabecera:
+		var ch := minf(30.0, (w - 24) * cabecera.get_height() / cabecera.get_width())
+		var cw := ch * cabecera.get_width() / cabecera.get_height()
+		ci.draw_texture_rect(cabecera, Rect2(cx - cw / 2.0, p.position.y + 5, cw, ch), false)
+	else:
+		_tinta_c(ci, "THE NORMANDY DISPATCH", cx, y, Estilo.TAM_GRANDE)
+		for lado in [-1, 1]:   # adornos a los lados del nombre
+			var ox: float = cx + lado * (Estilo.ancho_texto("THE NORMANDY DISPATCH", Estilo.TAM_GRANDE) / 2.0 + 10)
+			ci.draw_rect(Rect2(ox - 3, y - 9, 6, 6), TINTA)
+			ci.draw_rect(Rect2(ox - 1, y - 11, 2, 10), TINTA)
+			ci.draw_rect(Rect2(ox - 5, y - 7, 10, 2), TINTA)
 	y += 6
 	ci.draw_rect(Rect2(x, y, w - 24, 2), TINTA)
 	ci.draw_rect(Rect2(x, y + 4, w - 24, 1), TINTA)
 	y += 15
-	_tinta(ci, "EDICIÓN DEL FRENTE", Vector2(x, y))
+	_tinta(ci, "VOL. I - N.%d" % (Campana.turnos + 1), Vector2(x, y))
 	_tinta_c(ci, e.get("fecha", ""), cx, y)
 	var precio := "5 CENTAVOS"
 	_tinta(ci, precio, Vector2(p.end.x - 12 - Estilo.ancho_texto(precio), y))
@@ -621,6 +628,12 @@ func _diario(ci: CanvasItem, e: Dictionary) -> void:
 		ty += 2
 		_tinta(ci, "HERIDOS: " + ", ".join(e["heridos"]), Vector2(col, ty), TINTA, ancho)
 		ty += 11
+	# Texto de relleno (otras noticias en letra chica) hasta el pie, y la
+	# leyenda de la foto: que se vea como una página de diario de verdad
+	_tinta(ci, "FOTO: CUERPO DE SEÑALES", Vector2(x, foto.end.y + 11), Color(TINTA, 0.65))
+	_columna_falsa(ci, Rect2(x, foto.end.y + 17, foto.size.x, p.end.y - 18 - (foto.end.y + 17)), rng, "OTRAS NOTICIAS")
+	if ty < p.end.y - 40:
+		_columna_falsa(ci, Rect2(col, ty + 6, ancho, p.end.y - 18 - (ty + 6)), rng, "")
 	if e.has("apoyo") and int(e["apoyo"]) != 0:
 		var a := int(e["apoyo"])
 		_tinta(ci, "APOYO DEL MANDO: %s%d" % ["+" if a > 0 else "", a], Vector2(x, p.end.y - 10),
@@ -628,6 +641,76 @@ func _diario(ci: CanvasItem, e: Dictionary) -> void:
 	var seguir := "TOCA PARA SEGUIR"
 	var a2 := 0.5 + 0.5 * sin(_t * 4.0)
 	_tinta(ci, seguir, Vector2(p.end.x - 12 - Estilo.ancho_texto(seguir), p.end.y - 10), Color(TINTA, 0.4 + 0.5 * a2))
+
+
+## La hoja: textura de papel de ChatGPT (assets/campana/papel_diario.png) o,
+## si no está, papel de diario viejo hecho con código: amarillento en los
+## bordes, doblez al medio, borde mordido, una mancha de café y motas.
+func _papel(ci: CanvasItem, p: Rect2, rng: RandomNumberGenerator) -> void:
+	ci.draw_rect(Rect2(p.position + Vector2(5, 6), p.size), Color(Estilo.NEGRO, 0.55))   # sombra
+	var tex := _textura_opcional("papel_diario")
+	if tex:
+		ci.draw_texture_rect(tex, p, false)
+		return
+	ci.draw_rect(p, PAPEL)
+	var cafe := Color("#7a5a2a")
+	for i in 10:      # bordes amarillentos
+		ci.draw_rect(p.grow(-i), Color(cafe, 0.05 - i * 0.004), false, 1.0)
+	for esq in [p.position, Vector2(p.end.x - 26, p.position.y), Vector2(p.position.x, p.end.y - 20), p.end - Vector2(30, 24)]:
+		ci.draw_rect(Rect2(esq, Vector2(26, 20)), Color(cafe, 0.05))
+	# Doblez: una línea de luz y una de sombra al medio (vertical y horizontal)
+	var mx := floorf(p.get_center().x)
+	ci.draw_rect(Rect2(mx, p.position.y, 1, p.size.y), Color(1, 1, 1, 0.12))
+	ci.draw_rect(Rect2(mx + 1, p.position.y, 1, p.size.y), Color(cafe, 0.12))
+	var my := floorf(p.get_center().y + 18)
+	ci.draw_rect(Rect2(p.position.x, my, p.size.x, 1), Color(cafe, 0.08))
+	# Motas
+	for i in 80:
+		var q := Vector2(rng.randf_range(p.position.x, p.end.x - 3), rng.randf_range(p.position.y, p.end.y - 2)).floor()
+		ci.draw_rect(Rect2(q, Vector2(rng.randi_range(1, 3), 1)), Color(TINTA, rng.randf_range(0.04, 0.1)))
+	# Mancha de café (un anillo) cerca de una esquina
+	var c := Vector2(p.end.x - rng.randf_range(40, 90), p.position.y + rng.randf_range(60, 120))
+	var r := rng.randf_range(13.0, 17.0)
+	ci.draw_arc(c, r, 0.0, TAU, 28, Color(cafe, 0.16), 2.0)
+	ci.draw_arc(c + Vector2(1, 1), r - 2.0, 0.6, 4.8, 20, Color(cafe, 0.08), 1.0)
+	# Borde mordido arriba y abajo (pedacitos del fondo)
+	for i in 34:
+		var bx := floorf(rng.randf_range(p.position.x, p.end.x - 3))
+		var arriba := rng.randf() < 0.5
+		var alto := rng.randi_range(1, 2)
+		ci.draw_rect(Rect2(bx, p.position.y if arriba else p.end.y - alto, rng.randi_range(2, 5), alto),
+			Color(0.06, 0.06, 0.05, 0.95))
+
+
+## Columna de "letra chica": barras grises de largo variable que se leen
+## como texto de diario a esta resolución. `titulo` opcional en negrita.
+func _columna_falsa(ci: CanvasItem, r: Rect2, rng: RandomNumberGenerator, titulo: String) -> void:
+	var y := r.position.y
+	if titulo != "" and r.size.y > 20:
+		_tinta(ci, titulo, Vector2(r.position.x, y + 9))
+		y += 13
+	var renglon := 0
+	while y + 3 < r.end.y:
+		var largo := r.size.x if renglon % 7 != 6 else r.size.x * rng.randf_range(0.3, 0.7)
+		var px := r.position.x
+		while px < r.position.x + largo - 2:     # "palabras"
+			var pal := minf(rng.randf_range(4, 16), r.position.x + largo - px)
+			ci.draw_rect(Rect2(floorf(px), y, floorf(pal), 2), Color(TINTA, 0.32))
+			px += pal + 2
+		y += 4
+		renglon += 1
+		if renglon % 7 == 0:
+			y += 3
+
+
+var _opcionales := {}
+
+
+func _textura_opcional(nombre: String) -> Texture2D:
+	if not _opcionales.has(nombre):
+		var ruta := "res://assets/campana/%s.png" % nombre
+		_opcionales[nombre] = load(ruta) if ResourceLoader.exists(ruta) else null
+	return _opcionales[nombre]
 
 
 func _foto(ci: CanvasItem, clave: String, r: Rect2) -> void:

@@ -9,12 +9,13 @@ class_name Grenade
 var _bounces := 0
 var del_jugador := false     # la tiró el jugador (los alemanes cercanos gritan al verla caer)
 var _aviso := false
+const _SPRITE := preload("res://assets/armas/perfil_granada.png")
 var solo_vista := false      # cooperativo: copia de una granada del anfitrión (la explosión llega por la red)
 
 
 func _init() -> void:
 	collision_layer = 8          # capa 4: granadas
-	collision_mask = 1 | 4       # rebota en el escenario y en enemigos
+	collision_mask = 1 | 4 | 512 # rebota en el escenario, enemigos y modelos
 	mass = 0.6
 	continuous_cd = true
 	angular_damp = 1.5
@@ -31,12 +32,16 @@ func _init() -> void:
 	shape.shape = sphere
 	add_child(shape)
 
-	var olive := Game.material(Color(0.27, 0.31, 0.18))
-	var steel := Game.material(Color(0.4, 0.4, 0.38))
-	Game.box(self, Vector3(0.075, 0.1, 0.075), Vector3.ZERO, olive)
-	Game.box(self, Vector3(0.085, 0.07, 0.085), Vector3.ZERO, olive, Vector3(0, 45, 0))
-	Game.box(self, Vector3(0.025, 0.03, 0.025), Vector3(0, 0.06, 0), steel)      # espoleta
-	Game.box(self, Vector3(0.012, 0.09, 0.02), Vector3(0.035, 0.03, 0), steel)   # palanca
+	# La piña en píxeles, de frente a la cámara (como los soldados)
+	var sp := Sprite3D.new()
+	sp.texture = _SPRITE
+	sp.pixel_size = 0.0055
+	sp.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	sp.shaded = false
+	sp.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+	sp.alpha_cut = SpriteBase3D.ALPHA_CUT_DISCARD
+	sp.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(sp)
 
 	body_entered.connect(_on_bounce)
 
@@ -45,7 +50,7 @@ func _init() -> void:
 ## mango de madera con la cabeza de lata. Mecha un poco más larga.
 func modelo_aleman() -> void:
 	for c in get_children():
-		if c is MeshInstance3D:
+		if c is MeshInstance3D or c is Sprite3D:
 			c.queue_free()
 	fuse = 4.5
 	var lata := Game.material(Color(0.3, 0.33, 0.29))

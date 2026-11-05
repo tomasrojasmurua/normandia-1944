@@ -21,7 +21,7 @@ static func hornear(raiz: Node3D, zona: AABB) -> void:
 	nav.agent_max_slope = 40.0
 	nav.region_min_size = 4.0
 	nav.geometry_parsed_geometry_type = NavigationMesh.PARSED_GEOMETRY_STATIC_COLLIDERS
-	nav.geometry_collision_mask = 1
+	nav.geometry_collision_mask = 1 | 256   # escenario + cajas de los modelos
 	nav.filter_baking_aabb = zona
 	var fuente := NavigationMeshSourceGeometryData3D.new()
 	NavigationServer3D.parse_source_geometry_data(nav, fuente, raiz)

@@ -72,7 +72,7 @@ func _ready() -> void:
 	# hacia los bordes el modelo baja y antes se caminaba flotando)
 	_add_box(Vector3(0, 3.17, -42.1), Vector3(14.4, 0.5, 3.4), _concrete).get_child(0).visible = false
 	# Rampa de tablones por detrás (lado de tierra) para subir al techo
-	_add_box(Vector3(5.6, 1.62, -46.6), Vector3(1.8, 0.25, 6.0), _wood, Vector3(35, 0, 0))
+	_add_box(Vector3(1.5, 1.62, -46.6), Vector3(1.8, 0.25, 6.0), _wood, Vector3(-35, 0, 0))   # sube hacia el búnker (entre las dos trincheras de atrás)
 	for x in [-3.6, 3.6]:
 		Ambiente.modelo(self, "bunker", Vector3(x, 0, -42), 90.0, Vector3(3.2, 2.85, 3.8), false)
 

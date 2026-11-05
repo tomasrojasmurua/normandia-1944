@@ -58,6 +58,17 @@ var _rid_sig := 1
 var _cuerpos: Array = []       # [bando, arma, x, y, z, giro] (anfitrión: para los que entran tarde)
 var _vuelven := {}             # id → hasta cuándo vuelve desde la orilla (anfitrión)
 var _ultimo_dr := 9            # refuerzos alemanes que quedaban (por si hay traspaso)
+# Sala de espera (antes de la misión): quién más está y si ya empezaron
+var sala := {}                 # id → [puesto (-1 = aún no se sabe), anfitrión]
+var en_curso := false          # el anfitrión ya empezó la misión
+var _t_lob := 0.0
+
+
+## El anfitrión empieza la misión desde la sala de espera: avisa a los demás.
+static func empezar_partida() -> void:
+	if actual:
+		actual.en_curso = true
+		actual._ws.send_text('{"t":"ir"}')
 
 
 ## Se conecta a la sala (desde el menú). Queda en la raíz del árbol.
@@ -105,6 +116,11 @@ func _process(delta: float) -> void:
 				estado = "conectado"
 			while _ws.get_available_packet_count() > 0:
 				_recibir(_ws.get_packet().get_string_from_utf8())
+			# En la sala de espera (sin jugador): "aquí estoy" cada segundo
+			_t_lob -= delta
+			if _t_lob <= 0.0 and mi_id != "" and _jugador() == null:
+				_t_lob = 1.0
+				_ws.send_text(JSON.stringify({"t": "lob", "id": mi_id, "pu": puesto, "a": anfitrion}))
 			_t_envio -= delta
 			if _t_envio <= 0.0 and mi_id != "":
 				_t_envio += 1.0 / ENVIOS_POR_SEGUNDO
@@ -285,13 +301,23 @@ func _recibir(texto: String) -> void:
 			anfitrion = d["anfitrion"]
 			puesto = clampi(int(d.get("puesto", 0)), 0, 3)
 			mi_nombre = NOMBRES[puesto]
+			for o in d.get("otros", []):
+				sala[str(o)] = [-1, false]
+		"lob":
+			sala[str(d["id"])] = [int(d.get("pu", -1)), bool(d.get("a", false))]
+		"ir":
+			en_curso = true
 		"llena":
 			estado = "sala llena"
 		"entra":
+			sala[str(d["id"])] = [-1, false]
+			if anfitrion and en_curso:   # la misión ya empezó: que entre directo
+				_ws.send_text('{"t":"ir"}')
 			Game.say("[ENTRÓ UN JUGADOR]", Game.COLOR_GOOD)
 			if anfitrion and not _cuerpos.is_empty():
 				evento(["c", str(d["id"]), _cuerpos])
 		"sale":
+			sala.erase(str(d["id"]))
 			_quitar(str(d["id"]))
 			if d.get("anfitrion", false):
 				Game.say("[SE FUE EL ANFITRIÓN: OTRO JUGADOR TOMA SU LUGAR]", Game.COLOR_BAD)
@@ -299,12 +325,20 @@ func _recibir(texto: String) -> void:
 				Game.say("[UN JUGADOR SE FUE]", Game.COLOR_BAD)
 		"anfitrion":
 			if str(d["id"]) == mi_id and not anfitrion:
-				_volverse_anfitrion()
+				if _jugador() == null:   # aún en la sala de espera: solo cambia el papel
+					anfitrion = true
+				else:
+					_volverse_anfitrion()
+			elif sala.has(str(d["id"])):
+				sala[str(d["id"])][1] = true
 		"pong":
 			ping_ms = Time.get_ticks_msec() - int(d["k"])
 		"est":
 			var id := str(d["id"])
+			if d.has("a"):     # el anfitrión ya está en la misión
+				en_curso = true
 			if d.has("p"):
+				sala[id] = [int(d["p"][9]) if d["p"].size() > 9 else -1, d.has("a")]
 				_recibir_jugador(id, d["p"])
 			if not anfitrion:
 				if d.has("a"):

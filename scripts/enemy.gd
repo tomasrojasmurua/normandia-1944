@@ -52,7 +52,7 @@ func _ready() -> void:
 	add_to_group("enemies")
 	health = minf(health, 60.0)   # un tiro de fusil al cuerpo mata (Garand 100, carabina 60)
 	collision_layer = 4          # capa 3: enemigos
-	collision_mask = 1 | 2 | 64   # 64 = alambre de púas (no va en el mapa de caminos)
+	collision_mask = 1 | 2 | 64 | 256   # 256 = caja de los modelos; 64 = alambre de púas (no va en el mapa de caminos)
 	_fire_timer = randf_range(fire_interval.x, fire_interval.y) * 0.5
 	if arma == "":
 		var rng := RandomNumberGenerator.new()

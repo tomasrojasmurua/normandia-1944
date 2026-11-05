@@ -111,7 +111,7 @@ func _touch_down(index: int, pos: Vector2) -> void:
 	var btn := _button_at(pos)
 	if btn != "":
 		_pressed[btn] = true
-		_fingers[index] = {"role": "fire" if btn == "fire" else "button", "last": pos, "btn": btn}
+		_fingers[index] = {"role": "fire" if btn in ["fire", "grenade"] else "button", "last": pos, "btn": btn}   # con FUEGO y GRANADA se sigue mirando al arrastrar
 		match btn:
 			"fire", "fire_left":
 				_player.touch_fire = true
@@ -122,7 +122,7 @@ func _touch_down(index: int, pos: Vector2) -> void:
 			"use": _player.recoger()
 			"aim": _player.touch_aim = not _player.touch_aim
 			"reload": _player.weapons.reload()
-			"grenade": _player.throw_grenade()
+			"grenade": _player.preparar_granada()    # al soltar el dedo se lanza
 			"jump": _player.touch_jump = true
 			"crouch":
 				_player.crouch_press()
@@ -136,8 +136,10 @@ func _touch_down(index: int, pos: Vector2) -> void:
 			var orden: String = _hud.orden_at(pos)
 			if orden != "":
 				Aliado.dar_orden(orden)
-			elif _hud.apoyo_at(pos):
-				Escuadras.pedir_artilleria()
+			else:
+				var a: Aliado = _hud.retrato_at(pos)
+				if a:
+					a.orden_personal()
 		return
 	if pos.x < size.x * 0.5:
 		if not _has_role("move"):
@@ -159,6 +161,8 @@ func _touch_up(index: int) -> void:
 		_pressed.erase(f["btn"])
 		if f["btn"] == "crouch":
 			_player.touch_crouch_held = false
+		if f["btn"] == "grenade":
+			_player.soltar_granada()
 		if f["btn"] in ["fire", "fire_left"] and not _pressed.has("fire") and not _pressed.has("fire_left"):
 			_player.touch_fire = false
 			if _player.touch_hold_aim:

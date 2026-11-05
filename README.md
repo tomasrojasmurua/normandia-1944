@@ -15,9 +15,12 @@ FPS cooperativo retro de la Segunda Guerra Mundial, hecho en **Godot 4.7** y jug
 | Apuntar por la mira | Botón MIRA (activa / desactiva) | Mantener clic derecho |
 | Recargar | Botón RECARGA (también recarga solo al vaciarse) | R |
 | Cambiar arma | Tocar el arma 1 o 2 en la barra inferior | 1 / 2, Q o rueda del mouse |
-| Granada | Botón GRANADA | G |
+| Granada | Mantén GRANADA: queda en la mano y se ve la curva por donde va a caer; suelta para lanzarla | Mantén G y suelta |
 | Agacharse | Botón AGACHAR | C o Ctrl |
+| Órdenes a la escuadra | Botones » → ‖ de la barra (síganme, avancen, alto) | Z / X / V |
+| Orden a un hombre | Tocar su cara en la barra: el médico viene a curarte, la bazuca dispara donde apuntas, el de radio pide morteros, los fusileros y el BAR disparan al alemán que marcas, el ingeniero viene a tu lado | 7 / 8 / 9 |
 | Saltar | Botón SALTAR | Barra espaciadora |
+| Datos técnicos (FPS, ms) | En la pausa: DATOS TÉCNICOS (parten apagados) | — |
 | Modo de controles | En CONTROLES del menú o en la pausa: MODO TÁCTIL (2 DEDOS o GARRA) y DISPARO (AL TOCAR o AL SOLTAR). Quedan guardados | — |
 | Disparo AL SOLTAR | Mantén FUEGO: el arma sube a la mira (puedes seguir apuntando); suelta para disparar. Con automáticas, mantener = mira + ráfaga | — |
 

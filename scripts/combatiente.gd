@@ -93,7 +93,7 @@ func pos_cabeza() -> Vector3:
 
 ## ¿Hay línea de vista limpia (solo cuenta el escenario) entre dos puntos?
 func linea_libre(desde: Vector3, hasta: Vector3) -> bool:
-	var q := PhysicsRayQueryParameters3D.create(desde, hasta, 1 | 128)   # 128 = vegetación: tapa la vista
+	var q := PhysicsRayQueryParameters3D.create(desde, hasta, 1 | 128 | 512)   # 128 = vegetación: tapa la vista
 	return get_world_3d().direct_space_state.intersect_ray(q).is_empty()
 
 
@@ -260,7 +260,7 @@ func tiro_ia(blanco: Node3D, prob: float, sonido_db: float) -> bool:
 			if cerca < 2.5:
 				p.casi(cerca)
 	if not acierta:
-		var q := PhysicsRayQueryParameters3D.create(from, end, 1)
+		var q := PhysicsRayQueryParameters3D.create(from, end, 1 | 512)
 		var w := get_world_3d().direct_space_state.intersect_ray(q)
 		if not w.is_empty():
 			end = w["position"]

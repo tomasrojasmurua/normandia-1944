@@ -26,9 +26,16 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	_confirmar = maxf(_confirmar - delta, 0.0)
 	queue_redraw()
-	# Esperando al servidor: al saber si eres el anfitrión, empieza la misión
+	# Al saber tu puesto pasas a la sala de espera. El anfitrión empieza
+	# cuando quiere (solo o con los que hayan entrado); los invitados entran
+	# en cuanto empieza (o directo, si la misión ya estaba en curso).
 	if pantalla == "conectando" and Red.actual and Red.actual.mi_id != "":
-		Game.empezar_mision()
+		pantalla = "espera"
+	if pantalla == "espera":
+		if Red.actual == null:
+			pantalla = "coop"
+		elif not Red.actual.anfitrion and Red.actual.en_curso:
+			Game.empezar_mision()
 
 
 func _botones() -> Array:
@@ -64,6 +71,12 @@ func _botones() -> Array:
 			]
 		"conectando":
 			return [["salir_sala", Rect2(X, size.y - 44, 120, ALTO), "VOLVER", true, ""]]
+		"espera":
+			var lista := [["salir_sala", Rect2(X, size.y - 44, 120, ALTO), "SALIR", true, ""]]
+			if Red.actual and Red.actual.anfitrion:
+				lista.append(["empezar", Rect2(X, 236, ANCHO, ALTO), "¡EMPEZAR!", true,
+					"%d JUGADOR%s" % [_jugadores(), "ES" if _jugadores() > 1 else ""]])
+			return lista
 		"unirse":
 			# Teclado de números para escribir el código de la sala
 			var lista := []
@@ -120,6 +133,9 @@ func _pulsado(id: String) -> void:
 			pantalla = id
 		"volver":
 			pantalla = "inicio"
+		"empezar":
+			Red.empezar_partida()
+			Game.empezar_mision()
 		"salir_sala":
 			if Red.actual:
 				Red.actual.queue_free()
@@ -161,6 +177,8 @@ func _draw() -> void:
 			_unirse()
 		"conectando":
 			_conectando()
+		"espera":
+			_espera()
 	_dibujar_botones()
 
 
@@ -180,6 +198,52 @@ func _conectando() -> void:
 	elif e == "sin conexión":
 		txt = "NO SE PUDO CONECTAR. REVISA INTERNET Y PRUEBA DE NUEVO."
 	Estilo.texto(self, txt, Vector2(X, 96), Estilo.AMBAR_CLARO)
+
+
+func _jugadores() -> int:
+	return 1 + (Red.actual.sala.size() if Red.actual else 0)
+
+
+## Sala de espera: el código, los 4 puestos y quién está.
+func _espera() -> void:
+	var r := Red.actual
+	if r == null:
+		return
+	Estilo.texto(self, "SALA %s" % Game.sala, Vector2(X, 66), Estilo.CREMA, 33)
+	Estilo.texto(self, "DILES EL CÓDIGO: COOPERATIVO > UNIRSE A UNA SALA", Vector2(X, 92), Estilo.AMBAR_CLARO)
+	var puestos := ["", "", "", ""]
+	var anf := [false, false, false, false]
+	puestos[r.puesto] = "TÚ"
+	anf[r.puesto] = r.anfitrion
+	var sin_puesto := 0
+	for id in r.sala:
+		var pu: int = r.sala[id][0]
+		if pu >= 0 and pu < 4 and puestos[pu] == "":
+			puestos[pu] = "LISTO"
+			anf[pu] = r.sala[id][1]
+		else:
+			sin_puesto += 1
+	for i in 4:   # los que aún no dijeron su puesto, en los libres
+		if sin_puesto > 0 and puestos[i] == "":
+			puestos[i] = "ENTRANDO..."
+			sin_puesto -= 1
+	for i in 4:
+		var y := 118.0 + i * 24.0
+		var fila := Rect2(X, y - 14, 300, 20)
+		Estilo.marco(self, fila, "hundido" if puestos[i] != "" else "chapa")
+		var col := Estilo.AMBAR if puestos[i] == "TÚ" else (Estilo.CREMA if puestos[i] != "" else Color(Estilo.CREMA, 0.4))
+		Estilo.texto(self, "%d. SGT. %s" % [i + 1, Red.NOMBRES[i]], Vector2(X + 8, y), col)
+		var estado: String = puestos[i] if puestos[i] != "" else "LIBRE"
+		if anf[i]:
+			estado += " - ANFITRIÓN"
+		Estilo.texto(self, estado, Vector2(X + 130, y), col)
+	if r.anfitrion:
+		Estilo.texto(self, "EMPIEZA CUANDO QUIERAS: LOS QUE LLEGUEN DESPUÉS ENTRAN EN MARCHA.", Vector2(X, 226),
+			Color(Estilo.CREMA, 0.75))
+	else:
+		Estilo.texto(self, "ESPERANDO A QUE EL ANFITRIÓN EMPIECE LA MISIÓN...", Vector2(X, 226), Estilo.AMBAR_CLARO)
+	if r.estado == "sin conexión":
+		Estilo.texto(self, "SE CORTÓ LA CONEXIÓN. SAL Y VUELVE A ENTRAR.", Vector2(X, 280), Estilo.ROJO)
 
 
 func _coop() -> void:
@@ -230,6 +294,7 @@ func _controles() -> void:
 			"AL SOLTAR: MANTÉN FUEGO PARA APUNTAR, SUELTA PARA DISPARAR",
 			"BOTONES DE LA BARRA, A LA IZQUIERDA: ÓRDENES",
 			"A LA ESCUADRA (SÍGANME, AVANCEN, ALTO)",
+			"TOCA LA CARA DE UN HOMBRE: SU ORDEN (MÉDICO, BAZUCA...)",
 		]
 		for i in lineas.size():
 			Estilo.texto(self, lineas[i], Vector2(X, 140 + i * 15), Estilo.CREMA)
@@ -240,6 +305,7 @@ func _controles() -> void:
 			["R", "RECARGAR"], ["G", "GRANADA"], ["ESPACIO", "SALTAR"],
 			["C / CTRL", "AGACHARSE"], ["E", "RECOGER ARMA"], ["1 / 2 / Q", "CAMBIAR DE ARMA"],
 			["Z / X / V", "ESCUADRA: SÍGANME / AVANCEN / ALTO"],
+			["7 / 8 / 9", "ORDEN A UN HOMBRE (MÉDICO, BAZUCA...)"],
 			["ESC", "PAUSA"],
 		]
 		for i in teclas.size():

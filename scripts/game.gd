@@ -26,6 +26,7 @@ var _mat_cache := {}
 const AJUSTES := "user://ajustes.cfg"
 ## Controles táctiles en modo GARRA (FUEGO extra arriba a la izquierda).
 var garra := false
+var datos_tecnicos := false    # FPS, ms y versión arriba a la izquierda (se activan en la pausa)
 ## Disparo táctil "al soltar": mantener FUEGO apunta por la mira, soltarlo dispara.
 var disparo_soltar := false
 var modo_red := false
@@ -59,6 +60,7 @@ func _ready() -> void:
 		garra = cfg.get_value("controles", "garra", false)
 		disparo_soltar = cfg.get_value("controles", "disparo_soltar", false)
 		soldados_3d = cfg.get_value("graficos", "soldados_3d", false)
+		datos_tecnicos = cfg.get_value("pantalla", "datos_tecnicos", false)
 	_build_sounds()
 	_cargar_archivos()
 	_solo_horizontal()
@@ -173,6 +175,14 @@ func cambiar_garra() -> void:
 	var cfg := ConfigFile.new()
 	cfg.load(AJUSTES)
 	cfg.set_value("controles", "garra", garra)
+	cfg.save(AJUSTES)
+
+
+func cambiar_datos_tecnicos() -> void:
+	datos_tecnicos = not datos_tecnicos
+	var cfg := ConfigFile.new()
+	cfg.load(AJUSTES)
+	cfg.set_value("pantalla", "datos_tecnicos", datos_tecnicos)
 	cfg.save(AJUSTES)
 
 
@@ -304,6 +314,11 @@ const ARCHIVOS := {
 	"explosion_cerca": 3, "explosion_lejos": 2, "silbido_proyectil": 2, "bala_pasa": 3,
 	"impacto_arena": 2, "mg42_lejos": 1, "rampa": 1, "maquina_escribir": 1,
 	"grito_aleman": 4, "grito_medico": 3, "grito_herido": 3, "muerte": 3,
+	# Voces del sargento (órdenes) y de su escuadra (respuestas). Si falta el
+	# archivo, no suena nada (el mensaje igual sale en pantalla).
+	"orden_seguir": 2, "orden_avanzar": 2, "orden_mantener": 2,
+	"pedir_medico": 2, "pedir_bazuca": 1, "pedir_radio": 1, "pedir_fuego": 2, "pedir_ingeniero": 1,
+	"resp_ok": 3, "resp_medico": 2, "resp_bazuca": 1, "resp_radio": 1, "resp_fuego": 2, "resp_ingeniero": 1,
 }
 const ALIAS := {"explosion": "explosion_cerca", "silbido": "silbido_proyectil", "zumbido": "bala_pasa"}
 var _archivos := {}
@@ -340,6 +355,13 @@ func _stream(sound: String, lejos := false) -> AudioStream:
 		var l: Array = _archivos[n]
 		return l[_rng.randi() % l.size()]
 	return _sounds.get(sound)
+
+
+## Un compañero contesta (su voz sale de donde está), un poco después de la orden.
+func respuesta(sonido: String, quien: Node3D, retraso := 0.8) -> void:
+	await get_tree().create_timer(retraso).timeout
+	if is_instance_valid(quien) and quien.is_inside_tree() and not quien.get("dead"):
+		play_at(sonido, quien.global_position + Vector3(0, 1.5, 0), 2.0)
 
 
 ## Puente de sonido: el ambiente de la cinemática sigue sonando mientras carga
@@ -736,40 +758,42 @@ func _estrella() -> ImageTexture:
 
 
 ## Lo visual de la explosión: bola de fuego, humo y tierra (o agua).
+const _EXPLOSION := preload("res://assets/efectos/explosion.png")   # tools/arte/explosion.py
+const _EXPLOSION_CUADROS := 10
+
+
 func _explosion_fx(pos: Vector3) -> void:
-	# Bola de fuego: reserva de 8 que se reciclan (ver play_at)
+	# Bola de fuego en píxeles (tira de 10 cuadros, de frente a la cámara):
+	# reserva de 8 que se reciclan (ver play_at)
 	if _fuegos.is_empty():
-		var sphere := SphereMesh.new()
-		sphere.radius = 1.0
-		sphere.height = 2.0
-		sphere.radial_segments = 8
-		sphere.rings = 4
 		for i in 8:
-			var n := MeshInstance3D.new()
-			n.mesh = sphere
-			n.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-			var m := StandardMaterial3D.new()
-			m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-			m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-			n.material_override = m
-			n.visible = false
-			add_child(n)
-			_fuegos.append(n)
-	var fire: MeshInstance3D = _fuegos[_next_fuego]
+			var sp := Sprite3D.new()
+			sp.texture = _EXPLOSION
+			sp.hframes = _EXPLOSION_CUADROS
+			sp.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+			sp.shaded = false
+			sp.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+			sp.alpha_cut = SpriteBase3D.ALPHA_CUT_DISCARD
+			sp.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			sp.visible = false
+			add_child(sp)
+			_fuegos.append(sp)
+	var fire: Sprite3D = _fuegos[_next_fuego]
 	_next_fuego = (_next_fuego + 1) % _fuegos.size()
 	if fire.has_meta("tw"):
 		var viejo: Tween = fire.get_meta("tw")
 		if viejo and viejo.is_valid():
 			viejo.kill()
-	var mat: StandardMaterial3D = fire.material_override
-	mat.albedo_color = Color(1.0, 0.7, 0.25, 0.95)
-	fire.global_position = pos
-	fire.scale = Vector3.ONE * 0.2
+	var tam := randf_range(0.1, 0.125)          # 64 px → 6,4–8 m
+	fire.pixel_size = tam
+	fire.global_position = pos + Vector3(0, 64.0 * tam * 0.5 - 0.7, 0)   # la nube apoyada en el suelo
+	fire.flip_h = randf() < 0.5
+	fire.frame = 0
 	fire.visible = true
 	var tw := fire.create_tween()
 	fire.set_meta("tw", tw)
-	tw.tween_property(fire, "scale", Vector3.ONE * 2.2, 0.12)
-	tw.tween_property(mat, "albedo_color", Color(0.3, 0.28, 0.25, 0.0), 0.3)
+	tw.tween_method(func(v: float) -> void: fire.frame = mini(int(v), _EXPLOSION_CUADROS - 1),
+		0.0, float(_EXPLOSION_CUADROS), 0.8)
 	tw.tween_callback(func() -> void: fire.visible = false)
 	_burst(pos, Color(0.32, 0.31, 0.29), 18, 2.5, 1.6, 0.45, Vector3.UP, -0.15)
 	if pos.z > sea_from_z and pos.y < 0.5:
@@ -780,7 +804,7 @@ func _explosion_fx(pos: Vector3) -> void:
 
 func _clear_path(from: Vector3, to: Vector3) -> bool:
 	var space := get_tree().root.get_world_3d().direct_space_state
-	var q := PhysicsRayQueryParameters3D.create(from + Vector3(0, 0.3, 0), to, 1)  # solo escenario
+	var q := PhysicsRayQueryParameters3D.create(from + Vector3(0, 0.3, 0), to, 1 | 512)  # solo escenario
 	return space.intersect_ray(q).is_empty()
 
 

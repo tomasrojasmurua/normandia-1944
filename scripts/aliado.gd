@@ -42,6 +42,13 @@ static func dar_orden(o: String) -> void:
 	orden = o
 	Game.say({"seguir": "[ESCUADRA: SÍGANME]", "avanzar": "[ESCUADRA: AVANCEN]",
 		"mantener": "[ESCUADRA: MANTENGAN POSICIÓN]"}.get(o, ""), Game.COLOR_GOOD)
+	# El sargento lo grita y uno de los suyos contesta
+	Game.play("orden_" + o, 2.0)
+	var vivos: Array = Escuadras.ranuras_jugador().filter(func(a) -> bool:
+		return a != null and is_instance_valid(a) and not a.dead)
+	if not vivos.is_empty():
+		var quien: Node3D = vivos[randi() % vivos.size()]
+		Game.respuesta("resp_ok", quien, 0.9)
 	if Red.es_invitado():   # mi escuadra la corre el anfitrión: que él la mande
 		Red.evento(["o", o])
 		return
@@ -59,7 +66,7 @@ func _ready() -> void:
 	add_to_group("americanos")
 	add_to_group("aliados")
 	collision_layer = 16         # capa 5: compañeros (las balas del jugador no los tocan)
-	collision_mask = 1 | 64      # 64 = alambre de púas
+	collision_mask = 1 | 64 | 256   # 64 = alambre de púas, 256 = caja de los modelos
 	if arma == "":
 		arma = "garand"
 	_indice = get_tree().get_nodes_in_group("aliados").size()
@@ -85,7 +92,8 @@ func _physics_process(delta: float) -> void:
 	if _vista_t <= 0.0:
 		_vista_t = 0.35
 		var antes := objetivo
-		objetivo = elegir_objetivo("enemies", ALCANCE)
+		var marcado: Node = _marcado if is_instance_valid(_marcado) and Game.elapsed < _marcado_hasta else null
+		objetivo = elegir_objetivo("enemies", ALCANCE, marcado)
 		amenaza = objetivo.global_position if objetivo else _enemigo_conocido()
 		if objetivo and objetivo != antes and escuadra == Escuadras.mi_escuadra:
 			_cantar(objetivo)
@@ -221,6 +229,9 @@ func _enemigo_conocido() -> Vector3:
 func _pensar() -> void:
 	if not Navegacion.listo:
 		return
+	if _curar > 0:       # el médico va a atender al jugador
+		_ir_a_curar()
+		return
 	if Game.elapsed < float(get_meta("huye_hasta", 0.0)):
 		return          # se está alejando de una carga a punto de explotar
 	_alemanes.clear()
@@ -316,8 +327,154 @@ func _avance_suelto(sec: Vector2) -> void:
 
 
 func _al_llegar() -> void:
+	if _curar > 0:
+		_ir_a_curar()
+		return
 	_espera_hasta = Game.elapsed + randf_range(4.0, 8.0)
 	_fuego_t = minf(_fuego_t, randf_range(0.5, 1.5))
+
+
+# ================================================================ órdenes personales
+# Tocar el retrato de un hombre de tu escuadra le da una orden según lo que
+# es (como el de radio): el médico viene a curarte, el de la bazuca dispara
+# donde miras, los fusileros y el BAR concentran el fuego en el alemán que
+# marcas, el ingeniero viene a tu lado. Tú lo gritas y él contesta (sonidos
+# pedir_* y resp_*; si aún no están grabados, solo se ve el mensaje).
+
+const ESPERA_ORDEN := {"medico": 40.0, "bazuca": 20.0, "radio": 0.0, "ingeniero": 8.0, "bar": 6.0, "fusilero": 6.0}
+var listo_orden := 0.0        # Game.elapsed desde el que acepta otra orden personal
+var _curar := 0               # intentos que le quedan al médico para llegar a ti
+var _marcado: Node3D = null   # alemán que le marcaste
+var _marcado_hasta := 0.0
+
+
+## Segundos que le faltan para aceptar otra orden personal (0 = listo).
+func espera_orden() -> float:
+	if esp == "radio":
+		return maxf(Escuadras.apoyo_listo - Game.elapsed, 0.0)
+	return maxf(listo_orden - Game.elapsed, 0.0)
+
+
+func orden_personal() -> void:
+	if dead or _player == null or _player.dead:
+		return
+	var tipo := esp if esp != "" else "fusilero"
+	if tipo == "radio":
+		Game.play("pedir_radio", 2.0)
+		if Escuadras.pedir_artilleria():
+			Game.respuesta("resp_radio", self, 1.0)
+		return
+	var falta := espera_orden()
+	if falta > 0.0:
+		Game.say("[%s: DAME %d SEGUNDOS, SARGENTO]" % [nombre, ceili(falta)], Game.COLOR_INFO)
+		return
+	match tipo:
+		"medico":
+			Game.play("pedir_medico", 2.0)
+			if _player.health >= _player.max_health - 1.0:
+				Game.say("[%s: ESTÁS ENTERO, SARGENTO]" % nombre, Game.COLOR_INFO)
+				return
+			Game.say("[%s: ¡VOY, SARGENTO! ¡AGUANTA!]" % nombre, Game.COLOR_GOOD)
+			Game.respuesta("resp_medico", self, 0.8)
+			listo_orden = Game.elapsed + ESPERA_ORDEN["medico"]
+			_curar = 6
+			_ir_a_curar()
+		"bazuca":
+			Game.play("pedir_bazuca", 2.0)
+			var punto := _punto_mirado()
+			if punto == Vector3.INF:
+				Game.say("[%s: ¿DÓNDE, SARGENTO? APUNTA]" % nombre, Game.COLOR_INFO)
+				return
+			var dist := global_position.distance_to(punto)
+			if dist < 10.0:
+				Game.say("[%s: ¡DEMASIADO CERCA PARA LA BAZUCA!]" % nombre, Game.COLOR_BAD)
+				return
+			if dist > 110.0:
+				Game.say("[%s: ¡MUY LEJOS, NO LLEGA!]" % nombre, Game.COLOR_BAD)
+				return
+			listo_orden = Game.elapsed + ESPERA_ORDEN["bazuca"]
+			_t_bazuca = maxf(_t_bazuca, 12.0)
+			Game.say("[%s: ¡COHETE EN CAMINO!]" % nombre, Game.COLOR_GOOD)
+			Game.respuesta("resp_bazuca", self, 0.4)
+			_cohete_a.call_deferred(punto)
+		"ingeniero":
+			Game.play("pedir_ingeniero", 2.0)
+			listo_orden = Game.elapsed + ESPERA_ORDEN["ingeniero"]
+			Game.say("[%s: ¡A TU LADO, SARGENTO!]" % nombre, Game.COLOR_GOOD)
+			Game.respuesta("resp_ingeniero", self, 0.8)
+			var lado := _player.global_basis.x * 1.8 + _player.global_basis.z * 1.2
+			ir_a({"pos": Navegacion.cerca_de(_player.global_position + lado)})
+		_:   # fusilero y BAR: fuego concentrado en el alemán que marcas
+			Game.play("pedir_fuego", 2.0)
+			var punto := _punto_mirado()
+			var mejor: Node3D = null
+			var mejor_d := 14.0
+			if punto != Vector3.INF:
+				for e in get_tree().get_nodes_in_group("enemies"):
+					var d: float = (e as Node3D).global_position.distance_to(punto)
+					if d < mejor_d and not e.dead:
+						mejor_d = d
+						mejor = e
+			if mejor == null or not veo(mejor, ALCANCE * 1.3):
+				Game.say("[%s: ¡NO VEO A NADIE AHÍ!]" % nombre, Game.COLOR_INFO)
+				return
+			listo_orden = Game.elapsed + ESPERA_ORDEN.get(tipo, 6.0)
+			_marcado = mejor
+			_marcado_hasta = Game.elapsed + 10.0
+			objetivo = mejor
+			_fuego_t = 0.0
+			_rafaga = 0
+			if tipo == "bar":   # ráfaga larga de supresión
+				_rafaga = 8
+				_rafaga_t = 0.15
+			Game.say("[%s: ¡LO TENGO!]" % nombre, Game.COLOR_GOOD)
+			Game.respuesta("resp_fuego", self, 0.7)
+
+
+## Donde apunta la cruz del jugador (o Vector3.INF si no hay nada a 150 m).
+func _punto_mirado() -> Vector3:
+	var cam := _player.camera.global_transform
+	var q := PhysicsRayQueryParameters3D.create(cam.origin, cam.origin - cam.basis.z * 150.0, 1 | 4 | 512)
+	var hit := get_world_3d().direct_space_state.intersect_ray(q)
+	return Vector3.INF if hit.is_empty() else hit["position"]
+
+
+func _cohete_a(punto: Vector3) -> void:
+	if dead or cuerpo == null:
+		return
+	var to := punto - global_position
+	rotation.y = atan2(-to.x, -to.z)
+	cuerpo.apuntar_a = punto
+	await get_tree().create_timer(0.6).timeout
+	if dead or not is_inside_tree():
+		return
+	var desde: Vector3 = cuerpo.boca.global_position
+	Cohete.lanzar(get_parent(), desde, (punto - desde).normalized(), 220.0)
+	Game.play_at("throw", desde, 0.0)
+
+
+## El médico corre hasta el jugador; al llegar lo cura entero.
+func _ir_a_curar() -> void:
+	if _player == null or _player.dead or dead:
+		_curar = 0
+		return
+	var d := global_position.distance_to(_player.global_position)
+	if d < 3.2:
+		_curar = 0
+		_player.health = _player.max_health
+		Game.say("[%s: LISTO, SARGENTO. VENDADO]" % nombre, Game.COLOR_GOOD)
+		Game.play_at("reload", global_position, -4.0)
+		return
+	_curar -= 1
+	if _curar <= 0:
+		Game.say("[%s: ¡NO PUEDO LLEGAR HASTA TI!]" % nombre, Game.COLOR_BAD)
+		listo_orden = Game.elapsed + 5.0
+		return
+	var lado := (global_position - _player.global_position)
+	lado.y = 0.0
+	var meta := _player.global_position + lado.normalized() * 1.4
+	if not ir_a({"pos": Navegacion.cerca_de(meta)}):
+		_pensar_t = 0.8      # vuelve a intentar en un rato
 
 
 # ================================================================ disparar y recibir

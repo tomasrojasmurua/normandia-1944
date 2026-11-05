@@ -243,30 +243,31 @@ static var apoyo_listo := 0.0
 const ESPERA_APOYO := 90.0
 
 
-static func pedir_artilleria() -> void:
+static func pedir_artilleria() -> bool:
 	var p := Engine.get_main_loop().get_first_node_in_group("player") as Player
 	if p == null or p.dead or actual == null:
-		return
+		return false
 	var radio := especialista("radio", p.global_position)
 	if radio == null:
 		Game.say("[NO HAY RADIO EN TU ESCUADRA]", Game.COLOR_BAD)
-		return
+		return false
 	if Game.elapsed < apoyo_listo:
 		Game.say("[%s: LA ARTILLERÍA ESTÁ OCUPADA. %d S]" % [radio.nombre, int(apoyo_listo - Game.elapsed)], Game.COLOR_INFO)
-		return
+		return false
 	var cam := p.camera.global_transform
-	var q := PhysicsRayQueryParameters3D.create(cam.origin, cam.origin - cam.basis.z * 160.0, 1)
+	var q := PhysicsRayQueryParameters3D.create(cam.origin, cam.origin - cam.basis.z * 160.0, 1 | 512)
 	var hit := p.get_world_3d().direct_space_state.intersect_ray(q)
 	if hit.is_empty():
 		Game.say("[%s: ¿DÓNDE? APUNTA AL SUELO]" % radio.nombre, Game.COLOR_INFO)
-		return
+		return false
 	var blanco: Vector3 = hit["position"]
 	if blanco.distance_to(p.global_position) < 18.0:
 		Game.say("[%s: ¡DEMASIADO CERCA, SARGENTO!]" % radio.nombre, Game.COLOR_BAD)
-		return
+		return false
 	apoyo_listo = Game.elapsed + ESPERA_APOYO
 	Game.say("[%s: ¡MORTEROS EN CAMINO! CÚBRANSE]" % radio.nombre, Game.COLOR_GOOD)
 	actual._andanada(blanco)
+	return true
 
 
 func _andanada(blanco: Vector3) -> void:

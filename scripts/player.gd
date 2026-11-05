@@ -73,7 +73,7 @@ func _ready() -> void:
 	add_to_group("player")
 	add_to_group("americanos")
 	collision_layer = 2          # capa 2: jugador
-	collision_mask = 1 | 4 | 64  # choca con escenario (1), enemigos (3) y el alambre de púas (7)
+	collision_mask = 1 | 4 | 64 | 256  # 256 = caja de los modelos; choca con escenario (1), enemigos (3) y el alambre de púas (7)
 	health = max_health
 	_capsule = collision.shape.duplicate()
 	collision.shape = _capsule
@@ -107,7 +107,9 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event.is_action_pressed("weapon_next"):
 		weapons.next_weapon()
 	elif event.is_action_pressed("grenade"):
-		throw_grenade()
+		preparar_granada()
+	elif event.is_action_released("grenade"):
+		soltar_granada()
 	elif event.is_action_pressed("use"):
 		recoger()
 	elif event.is_action_pressed("crouch"):
@@ -173,27 +175,50 @@ func _set_prone() -> void:
 	Game.say("[CUERPO A TIERRA]", Game.COLOR_INFO)
 
 
-func throw_grenade() -> void:
+## Granada en dos tiempos: al apretar GRANADA se saca el seguro y queda en la
+## mano (se ve la curva de por dónde va a ir); al soltar, se lanza. Como la
+## Mk 2 de verdad, la mecha no corre mientras se aprieta la palanca.
+func preparar_granada() -> void:
 	if dead or grenades <= 0 or weapons.busy() or _throw_pending:
 		if grenades <= 0 and not dead:
 			Game.say("[SIN GRANADAS]", Game.COLOR_BAD)
 		return
+	weapons.sacar_granada()
+	Game.play("click", -2.0, 0.7)      # el seguro
+
+
+func soltar_granada() -> void:
+	if not weapons.granada_en_mano:
+		return
+	weapons.soltar_granada()
 	grenades -= 1
 	_throw_pending = true
-	weapons.start_throw()
 	Game.play("throw", -2.0)
-	await get_tree().create_timer(0.25).timeout
+	await get_tree().create_timer(0.1).timeout
 	_throw_pending = false
 	if dead:
 		return
 	var g := Grenade.new()
 	get_tree().current_scene.add_child(g)
-	var fwd := -camera.global_basis.z
-	g.global_position = camera.global_position + fwd * 0.5 - camera.global_basis.y * 0.1
-	g.linear_velocity = fwd * 13.0 + Vector3.UP * 3.5 + velocity * 0.5
+	var salida := granada_salida()
+	g.global_position = salida[0]
+	g.linear_velocity = salida[1]
 	g.angular_velocity = Vector3(randf_range(-8, 8), randf_range(-8, 8), randf_range(-8, 8))
 	Game.say("[GRANADA!]")
 	g.del_jugador = true
+
+
+## Dónde sale la granada y con qué velocidad (el HUD dibuja su curva con esto).
+func granada_salida() -> Array:
+	var fwd := -camera.global_basis.z
+	return [camera.global_position + fwd * 0.5 - camera.global_basis.y * 0.1,
+		fwd * 13.0 + Vector3.UP * 3.5 + velocity * 0.5]
+
+
+## Toque corto (sin mantener): saca y lanza enseguida.
+func throw_grenade() -> void:
+	preparar_granada()
+	soltar_granada()
 
 
 ## Para los soldados de IA: dónde apuntar y cuánto cuesta pegarte.
@@ -254,6 +279,14 @@ var esperando_relevo := false
 
 
 func _die() -> void:
+	if weapons.granada_en_mano:   # cae con la granada sin seguro: queda en el suelo, viva
+		weapons.granada_en_mano = false
+		var g := Grenade.new()
+		get_tree().current_scene.add_child(g)
+		g.global_position = global_position + Vector3(0, 0.8, 0)
+		g.linear_velocity = Vector3(randf_range(-1, 1), 0.5, randf_range(-1, 1))
+		g.del_jugador = true
+		grenades -= 1
 	dead = true
 	health = 0.0
 	weapons.visible = false

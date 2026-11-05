@@ -113,15 +113,17 @@ func _firma_de_barra() -> Array:
 			continue
 		f.append_array([a.get_instance_id(), a.nombre, a.dead, a.moviendo,
 			roundi(clampf(a.health / a.max_health, 0.0, 1.0) * 20.0)])
-		if not a.dead and a is Aliado and a.esp == "radio":
-			f.append(int(Escuadras.apoyo_listo - Game.elapsed))
+		if not a.dead and a is Aliado:
+			f.append(ceili(a.espera_orden()))
 	return f
 
 
 ## Lo que muestran los textos de arriba a la izquierda y los mensajes.
 func _firma_de_textos() -> Array:
 	_n_mensajes = _messages.size()
-	var f: Array = [size, _med_texto, _med_desglose, _med_color]
+	var f: Array = [size, Game.datos_tecnicos]
+	if Game.datos_tecnicos or Game.prueba_carga:
+		f.append_array([_med_texto, _med_desglose, _med_color])
 	if Game.prueba_carga:
 		f.append(Game.carga_texto)
 	if Game.modo_red:
@@ -181,6 +183,8 @@ func _draw() -> void:
 	var w := _player.weapons
 	_draw_viewmodel(w)
 	_draw_volando()
+	if w.granada_en_mano and not _player.dead:
+		_draw_curva_granada()
 	var top := s.y - BAR_H
 	if w.scoped() and not _player.dead:
 		_draw_scope((s / 2.0).floor(), top)
@@ -251,17 +255,21 @@ func _draw() -> void:
 func _dibujar_textos() -> void:
 	var s := size
 	var top := s.y - BAR_H
-	Estilo.texto(_ci, "NORMANDY 1944  V%s" % ProjectSettings.get_setting("application/config/version"),
-		Vector2(4, 10), Color(Estilo.CREMA, 0.35))
-	Estilo.texto(_ci, _med_texto, Vector2(4, 21), Color(_med_color, 0.7))
-	Estilo.texto(_ci, _med_desglose, Vector2(4, 32), Color(Estilo.CREMA, 0.55))
+	# Datos técnicos (versión, FPS, ms): apagados salvo que se activen en la pausa
+	var oy := 10.0
+	if Game.datos_tecnicos or Game.prueba_carga:
+		Estilo.texto(_ci, "NORMANDY 1944  V%s" % ProjectSettings.get_setting("application/config/version"),
+			Vector2(4, 10), Color(Estilo.CREMA, 0.35))
+		Estilo.texto(_ci, _med_texto, Vector2(4, 21), Color(_med_color, 0.7))
+		Estilo.texto(_ci, _med_desglose, Vector2(4, 32), Color(Estilo.CREMA, 0.55))
+		oy = 43.0
 	if Game.prueba_carga:
-		Estilo.texto(_ci, Game.carga_texto, Vector2(4, 43), Color(Estilo.AMBAR_CLARO, 0.8))
+		Estilo.texto(_ci, Game.carga_texto, Vector2(4, oy), Color(Estilo.AMBAR_CLARO, 0.8))
 	if Game.modo_red:
-		Estilo.texto(_ci, Red.texto(), Vector2(4, 43), Color(Estilo.AMBAR_CLARO, 0.85))
+		Estilo.texto(_ci, Red.texto(), Vector2(4, oy), Color(Estilo.AMBAR_CLARO, 0.85))
+		oy += 14.0
 	# Objetivo de mi escuadra (y la barra de la carga / la toma, si va avanzando)
 	if Objetivos.actual and Objetivos.terminado == 0:
-		var oy := 57.0 if Game.modo_red else 43.0
 		var foco := Objetivos.foco_mio()
 		Estilo.texto(_ci, Objetivos.texto_fase(), Vector2(4, oy), Color(Estilo.CREMA, 0.6))
 		oy += 11.0
@@ -318,7 +326,7 @@ func _expulsar(w: Weapons, delta: float) -> void:
 	if _shots_vistos < 0:
 		_shots_vistos = w.shots_fired
 		_clips_vistos = w.clips_ejected
-	var origen: Vector2 = _v(w, "vm_pos") + _v(w, "expulsion") + w.view_offset
+	var origen: Vector2 = _base_cadera(w) + _v(w, "expulsion") + w.view_offset
 	if w.ads_amount > 0.5:
 		origen = Vector2(size.x / 2.0 + 40, size.y / 2.0 + 30)
 	while _shots_vistos < w.shots_fired:
@@ -347,6 +355,12 @@ func _draw_volando() -> void:
 const GRANADA_POS := Vector2(120, 40)
 
 
+## Dónde va la imagen de cadera: su lugar en 640×360, corrida para que el
+## cañón apunte a la cruz (vm_cadera) y centrada en pantallas más anchas.
+func _base_cadera(w: Weapons) -> Vector2:
+	return _v(w, "vm_pos") + _v(w, "vm_cadera") + ((size / 2.0).floor() - Vector2(320, 180))
+
+
 ## Dato de imagen del arma actual (ver armas.gd); Vector2.ZERO si no lo tiene.
 func _v(w: Weapons, campo: String) -> Vector2:
 	return w.def().get(campo, Vector2.ZERO)
@@ -361,7 +375,11 @@ func _draw_viewmodel(w: Weapons) -> void:
 	var tp := w.throw_progress()
 	if tp >= 0.0 and w.sprite_granada:
 		var sube := sin(PI * clampf(tp * 1.4, 0.0, 1.0))
-		_ci.draw_texture(w.sprite_granada, GRANADA_POS + Vector2(-40.0 * sube, 230.0 * (1.0 - sube)).round())
+		var tex: Texture2D = w.sprite_granada_lista if w.sprite_granada_lista and (w.granada_en_mano or tp > 0.36) \
+			else w.sprite_granada
+		var vaiven := Vector2(0, roundf(sin(Time.get_ticks_msec() / 260.0) * 2.0)) if w.granada_en_mano else Vector2.ZERO
+		_ci.draw_texture(tex, GRANADA_POS + ((size / 2.0).floor() - Vector2(320, 180)) * Vector2(1, 0)
+			+ Vector2(-40.0 * sube, 230.0 * (1.0 - sube)).round() + vaiven)
 		return
 	var a := w.ads_amount
 	var mira: Texture2D = w.sprite_mira[w.current]
@@ -375,10 +393,12 @@ func _draw_viewmodel(w: Weapons) -> void:
 		return
 	# Desde la cadera; al apuntar se desliza hasta que su punto de mira llega al centro
 	var t := smoothstep(0.0, 1.0, a)
-	var hacia: Vector2 = centro - (_v(w, "vm_pos") + _v(w, "vm_mira"))
+	var base := _base_cadera(w)
+	var hacia: Vector2 = centro - (base + _v(w, "vm_mira"))
 	var desliz := hacia * (t * 0.6 if mira else t)
 	var giro := deg_to_rad(w.view_angle) * (1.0 - t)
-	var o: Vector2 = _v(w, "vm_pos") - VM_PIVOT
+	var piv: Vector2 = VM_PIVOT + base - _v(w, "vm_pos")   # el giro, en las manos (se corren con la imagen)
+	var o: Vector2 = base - piv
 	# Recarga: el arma se mueve y aparece el clip o el cargador
 	var rp := w.reload_progress()
 	var pieza := Vector4.ZERO   # x, y = posición de la pieza (imagen); z = 1 si se ve; w = 1 si va detrás
@@ -411,8 +431,8 @@ func _draw_viewmodel(w: Weapons) -> void:
 			if rp > 0.3 and rp < 0.62:
 				var sube := smoothstep(0.3, 0.6, rp)
 				pieza = Vector4(0, 0, 1, 1)
-				_cargador_pantalla = Vector2(446, 345 - 95.0 * sube).round()
-	_ci.draw_set_transform((VM_PIVOT + off + desliz).round(), giro, Vector2.ONE)
+				_cargador_pantalla = (Vector2(446, 345 - 95.0 * sube) + base - _v(w, "vm_pos")).round()
+	_ci.draw_set_transform((piv + off + desliz).round(), giro, Vector2.ONE)
 	_ci.draw_texture(w.sprite_cadera[w.current], o.round())
 	if pieza.z > 0.0 and pieza.w == 0.0:
 		_ci.draw_texture(_CLIP, Vector2(pieza.x, pieza.y).round())
@@ -426,6 +446,50 @@ func _draw_viewmodel(w: Weapons) -> void:
 	if w.flash_2d > 0.0:
 		_draw_flash_2d(o + _v(w, "vm_boca"), 1.0)
 	_ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+
+## Granada en la mano: puntos por donde va a volar y un anillo donde cae
+## (misma salida que Player.soltar_granada; gravedad del proyecto).
+func _draw_curva_granada() -> void:
+	var cam := _player.camera
+	var salida := _player.granada_salida()
+	var p: Vector3 = salida[0]
+	var v: Vector3 = salida[1]
+	var g := float(ProjectSettings.get_setting("physics/3d/default_gravity", 9.8))
+	var espacio := _player.get_world_3d().direct_space_state
+	var paso := 0.05
+	var cae := Vector3.INF
+	var normal := Vector3.UP
+	for i in 60:
+		var sig := p + v * paso
+		v.y -= g * paso
+		var q := PhysicsRayQueryParameters3D.create(p, sig, 1 | 4 | 512)
+		var hit := espacio.intersect_ray(q)
+		if not hit.is_empty():
+			cae = hit["position"]
+			normal = hit["normal"]
+			break
+		if i % 2 == 0 and i > 1 and not cam.is_position_behind(sig):
+			var c := cam.unproject_position(sig).round()
+			var t := float(i) / 60.0
+			_ci.draw_rect(Rect2(c - Vector2(1, 1), Vector2(4, 4)), Color(Estilo.NEGRO, 0.6))
+			_ci.draw_rect(Rect2(c, Vector2(2, 2)), Color(Estilo.CREMA, 0.95 - t * 0.4))
+		p = sig
+	if cae != Vector3.INF:
+		# Anillo en el suelo donde cae, apoyado según la normal
+		var t1 := normal.cross(Vector3.RIGHT if absf(normal.x) < 0.9 else Vector3.FORWARD).normalized()
+		var t2 := normal.cross(t1).normalized()
+		var prev := Vector2.INF
+		for k in 25:
+			var a := TAU * k / 24.0
+			var punto := cae + (t1 * cos(a) + t2 * sin(a)) * 1.6 + normal * 0.05
+			if cam.is_position_behind(punto):
+				prev = Vector2.INF
+				continue
+			var c := cam.unproject_position(punto)
+			if prev != Vector2.INF:
+				_ci.draw_line(prev, c, Color(Estilo.AMBAR, 0.9), 2.0)
+			prev = c
 
 
 ## Fogonazo de píxeles: estrella amarilla con centro blanco, al azar cada vez.
@@ -454,20 +518,28 @@ func _draw_scope(c: Vector2, top: float) -> void:
 ## ¿La mira está sobre un alemán? (un rayo desde la cámara: escenario y alemanes)
 func _apunta_a_aleman() -> bool:
 	var cam := _player.camera.global_transform
-	var q := PhysicsRayQueryParameters3D.create(cam.origin, cam.origin - cam.basis.z * 150.0, 1 | 4)
+	var q := PhysicsRayQueryParameters3D.create(cam.origin, cam.origin - cam.basis.z * 150.0, 1 | 4 | 512)
 	var hit := _player.get_world_3d().direct_space_state.intersect_ray(q)
 	return not hit.is_empty() and hit["collider"] is Node and (hit["collider"] as Node).is_in_group("enemies")
 
 
 func _draw_crosshair(c: Vector2, spread_deg: float, enemigo := false) -> void:
 	var gap := roundf(2.0 + spread_deg * 2.2)
-	var col := Color(Estilo.ROJO.lightened(0.15), 1.0) if enemigo else Color(Estilo.AMBAR_CLARO, 0.9)
-	var sombra := Color(Estilo.NEGRO, 0.6)
+	# Clara y con borde oscuro de 1 px por todos lados: se lee sobre el arma
+	# (madera y manos tienen el mismo tono que el ámbar) y sobre el cielo.
+	var col := Color(Estilo.ROJO.lightened(0.25), 1.0) if enemigo else Color(1.0, 0.97, 0.86, 1.0)
+	var borde := Color(Estilo.NEGRO, 0.85)
+	var brazos := []
 	for d in [Vector2.RIGHT, Vector2.LEFT, Vector2.UP, Vector2.DOWN]:
 		var a: Vector2 = c + d * gap
 		var b: Vector2 = c + d * (gap + 5)
-		_ci.draw_line(a + Vector2(1, 1), b + Vector2(1, 1), sombra, 1.0)
-		_ci.draw_line(a, b, col, 1.0)
+		brazos.append(Rect2(Vector2(minf(a.x, b.x), minf(a.y, b.y)), (b - a).abs() + Vector2.ONE))
+	for r: Rect2 in brazos:
+		_ci.draw_rect(r.grow(1.0), borde)
+	for r: Rect2 in brazos:
+		_ci.draw_rect(r, col)
+	_ci.draw_rect(Rect2(c - Vector2(1, 1), Vector2(3, 3)), borde)   # punto al centro
+	_ci.draw_rect(Rect2(c, Vector2.ONE), col)
 
 
 ## Supresión: los bordes de la vista se oscurecen (marco de bandas, barato).
@@ -512,13 +584,14 @@ var _retrato_rects: Array = []
 var _mecha_vista := -1     # [Rect2, Aliado] de cada puesto de la escuadra
 
 
-## ¿Tocó el retrato del de radio? (pide morteros donde mira el jugador)
-func apoyo_at(pos: Vector2) -> bool:
+## ¿Tocó el retrato de un compañero vivo? (le da su orden personal: el
+## médico viene a curarte, el de radio pide morteros, la bazuca dispara...)
+func retrato_at(pos: Vector2) -> Aliado:
 	for x in _retrato_rects:
 		var a = x[1]
-		if (x[0] as Rect2).has_point(pos) and is_instance_valid(a) and not a.dead and a is Aliado and a.esp == "radio":
-			return true
-	return false
+		if (x[0] as Rect2).has_point(pos) and is_instance_valid(a) and not a.dead and a is Aliado:
+			return a
+	return null
 
 
 func orden_at(pos: Vector2) -> String:
@@ -534,6 +607,12 @@ func _unhandled_input(event: InputEvent) -> void:
 			Aliado.dar_orden(ORDENES[i])
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_B:
 		Escuadras.pedir_artilleria()
+	# 7 / 8 / 9: orden personal al primer, segundo o tercer hombre (como tocar su retrato)
+	if event is InputEventKey and event.pressed and not event.echo and event.keycode in [KEY_7, KEY_8, KEY_9]:
+		var ranuras: Array = Escuadras.ranuras_jugador()
+		var i: int = [KEY_7, KEY_8, KEY_9].find(event.keycode)
+		if i < ranuras.size() and ranuras[i] is Aliado and is_instance_valid(ranuras[i]):
+			(ranuras[i] as Aliado).orden_personal()
 
 
 func _retrato_de(nombre: String) -> Texture2D:
@@ -579,14 +658,15 @@ func _draw_escuadra(r: Rect2) -> void:
 			_ci.draw_line(c + Vector2(8, -8), c + Vector2(-8, 8), Estilo.ROJO, 2.0)
 		elif a.moviendo:
 			_flecha(face.position + Vector2(face.size.x - 7, face.size.y - 6))
-		# Especialidad: el de radio muestra si la artillería está lista (tocar = pedirla)
-		if not a.dead and a is Aliado and a.esp != "":
-			var etiqueta: String = Compania.ESPECIALIDADES[a.esp]["c"]
-			var col_e := Color(Estilo.CREMA, 0.8)
+		# Especialidad y si su orden personal está lista (tocar el retrato = dársela)
+		if not a.dead and a is Aliado:
+			var etiqueta: String = Compania.ESPECIALIDADES[a.esp]["c"] if a.esp != "" else "FUS"
 			if a.esp == "radio":
-				var falta := Escuadras.apoyo_listo - Game.elapsed
-				etiqueta = "RADIO" if falta <= 0.0 else str(int(falta))
-				col_e = Estilo.VERDE_LED if falta <= 0.0 else Estilo.AMBAR
+				etiqueta = "RADIO"
+			var falta: float = a.espera_orden()
+			var col_e := Estilo.VERDE_LED if falta <= 0.0 else Estilo.AMBAR
+			if falta > 0.0:
+				etiqueta = str(ceili(falta))
 			Estilo.texto(_ci, etiqueta, Vector2(face.position.x + 2, face.end.y - 2), col_e)
 	# Órdenes: » síganme, → avancen, ‖ alto
 	_orden_rects.clear()

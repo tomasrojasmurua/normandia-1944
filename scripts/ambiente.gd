@@ -248,6 +248,28 @@ static func _mat_modelo() -> StandardMaterial3D:
 
 
 ## Modelo de decorado con su caja de choque (y, si se pide, puntos de cobertura).
+## Capas de choque de los modelos de Meshy (ver `modelo`).
+const CAPA_VOLUMEN := 256   # capa 9: caja que para a la gente (y entra al mapa de caminos)
+const CAPA_FORMA := 512     # capa 10: forma exacta que paran las balas, la vista y las granadas
+static var _formas := {}
+
+
+## Forma de choque con los triángulos del modelo ya escalados (una por
+## modelo y escala, compartida entre copias).
+static func _forma_exacta(nombre: String, mesh: Mesh, escala: Vector3) -> ConcavePolygonShape3D:
+	var clave := "%s_%s" % [nombre, escala]
+	if _formas.has(clave):
+		return _formas[clave]
+	var caras := mesh.get_faces()
+	for i in caras.size():
+		caras[i] *= escala
+	var forma := ConcavePolygonShape3D.new()
+	forma.backface_collision = true
+	forma.set_faces(caras)
+	_formas[clave] = forma
+	return forma
+
+
 static func modelo(padre: Node3D, nombre: String, pos: Vector3, giro_deg: float, escala: Vector3,
 		choque: bool, cobertura := false) -> MeshInstance3D:
 	var mesh: Mesh = load("res://assets/decorado/%s.res" % nombre)
@@ -264,9 +286,15 @@ static func modelo(padre: Node3D, nombre: String, pos: Vector3, giro_deg: float,
 	mi.visibility_range_end = clampf(largo * 22.0, 70.0, 260.0) if largo < 15.0 else 0.0
 	padre.add_child(mi)
 	if choque:
+		# Dos choques: la caja (capa 9, 256) para caminar y el mapa de caminos
+		# (la gente no se enreda en los rayos de una rueda), y la forma exacta
+		# del modelo (capa 10, 512) para balas, vista y granadas: por los huecos
+		# de una carreta o unos escombros pasan las balas, como se ve.
 		var caja := mesh.get_aabb()
 		var tam := caja.size * escala * Vector3(0.9, 0.85, 0.85)
 		var body := StaticBody3D.new()
+		body.collision_layer = CAPA_VOLUMEN
+		body.collision_mask = 0
 		body.position = pos + Vector3(0, tam.y / 2.0, 0)
 		body.rotation_degrees.y = giro_deg
 		padre.add_child(body)
@@ -275,6 +303,15 @@ static func modelo(padre: Node3D, nombre: String, pos: Vector3, giro_deg: float,
 		forma.size = tam
 		col.shape = forma
 		body.add_child(col)
+		var exacto := StaticBody3D.new()
+		exacto.collision_layer = CAPA_FORMA
+		exacto.collision_mask = 0
+		exacto.position = pos
+		exacto.rotation_degrees.y = giro_deg
+		padre.add_child(exacto)
+		var col2 := CollisionShape3D.new()
+		col2.shape = _forma_exacta(nombre, mesh, escala)
+		exacto.add_child(col2)
 		if cobertura:
 			Coberturas.agregar_muro(Vector3(pos.x, pos.y, pos.z), tam.x, giro_deg, tam.z, tam.y)
 	return mi

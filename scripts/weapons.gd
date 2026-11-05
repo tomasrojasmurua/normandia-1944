@@ -25,6 +25,7 @@ var last_shot := {}        # datos del último disparo (para pruebas)
 var sprite_cadera: Array[Texture2D] = [null, null]
 var sprite_mira: Array[Texture2D] = [null, null]
 var sprite_granada: Texture2D = null
+var sprite_granada_lista: Texture2D = null   # sin seguro (arma_granada_lista.png, opcional)
 var view_offset := Vector2.ZERO   # desplazamiento en píxeles de pantalla
 var view_angle := 0.0             # giro en grados
 var flash_2d := 0.0               # >0 mientras se ve el fogonazo 2D
@@ -38,6 +39,7 @@ var _reload_t := -1.0      # >=0 mientras recarga
 var _switch_t := -1.0
 var _switch_to := 0
 var _throw_t := -1.0
+var granada_en_mano := false   # sin seguro, con la palanca apretada: no explota hasta soltarla
 var _kick := 0.0
 var _recoil_left := 0.0    # radianes de retroceso que la vista aún debe "devolver"
 var _recoil_wait := 0.0
@@ -56,6 +58,7 @@ func _ready() -> void:
 		reserve.append(d["reserve"])
 		_set_slot(i, slots[i])
 	sprite_granada = _load_opt("res://assets/armas/arma_granada.png")
+	sprite_granada_lista = _load_opt("res://assets/armas/arma_granada_lista.png")
 
 
 func def() -> Dictionary:
@@ -96,7 +99,7 @@ func is_reloading() -> bool:
 
 
 func busy() -> bool:
-	return _reload_t >= 0.0 or _switch_t >= 0.0 or _throw_t >= 0.0
+	return _reload_t >= 0.0 or _switch_t >= 0.0 or _throw_t >= 0.0 or granada_en_mano
 
 
 # ------------------------------------------------------------ acciones
@@ -119,7 +122,8 @@ func reload() -> void:
 
 
 func select(index: int) -> void:
-	if index == current or index < 0 or index >= slots.size() or _switch_t >= 0.0 or _throw_t >= 0.0:
+	if index == current or index < 0 or index >= slots.size() or _switch_t >= 0.0 or _throw_t >= 0.0 \
+			or granada_en_mano:
 		return
 	_reload_t = -1.0  # cambiar de arma cancela la recarga
 	_switch_t = 0.0
@@ -135,6 +139,18 @@ func next_weapon() -> void:
 func start_throw() -> void:
 	_reload_t = -1.0
 	_throw_t = 0.0
+
+
+## La granada en la mano (arriba, lista): el arma baja y no se dispara.
+func sacar_granada() -> void:
+	_reload_t = -1.0
+	granada_en_mano = true
+
+
+## Soltó el botón: el brazo sigue el lanzamiento desde arriba.
+func soltar_granada() -> void:
+	granada_en_mano = false
+	_throw_t = 0.21
 
 
 # ------------------------------------------------------------ lógica
@@ -216,9 +232,12 @@ func _animate(_delta: float, w: Dictionary) -> void:
 		pos += Vector3(-0.04, -0.07, 0.04)
 		rot += Vector3(-12, 35, 8)
 	# (la recarga la anima hud.gd con su propio clip/cargador)
-	if _switch_t >= 0.0 or _throw_t >= 0.0:
-		var s := sin(PI * clampf(_switch_t / 0.38, 0.0, 1.0)) if _switch_t >= 0.0 \
-			else sin(PI * clampf(_throw_t / 0.6, 0.0, 1.0))
+	if _switch_t >= 0.0 or _throw_t >= 0.0 or granada_en_mano:
+		var s := 1.0
+		if _switch_t >= 0.0:
+			s = sin(PI * clampf(_switch_t / 0.38, 0.0, 1.0))
+		elif _throw_t >= 0.0:
+			s = sin(PI * clampf(_throw_t / 0.6, 0.0, 1.0))
 		pos += Vector3(0, -0.3, 0) * s
 		rot += Vector3(-30, 0, 0) * s
 
@@ -248,6 +267,8 @@ func reload_progress() -> float:
 
 ## 0..1 mientras se lanza una granada; -1 si no.
 func throw_progress() -> float:
+	if granada_en_mano:
+		return 0.36     # arriba, en el punto más alto del lanzamiento
 	return _throw_t / 0.6 if _throw_t >= 0.0 else -1.0
 
 
@@ -281,7 +302,7 @@ func _fire() -> void:
 		_player.look(Vector2(0, -deg_to_rad(w["recoil"])))
 		_recoil_left += deg_to_rad(w["recoil"]) * RECOIL_RECOVERY
 		return
-	var q := PhysicsRayQueryParameters3D.create(from, from + dir * 250.0, 1 | 4)
+	var q := PhysicsRayQueryParameters3D.create(from, from + dir * 250.0, 1 | 4 | 512)
 	q.exclude = [_player.get_rid()]
 	var hit := get_world_3d().direct_space_state.intersect_ray(q)
 

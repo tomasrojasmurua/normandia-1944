@@ -10,6 +10,7 @@ const COLS := 3
 const CARTA := Vector2(126, 36)
 
 var _info := ""            # descripción de la especialidad del último tocado
+var _visto := ""           # hombre cuya ficha se ve a la izquierda ("" = la misión)
 var _retratos := {}
 
 
@@ -48,13 +49,17 @@ func _botones() -> Array:
 	for i in lista.size():
 		var h: Dictionary = lista[i]
 		var r := Rect2(x0 + (i % COLS) * (CARTA.x + 4), 40 + (i / COLS) * (CARTA.y + 3), CARTA.x, CARTA.y)
-		l.append(["h:" + h["n"], r, h["n"], h["estado"] == "ok", ""])
+		# Los heridos y caídos no se pueden llevar, pero se puede leer su ficha
+		l.append(["h:" + h["n"] if h["estado"] == "ok" else "f:" + h["n"], r, h["n"], true, ""])
 	# Tu escuadra: Murphy y los 3 elegidos (tocar el arma la cambia)
 	var eq := Compania.equipo()
 	for k in eq.size():
 		var r := Rect2(x0 + 96 + k * 98, 250, 94, 46)
 		l.append(["a:" + eq[k][0], r, eq[k][0], Compania.ESPECIALIDADES[eq[k][2]]["armas"].size() > 1, ""])
+	l.append(["f:MURPHY", Rect2(x0, 250, 92, 46), "MURPHY", true, ""])
 	var by := size.y - 34
+	if _visto != "":
+		l.append(["mision", Rect2(maxf(_x0() - 112, 136), by, 100, 26), "LA MISIÓN", true, ""])
 	l.append(["volver", Rect2(8, by, 120, 26), "AL MAPA", true, ""])
 	l.append(["atacar", Rect2(size.x - 168, by, 160, 26), "¡AL ATAQUE!", Compania.equipo().size() > 0, ""])
 	return l
@@ -65,11 +70,17 @@ func _pulsado(id: String) -> void:
 		var n := id.substr(2)
 		Compania.alternar(n)
 		_info = Compania.ESPECIALIDADES[Compania.hombre(n)["esp"]]["info"]
+		_visto = n
+		return
+	if id.begins_with("f:"):    # tocar a alguien de tu escuadra muestra su ficha
+		_visto = id.substr(2)
 		return
 	if id.begins_with("a:"):
 		Compania.otra_arma(id.substr(2))
 		return
 	match id:
+		"mision":
+			_visto = ""
 		"volver":
 			Game.ir_al_mapa()
 		"atacar":
@@ -93,6 +104,66 @@ func _draw() -> void:
 	# --- Izquierda: el coronel y la misión
 	var izq := Rect2(6, 6, _x0() - 14, s.y - 46)
 	Estilo.marco(self, izq, "chapa")
+	if _visto != "":
+		_ficha(izq)
+	else:
+		_mision(izq, m)
+	_derecha()
+
+
+## La ficha del hombre tocado: retrato, de dónde es, qué hacía, por qué está
+## aquí, su frase y lo que dice de él un compañero.
+func _ficha(izq: Rect2) -> void:
+	var h: Dictionary = Compania.hombre(_visto) if _visto != "MURPHY" else {}
+	var f := Fichas.de(_visto)
+	var ancho := izq.end.x - 16 - 8
+	var cara := Rect2(14, 14, 78, 70)
+	Estilo.marco(self, cara, "hundido")
+	var tinte := Color.WHITE
+	if not h.is_empty() and h["estado"] == "muerto":
+		tinte = Color(0.35, 0.35, 0.35)
+	draw_texture_rect(_retrato(_visto), cara.grow(-2), false, tinte)
+	Estilo.texto(self, _visto, Vector2(100, 34), Estilo.AMBAR, Estilo.TAM_GRANDE)
+	var linea := "SARGENTO - TÚ"
+	if not h.is_empty():
+		linea = "%s - %s" % [Compania.RANGOS[h["rango"]], Compania.ESPECIALIDADES[h["esp"]]["n"]]
+	Estilo.texto(self, linea, Vector2(100, 48), Estilo.CREMA)
+	var y := _parrafo(f["de"], 100, 62, izq.end.x - 108, Color(Estilo.CREMA, 0.75))
+	if not h.is_empty():
+		var estado := "%d MISIONES CON LA COMPAÑÍA" % h["misiones"]
+		match h["estado"]:
+			"herido": estado = "HERIDO: VUELVE EN %d MISIÓN%s" % [h["herido"], "ES" if h["herido"] > 1 else ""]
+			"muerto": estado = "CAÍDO EN COMBATE"
+		Estilo.texto(self, estado, Vector2(100, maxf(y, 76)), Estilo.ROJO if h["estado"] != "ok" else Estilo.AMBAR_CLARO)
+	y = 100.0
+	Estilo.texto(self, "ANTES DE LA GUERRA", Vector2(16, y), Estilo.AMBAR_CLARO)
+	y = _parrafo(f["antes"], 16, y + 12, ancho, Estilo.CREMA) + 6
+	Estilo.texto(self, "QUÉ LO TRAE A NORMANDÍA", Vector2(16, y), Estilo.AMBAR_CLARO)
+	y = _parrafo(f["porque"], 16, y + 12, ancho, Estilo.CREMA) + 8
+	y = _parrafo("- " + f["frase"], 16, y, ancho, Estilo.AMBAR) + 8
+	var dicen: Array = f["dicen"]
+	Estilo.texto(self, "LO QUE DICE %s" % dicen[0], Vector2(16, y), Estilo.AMBAR_CLARO)
+	_parrafo(dicen[1], 16, y + 12, ancho, Color(Estilo.CREMA, 0.85))
+
+
+## Texto en varias líneas (cortando entre palabras). Devuelve la y siguiente.
+func _parrafo(t: String, x: float, y: float, ancho: float, col: Color) -> float:
+	var linea := ""
+	for p in t.split(" "):
+		var prueba := p if linea == "" else linea + " " + p
+		if Estilo.ancho_texto(prueba) > ancho and linea != "":
+			Estilo.texto(self, linea, Vector2(x, y), col)
+			y += 12.0
+			linea = p
+		else:
+			linea = prueba
+	if linea != "":
+		Estilo.texto(self, linea, Vector2(x, y), col)
+		y += 12.0
+	return y
+
+
+func _mision(izq: Rect2, m: Dictionary) -> void:
 	Estilo.texto(self, m["nombre"], Vector2(16, 30), Estilo.AMBAR, Estilo.TAM_GRANDE)
 	Estilo.texto(self, m["lugar"], Vector2(16, 43), Color(Estilo.CREMA, 0.8), Estilo.TAM, izq.end.x - 22)
 	Estilo.texto(self, m["fecha"], Vector2(16, 55), Color(Estilo.CREMA, 0.8))
@@ -128,15 +199,18 @@ func _draw() -> void:
 			y += 12.0
 	Estilo.texto(self, "MISIONES DE LA COMPAÑÍA: %d" % Compania.misiones_jugadas, Vector2(16, izq.end.y - 10),
 		Color(Estilo.CREMA, 0.55))
+	Estilo.texto(self, "TOCA A UN HOMBRE PARA LEER SU FICHA", Vector2(16, izq.end.y - 22), Color(Estilo.AMBAR_CLARO, 0.7))
 
+
+func _derecha() -> void:
 	# --- Derecha: la compañía
 	var x0 := _x0()
 	var listos := Compania.listos().size()
 	Estilo.texto(self, "LA COMPAÑÍA - ELIGE 3 HOMBRES (%d DISPONIBLES)" % listos, Vector2(x0, 32), Estilo.AMBAR)
 	for b in _botones():
 		var id: String = b[0]
-		if id.begins_with("h:"):
-			_carta(Compania.hombre(id.substr(2)), b[1], id == "h:" + _encima.substr(2) and _encima.begins_with("h:"))
+		if id.begins_with("h:") or (id.begins_with("f:") and id != "f:MURPHY"):
+			_carta(Compania.hombre(id.substr(2)), b[1], id == _encima)
 	# Tu escuadra
 	Estilo.texto(self, "TU ESCUADRA", Vector2(x0, 244), Estilo.AMBAR)
 	var murphy := Rect2(x0, 250, 92, 46)
@@ -151,7 +225,7 @@ func _draw() -> void:
 		Estilo.texto(self, _info, Vector2(x0, 312), Estilo.AMBAR_CLARO)
 	for b in _botones():
 		var id: String = b[0]
-		if not id.begins_with("h:") and not id.begins_with("a:"):
+		if not id.begins_with("h:") and not id.begins_with("a:") and not id.begins_with("f:"):
 			var estado := "normal"
 			if not b[3]:
 				estado = "apagado"

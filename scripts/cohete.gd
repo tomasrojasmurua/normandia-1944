@@ -36,7 +36,7 @@ func _physics_process(delta: float) -> void:
 	_vel.y -= 2.0 * delta
 	var desde := global_position
 	var hasta := desde + _vel * delta
-	var q := PhysicsRayQueryParameters3D.create(desde, hasta, 1 | 4)
+	var q := PhysicsRayQueryParameters3D.create(desde, hasta, 1 | 4 | 512)
 	var hit := get_world_3d().direct_space_state.intersect_ray(q)
 	if not hit.is_empty() or _vida <= 0.0:
 		var p: Vector3 = hit["position"] if not hit.is_empty() else hasta

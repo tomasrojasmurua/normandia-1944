@@ -35,7 +35,7 @@ func _process(delta: float) -> void:
 		if Red.actual == null:
 			pantalla = "coop"
 		elif not Red.actual.anfitrion and Red.actual.en_curso:
-			Game.empezar_mision()
+			Game.empezar_mision(Misiones.PRIMERA)    # el cooperativo, por ahora, solo en Omaha
 
 
 func _botones() -> Array:
@@ -112,7 +112,7 @@ func _pulsado(id: String) -> void:
 		"carga":
 			Game.modo_red = false
 			Game.prueba_carga = true
-			Game.empezar_mision()
+			Game.empezar_mision(Misiones.PRIMERA)
 		"seguir":
 			Game.prueba_carga = false
 			Game.modo_red = false
@@ -135,7 +135,7 @@ func _pulsado(id: String) -> void:
 			pantalla = "inicio"
 		"empezar":
 			Red.empezar_partida()
-			Game.empezar_mision()
+			Game.empezar_mision(Misiones.PRIMERA)    # el cooperativo, por ahora, solo en Omaha
 		"salir_sala":
 			if Red.actual:
 				Red.actual.queue_free()

@@ -70,6 +70,8 @@ func _ready() -> void:
 	_spr.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
 	_spr.alpha_cut = SpriteBase3D.ALPHA_CUT_DISCARD
 	_spr.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	# De noche reciben luz (la luna, las bengalas, los fuegos): si no, brillarían
+	_spr.shaded = Noche.activa
 	add_child(_spr)
 	boca = Node3D.new()
 	add_child(boca)

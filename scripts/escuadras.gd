@@ -76,6 +76,12 @@ func _ready() -> void:
 	else:
 		for k in 3:
 			datos[0]["ranuras"][k] = _soldado(0, mia[k][0], mia[k][1], mia[k][2], false)
+	# Misión 2: tras el choque del planeador, algunos quedaron dispersos (hay
+	# que encontrarlos: objetivo "reunir"; hasta entonces no siguen órdenes)
+	for k in Misiones.actual().get("perdidos", []):
+		var a: Aliado = datos[0]["ranuras"][k]
+		if a:
+			a.set_meta("perdido", true)
 	# Las otras tres, con su sargento, repartidas en su sector
 	for i in range(1, 4):
 		var s: Vector2 = SECTORES[i]

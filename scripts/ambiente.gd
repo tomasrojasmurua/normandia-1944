@@ -56,6 +56,7 @@ static func _plantas(padre: Node3D, nombre: String, lugares: Array) -> void:
 	mat.billboard_keep_scale = true
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	mat.albedo_color = Color(0.82, 0.84, 0.82)   # un poco apagado por la luz nublada
+	Noche.tenir(mat)                             # de noche, oscuras (no reciben luz)
 	quad.material = mat
 	var mm := MultiMesh.new()
 	mm.transform_format = MultiMesh.TRANSFORM_3D
@@ -140,6 +141,7 @@ static func _alambre(padre: Node3D, rng: RandomNumberGenerator) -> void:
 	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	mat.albedo_color = Color(0.8, 0.8, 0.8)
+	Noche.tenir(mat)
 	quad.material = mat
 	# Tramos en líneas cortadas delante de las posiciones alemanas
 	var lugares := []

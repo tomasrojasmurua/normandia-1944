@@ -93,7 +93,8 @@ func _physics_process(delta: float) -> void:
 		_vista_t = 0.35
 		var antes := objetivo
 		var marcado: Node = _marcado if is_instance_valid(_marcado) and Game.elapsed < _marcado_hasta else null
-		objetivo = elegir_objetivo("enemies", ALCANCE, marcado)
+		# Disperso tras el choque: escondido, solo tira si se le acercan
+		objetivo = elegir_objetivo("enemies", 14.0 if has_meta("perdido") else ALCANCE, marcado)
 		amenaza = objetivo.global_position if objetivo else _enemigo_conocido()
 		if objetivo and objetivo != antes and escuadra == Escuadras.mi_escuadra:
 			_cantar(objetivo)
@@ -184,6 +185,19 @@ func _cantar(e: Node3D) -> void:
 ## que vea (no a uno suelto: los cohetes son pocos).
 func _bazuca(delta: float) -> void:
 	_t_bazuca -= delta
+	# Lo primero son los tanques (misión 2): si ve uno a tiro, le dispara
+	if _t_bazuca <= 0.0 and not moviendo and not has_meta("perdido"):
+		for t in get_tree().get_nodes_in_group("tanques"):
+			var dt := global_position.distance_to(t.global_position)
+			if dt > 12.0 and dt < 90.0 and linea_libre(ojos(), t.centro()):
+				_t_bazuca = randf_range(9.0, 13.0)
+				var de: Vector3 = cuerpo.boca.global_position
+				var al: Vector3 = t.centro() + Vector3(randf_range(-1.0, 1.0), randf_range(-0.4, 0.3), randf_range(-1.0, 1.0))
+				Cohete.lanzar(get_parent(), de, (al - de).normalized(), 220.0)
+				Game.play_at("throw", de, 0.0)
+				if escuadra == Escuadras.mi_escuadra:
+					Game.say("[%s: ¡BAZUCA AL TANQUE!]" % nombre, Game.COLOR_INFO)
+				return
 	if _t_bazuca > 0.0 or objetivo == null or not is_instance_valid(objetivo) or objetivo.dead or moviendo:
 		return
 	var dist := global_position.distance_to(objetivo.global_position)
@@ -229,6 +243,8 @@ func _enemigo_conocido() -> Vector3:
 func _pensar() -> void:
 	if not Navegacion.listo:
 		return
+	if has_meta("perdido"):
+		return          # disperso tras el choque: se queda escondido hasta que lo encuentren
 	if _curar > 0:       # el médico va a atender al jugador
 		_ir_a_curar()
 		return
@@ -357,6 +373,9 @@ func espera_orden() -> float:
 
 func orden_personal() -> void:
 	if dead or _player == null or _player.dead:
+		return
+	if has_meta("perdido"):
+		Game.say("[%s ESTÁ PERDIDO: BÚSCALO CON EL GRILLO]" % nombre, Game.COLOR_INFO)
 		return
 	var tipo := esp if esp != "" else "fusilero"
 	if tipo == "radio":

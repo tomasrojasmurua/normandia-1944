@@ -126,12 +126,15 @@ func elegir_objetivo(grupo: String, alcance: float, preferido: Node = null, excl
 			d *= 0.75
 		if b == objetivo:
 			d *= 0.85      # no cambia de blanco a cada rato
-		if d < alcance:
-			lista.append([d, b])
+		# De noche se ve menos (y nada al que está cuerpo a tierra en la
+		# oscuridad); bajo una bengala o al disparar, como de día (noche.gd)
+		var hasta := alcance * Noche.factor_vista(b) if Noche.activa else alcance
+		if d < hasta:
+			lista.append([d, b, hasta])
 	if lista.size() > 1:
 		lista.sort_custom(func(x: Array, y: Array) -> bool: return x[0] < y[0])
 	for par in lista:
-		if veo(par[1], alcance):
+		if veo(par[1], par[2] + 2.0):
 			return par[1]
 	return null
 
@@ -273,6 +276,7 @@ func tiro_ia(blanco: Node3D, prob: float, sonido_db: float) -> bool:
 		Game.tracer(from, end)
 	Red.tiro_ia(self, from, end)   # en el cooperativo: que lo vean los invitados
 	cuerpo.disparo()
+	set_meta("disparo_t", Game.elapsed)    # de noche, el fogonazo te delata (noche.gd)
 	Game.fogonazo(from, self is Enemy)
 	return acierta
 

@@ -74,6 +74,34 @@ const DATOS := {
 	],
 }
 
+# Misión 2: imágenes provisorias (planeador_1/2 dibujadas con código, planeador_3
+# sacada del mapa del juego) hasta que lleguen las de ChatGPT (ver docs/09).
+const _PLANEADOR := [
+	{"img": "planeador_1", "dur": 9.0, "z": Vector2(1.0, 1.14), "c": [Vector2(0.45, 0.5), Vector2(0.55, 0.46)],
+		"tarjeta": ["SOBRE NORMANDÍA - PLANEADOR WACO CG-4A", "6 DE JUNIO DE 1944 - 22:58"],
+		"subs": [[2.0, "", "LOS C-47 REMOLCAN LOS PLANEADORES SOBRE LA COSTA."],
+			[5.6, "@0", "¿ESO DE ALLÁ ABAJO ES LA ANTIAÉREA?"]],
+		"fx": ["fogonazos", "sacudida"], "amb": {"lancha": -10.0, "campo_batalla": -24.0},
+		"musica": ["musica_omaha", -12.0],
+		"sonidos": [[1.5, "explosion_lejos", -8.0, 1.2], [4.2, "explosion_lejos", -6.0, 1.0], [7.4, "explosion_lejos", -5.0, 1.1]]},
+	{"img": "planeador_2", "dur": 9.5, "z": Vector2(1.08, 1.3), "c": [Vector2(0.5, 0.5), Vector2(0.52, 0.56)],
+		"subs": [[0.5, "PILOTO", "¡SOLTAMOS EL CABLE! ¡AGÁRRENSE, VAMOS A BAJAR!"],
+			[3.6, "MURPHY", "¡CASCOS PUESTOS! ¡PIES ARRIBA, BRAZOS ADENTRO!"],
+			[6.6, "@1", "DIOS MÍO... NO SE VE NADA AHÍ AFUERA."]],
+		"fx": ["sacudida", "farol"], "amb": {"lancha": -16.0, "campo_batalla": -18.0}, "musica": ["", -7.0],
+		"sonidos": [[1.0, "throw", -4.0, 0.4], [4.8, "bala_pasa", -4.0, 0.9], [5.0, "hit", -2.0, 0.6],
+			[5.3, "bala_pasa", -6.0, 1.1], [8.0, "explosion_lejos", -4.0, 0.9]]},
+	{"img": "planeador_3", "dur": 6.0, "z": Vector2(1.0, 1.5), "c": [Vector2(0.5, 0.4), Vector2(0.48, 0.62)],
+		"subs": [[0.8, "@2", "¡ÁRBOLES! ¡ÁRBOLES!"], [3.4, "PILOTO", "¡SUJÉTENSE!"]],
+		"fx": ["sacudida", "fogonazos"], "amb": {"lancha": -12.0, "campo_batalla": -10.0}, "musica": ["", -3.0],
+		"sonidos": [[2.0, "mg42_lejos", -4.0, 1.0], [4.0, "bala_pasa", -2.0, 1.0]]},
+	# El choque contra el seto, a oscuras. Después, el silencio y el grillo.
+	{"img": "", "dur": 5.0, "subs": [[2.6, "MURPHY", "...¿DELUCA? ¿HAYES? ¿BRENNAN?"]],
+		"amb": {"campo_batalla": -12.0}, "musica": ["corte", 0.0], "amb_rapido": true,
+		"sonidos": [[0.1, "explosion_cerca", 0.0, 0.7], [0.2, "hit", 2.0, 0.5], [0.45, "hit", 0.0, 0.4],
+			[0.7, "bounce", 0.0, 0.6], [4.2, "grillo", -2.0, 1.0]]},
+]
+
 const LOGO := preload("res://assets/ui/logo.png")
 const BARRA := 40.0        # franjas negras de arriba y abajo
 const FUNDIDO := 0.6       # segundos de fundido a negro entre planos
@@ -103,14 +131,20 @@ var _vineta: Texture2D
 
 
 static func tiene(id: String) -> bool:
-	return DATOS.has(id)
+	return DATOS.has(id) or id == "planeador"
+
+
+static func _planos_de(id: String) -> Array:
+	if id == "planeador":
+		return _PLANEADOR
+	return DATOS.get(id, [])
 
 
 func _ready() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	_rng.randomize()
-	_planos = DATOS.get(actual, [])
+	_planos = _planos_de(actual)
 	for e in Compania.equipo():
 		_equipo.append(e[0])
 	while _equipo.size() < 3:

@@ -319,6 +319,9 @@ const ARCHIVOS := {
 	"orden_seguir": 2, "orden_avanzar": 2, "orden_mantener": 2,
 	"pedir_medico": 2, "pedir_bazuca": 1, "pedir_radio": 1, "pedir_fuego": 2, "pedir_ingeniero": 1,
 	"resp_ok": 3, "resp_medico": 2, "resp_bazuca": 1, "resp_radio": 1, "resp_fuego": 2, "resp_ingeniero": 1,
+	# Misión 2: el grillo (uno = clic-clac, dos = la respuesta) y la bengala.
+	# Mientras no estén grabados suenan los hechos con código.
+	"grillo": 1, "grillo2": 1, "bengala": 1,
 }
 const ALIAS := {"explosion": "explosion_cerca", "silbido": "silbido_proyectil", "zumbido": "bala_pasa"}
 var _archivos := {}
@@ -425,6 +428,7 @@ func _build_sounds() -> void:
 		"explosion": [1.8, 0.06], "hurt": [0.3, 0.2], "hit": [0.07, 1.0],
 		"throw": [0.35, 0.25], "bounce": [0.08, 0.5],
 		"zumbido": [0.22, 0.9], "silbido": [1.3, 1.0],
+		"grillo": [0.3, 1.0], "grillo2": [0.75, 1.0], "bengala": [1.6, 0.8],
 	}
 	for sound in specs:
 		_sounds[sound] = _make(sound, specs[sound][0], specs[sound][1])
@@ -464,7 +468,21 @@ func _sample(sound: String, t: float, n: float) -> float:
 			return n * exp(-t * 60.0) * 0.6 + sin(TAU * (2300.0 - t * 4000.0) * t) * exp(-t * 14.0) * 0.25
 		"silbido":   # mortero cayendo: tono que baja y sube de volumen
 			return sin(TAU * (1500.0 - t * 700.0) * t) * minf(t / 1.1, 1.0) * 0.32 + n * 0.03
+		"bengala":   # pistola de señales: estampido seco y el silbido de la bengala que sube
+			return n * exp(-t * 40.0) * 0.8 + sin(TAU * 70.0 * t) * exp(-t * 30.0) * 0.5 \
+				+ n * clampf(t * 4.0, 0.0, 1.0) * exp(-t * 1.6) * 0.18
+		"grillo":    # el grillo de los paracaidistas: clic-clac (lámina de metal)
+			return _clic(t) + _clic(t - 0.11) * 0.8
+		"grillo2":   # la respuesta: dos clic-clac
+			return _clic(t) + _clic(t - 0.11) * 0.8 + _clic(t - 0.38) + _clic(t - 0.49) * 0.8
 	return 0.0
+
+
+func _clic(t: float) -> float:
+	if t < 0.0:
+		return 0.0
+	return (sin(TAU * 3100.0 * t) * 0.5 + sin(TAU * 4700.0 * t) * 0.3) * exp(-t * 85.0) \
+		+ _rng.randf_range(-1.0, 1.0) * exp(-t * 400.0) * 0.5
 
 
 ## Genera un sonido. `brightness` (0..1) filtra el ruido: bajo = grave y apagado.
@@ -684,6 +702,9 @@ func explode(pos: Vector3, radius: float, damage: float, desde_red := false) -> 
 		var d := pos.distance_to(chest)
 		if d < radius and _clear_path(pos, chest):
 			e.hit(damage * (1.0 - d / radius), false, chest, (chest - pos).normalized())
+	for t in get_tree().get_nodes_in_group("tanques") if not desde_red else []:
+		if pos.distance_to(t.centro()) < radius * 0.5 + 2.8:
+			t.danar(damage)
 	for a in get_tree().get_nodes_in_group("aliados"):
 		var c: Vector3 = a.global_position + Vector3(0, 1.0, 0)
 		var da := pos.distance_to(c)

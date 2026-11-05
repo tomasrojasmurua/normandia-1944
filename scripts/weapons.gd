@@ -289,6 +289,9 @@ func _fire() -> void:
 		get_tree().create_timer(0.12).timeout.connect(func() -> void: Game.play("ping", -3.0))
 
 	flash_2d = 0.06
+	var yo := get_tree().get_first_node_in_group("player")
+	if yo and not w.get("rocket", false):
+		yo.set_meta("disparo_t", Game.elapsed)   # de noche, el fogonazo te delata (noche.gd)
 
 	# Disparo instantáneo (rayo) desde el centro de la pantalla
 	var b := _camera.global_basis

@@ -116,6 +116,48 @@ func _unhandled_input(event: InputEvent) -> void:
 		crouch_press()
 	elif event.is_action_released("crouch"):
 		_agachar_desde = -1.0
+	elif event is InputEventKey and event.pressed and not event.echo and event.physical_keycode == KEY_G:
+		grillo()
+
+
+## Misión 2: el grillo de los paracaidistas (clic-clac). Los compañeros que
+## quedaron dispersos tras el choque contestan con dos clics desde donde
+## están: se oye hacia dónde ir (y sale escrito, por si no hay audífonos).
+var _grillo_listo := 0.0
+
+
+func grillo() -> void:
+	if dead or Game.elapsed < _grillo_listo:
+		return
+	_grillo_listo = Game.elapsed + 2.5
+	Game.play("grillo", 0.0)
+	var n := 0
+	for a in get_tree().get_nodes_in_group("aliados"):
+		if a.dead or not a.has_meta("perdido"):
+			continue
+		if global_position.distance_to(a.global_position) > 120.0:
+			continue
+		n += 1
+		_contesta_grillo(a, 0.8 + n * 0.7)
+	if n == 0:
+		Game.say("[CLIC-CLAC... NADIE CONTESTA]", Game.COLOR_INFO)
+
+
+func _contesta_grillo(a: Node3D, retraso: float) -> void:
+	await get_tree().create_timer(retraso).timeout
+	if not is_instance_valid(a) or a.dead or not a.has_meta("perdido"):
+		return
+	Game.play_at("grillo2", a.global_position + Vector3(0, 1.0, 0), 8.0)
+	var d := a.global_position - global_position
+	var dist := Vector2(d.x, d.z).length()
+	var plano := Vector3(d.x, 0, d.z).normalized()
+	var ang := rad_to_deg((-global_basis.z).angle_to(plano))
+	var donde := "ADELANTE"
+	if ang > 120.0:
+		donde = "ATRÁS"
+	elif ang > 35.0:
+		donde = "A TU DERECHA" if plano.dot(global_basis.x) > 0.0 else "A TU IZQUIERDA"
+	Game.say("[CLIC-CLAC, CLIC-CLAC: %s, ~%d M]" % [donde, int(roundf(dist / 10.0) * 10.0)], Game.COLOR_GOOD)
 
 
 ## Gira la cámara. `delta` en radianes (x = horizontal, y = vertical).

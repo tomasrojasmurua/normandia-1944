@@ -4,8 +4,8 @@ extends PanelBotones
 ## hora, clima, cómo se entra); a la derecha la compañía. Se tocan 3 hombres
 ## para llevarlos y, abajo, el arma de cada uno para cambiarla.
 
-const CLIMA := {"nublado": "NUBLADO", "lluvia": "LLUVIA", "noche": "NOCHE DESPEJADA"}
-const ENTRADA := {"playa": "LANCHA", "paracaidas": "PARACAÍDAS", "a_pie": "A PIE"}
+const CLIMA := {"nublado": "NUBLADO", "lluvia": "LLUVIA", "noche": "NOCHE DE LUNA LLENA"}
+const ENTRADA := {"playa": "LANCHA", "paracaidas": "PARACAÍDAS", "planeador": "PLANEADOR", "a_pie": "A PIE"}
 const COLS := 3
 const CARTA := Vector2(126, 36)
 

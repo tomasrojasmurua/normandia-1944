@@ -10,6 +10,8 @@ class_name Defensa
 ##   la casamata del cañón siga en pie, caen más seguido.
 ## - Refuerzos: durante la fase llegan de a 3 desde atrás, hasta "n".
 ## - Defender (Vierville): olas de alemanes que avanzan sobre el lugar.
+## - Bengalas (misiones de noche, "bengalas" en la fase): cada tanto un alemán
+##   dispara una bengala sobre los americanos (ver bengala.gd y noche.gd).
 ## Los alemanes de la primera fase los pone beach_decor.gd (los de la escena
 ## y las trincheras de la playa).
 
@@ -25,6 +27,8 @@ var _t_mortero := 22.0
 var _t_refuerzo := 40.0
 var _t_ola := 8.0
 var _olas := 0
+var _t_bengala := 7.0
+var _avisos_bengala := 0
 var _cola: Array = []           # alemanes por aparecer: [pos, arma, rol, meta] (de a uno, para no trabar)
 var _t_cola := 0.0
 
@@ -78,6 +82,13 @@ func _process(delta: float) -> void:
 		var ritmo := 0.6 if Objetivos.pendiente("casamata") else 1.0
 		_t_mortero = _rng.randf_range(mort.x, mort.y) * ritmo
 		_mortero()
+	# Bengalas (de noche, hasta que empieza a clarear)
+	var beng = d.get("bengalas", null)
+	if beng != null and Noche.activa and Noche.amanecer < 0.45:
+		_t_bengala -= delta
+		if _t_bengala <= 0.0:
+			_t_bengala = _rng.randf_range(beng.x, beng.y)
+			_bengala()
 	# Refuerzos de la fase
 	var r: Dictionary = d.get("refuerzos", {})
 	_t_refuerzo -= delta
@@ -214,7 +225,7 @@ func _lugares(zona: Array, n: int, usados: Array, lejos: float) -> Array:
 	for k in n:
 		var p: Vector3
 		if libres.is_empty():
-			p = Navegacion.cerca_de(Vector3(_rng.randf_range(zona[0], zona[1]), 14.0, zona[2] + 2.0))
+			p = Navegacion.cerca_de(Vector3(_rng.randf_range(zona[0], zona[1]), float(Misiones.actual().get("suelo", 14.0)), zona[2] + 2.0))
 		else:
 			p = libres.pop_at(_rng.randi() % libres.size())
 			# que no queden dos pegados (los puntos de un muro están cada 1,4 m)
@@ -256,6 +267,35 @@ func _cobertura_cerca(pos: Vector3, radio: float) -> Vector3:
 			mejor_d = d
 			mejor = c["pos"]
 	return mejor
+
+
+## Un alemán cerca del frente dispara una bengala sobre un jugador (o cerca).
+func _bengala() -> void:
+	var jugadores: Array = get_tree().get_nodes_in_group("americanos").filter(
+		func(a: Node) -> bool: return (a is Player or a is JugadorRemoto) and not a.dead)
+	if jugadores.is_empty():
+		return
+	var j: Node3D = jugadores[_rng.randi() % jugadores.size()]
+	var desde := Vector3.INF
+	var mejor := INF
+	for e in get_tree().get_nodes_in_group("enemies"):
+		if e.dead:
+			continue
+		var d: float = e.global_position.distance_to(j.global_position)
+		if d > 22.0 and d < 95.0 and absf(d - 50.0) < mejor:
+			mejor = absf(d - 50.0)
+			desde = e.global_position + Vector3(0, 1.5, 0)
+	if desde == Vector3.INF:
+		return
+	var hacia := j.global_position + Vector3(_rng.randf_range(-14, 14), 0, _rng.randf_range(-14, 6))
+	Bengala.disparar(get_parent(), desde, hacia)
+	if _avisos_bengala < 3 and Escuadras.actual:
+		_avisos_bengala += 1
+		for a in Escuadras.ranuras_jugador():
+			if a and is_instance_valid(a) and not a.dead and not a.has_meta("perdido"):
+				Game.say("[%s: ¡BENGALA! ¡CUERPO A TIERRA!]" % a.nombre, Game.COLOR_BAD)
+				return
+		Game.say("[¡BENGALA! ¡CUERPO A TIERRA! (MANTÉN AGACHAR)]", Game.COLOR_BAD)
 
 
 ## Un mortero: silbido y, 1,3 s después, la explosión.

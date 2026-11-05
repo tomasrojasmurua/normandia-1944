@@ -728,7 +728,8 @@ func _foto(ci: CanvasItem, clave: String, r: Rect2) -> void:
 
 
 ## Foto del diario en blanco y negro: assets/campana/foto_<clave>.png; para el
-## comienzo y Omaha, mientras tanto, el fondo del menú (la playa).
+## comienzo y Omaha, mientras tanto, el fondo del menú (la playa); para las
+## demás misiones, el tercer plano de su cinemática (<clave>_3).
 func _textura_foto(clave: String) -> Texture2D:
 	if _fotos.has(clave):
 		return _fotos[clave]
@@ -738,6 +739,8 @@ func _textura_foto(clave: String) -> Texture2D:
 		tex = load(ruta)
 	elif clave in ["inicio", "omaha"]:
 		tex = load("res://assets/ui/fondo_menu.png")
+	elif ResourceLoader.exists("res://assets/cinematicas/%s_3.png" % clave):
+		tex = load("res://assets/cinematicas/%s_3.png" % clave)    # mientras tanto, un plano de su cinemática
 	if tex:
 		var img := tex.get_image()
 		if img:

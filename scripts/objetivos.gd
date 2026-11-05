@@ -13,7 +13,13 @@ class_name Objetivos
 ##             el nido. Si nadie llega en 20 s, otro alemán toma la MG42.
 ##   tomar     americanos dentro de `radio` y ningún alemán a menos de 9 m.
 ##   defender  aguantar `seg` en el lugar mientras llegan olas alemanas. Si los
-##             alemanes lo ocupan sin ningún americano 25 s, se pierde.
+##             alemanes lo ocupan sin ningún americano 25 s, se pierde. Textos
+##             propios de cada misión: txt_toman, txt_perdido, txt_llegan,
+##             txt_fin, txt_recupera (si faltan, los de Vierville).
+##   reunir    (misión 2) los compañeros dispersos tras el choque (Escuadras
+##             los marca "perdido") se unen cuando el jugador llega a su lado.
+##             El GRILLO (Player.grillo) los hace contestar: se oye dónde están.
+##             Sin marcador en el mapa.
 ## En "mg", "tomar" y "defender" la IA ayuda, pero sin un jugador cerca avanza
 ## a menos de la mitad de velocidad (los objetivos importantes los hace uno).
 ## Fracaso: todos los jugadores caídos y sin nadie que los releve, o perder
@@ -44,6 +50,8 @@ var _sin_tirador := {}             # objetivo "mg" → desde cuándo no tiene ti
 var _mecha := {}                   # objetivo "carga" → segundos que faltan para que explote
 var _fase_vista := -1
 var _hecho_visto: Array = []
+var _reunir_lista := {}            # objetivo "reunir" → [Aliado] los que estaban perdidos
+static var reunidos := Vector2i(1, 1)   # para el HUD: hombres juntos / total (contándote a ti)
 
 
 func _ready() -> void:
@@ -270,11 +278,12 @@ func _process(delta: float) -> void:
 	var foco_i := foco_mio()
 	for i in LISTA.size():
 		var m: Label3D = _marcas[i]
-		m.visible = activo(i) and terminado == 0
+		m.visible = activo(i) and terminado == 0 and LISTA[i]["tipo"] != "reunir"
 		m.modulate = Estilo.AMBAR_CLARO if i == foco_i else Color(Estilo.CREMA, 0.45)
 	# Los Sherman suben por el camino cuando falta poco para aguantar (en todos los celulares)
 	for i in LISTA.size():
-		if LISTA[i]["tipo"] == "defender" and progreso[i] >= 0.85 and not OmahaInterior._tanques_llegan:
+		if LISTA[i]["tipo"] == "defender" and progreso[i] >= 0.85 and not OmahaInterior._tanques_llegan \
+				and Game.mision == "omaha":
 			if manda():
 				Red.anunciar("[RADIO: ¡LOS SHERMAN ESTÁN SUBIENDO POR EL CAMINO!]", Game.COLOR_GOOD)
 			OmahaInterior.llegan_tanques(get_parent(), (1.0 - minf(progreso[i], 1.0)) * float(LISTA[i].get("seg", 120.0)))
@@ -295,6 +304,8 @@ func _process(delta: float) -> void:
 					_cumplir(i)
 			"defender":
 				_defender(i, delta)
+			"reunir":
+				_reunir(i)
 	_t_fracaso -= delta
 	if _t_fracaso <= 0.0:
 		_t_fracaso = 1.0
@@ -443,10 +454,10 @@ func _defender(i: int, delta: float) -> void:
 			alemanes += 1
 	if ritmo == 0.0 and alemanes > 0:
 		if perdiendo == 0.0:
-			Red.anunciar("[¡LOS ALEMANES TOMAN EL CRUCE! ¡RECUPÉRENLO!]", Game.COLOR_BAD)
+			Red.anunciar(o.get("txt_toman", "[¡LOS ALEMANES TOMAN EL CRUCE! ¡RECUPÉRENLO!]"), Game.COLOR_BAD)
 		perdiendo += delta
 		if perdiendo > SEG_PERDER:
-			Red.anunciar("[PERDIMOS VIERVILLE]", Game.COLOR_BAD)
+			Red.anunciar(o.get("txt_perdido", "[PERDIMOS VIERVILLE]"), Game.COLOR_BAD)
 			terminar(-1)
 		return
 	perdiendo = maxf(perdiendo - delta * 2.0, 0.0)
@@ -455,10 +466,60 @@ func _defender(i: int, delta: float) -> void:
 	for marca in [0.5, 0.8]:
 		if antes < marca and progreso[i] >= marca:
 			var falta := int((1.0 - progreso[i]) * float(o.get("seg", 120.0)))
-			Red.anunciar("[RADIO: LOS TANQUES LLEGAN EN %d S. ¡AGUANTEN!]" % falta, Game.COLOR_INFO)
+			Red.anunciar(o.get("txt_llegan", "[RADIO: LOS TANQUES LLEGAN EN %d S. ¡AGUANTEN!]") % falta, Game.COLOR_INFO)
 	if progreso[i] >= 1.0:
-		Red.anunciar("[¡LLEGAN LOS SHERMAN! ¡VIERVILLE ES NUESTRA!]", Game.COLOR_GOOD)
+		Red.anunciar(o.get("txt_fin", "[¡LLEGAN LOS SHERMAN! ¡VIERVILLE ES NUESTRA!]"), Game.COLOR_GOOD)
 		_cumplir(i)
+
+
+## Reunir a la escuadra (misión 2): los que quedaron dispersos tras el choque
+## se unen cuando un jugador llega a menos de 5,5 m. Los que murieron antes de
+## que los encontraras cuentan como resueltos (no traba la misión).
+const DIST_REUNIR := 5.5
+const FRASES_REUNIR := ["¡SARGENTO! CREÍ QUE ERA UN ALEMÁN", "¡GRACIAS A DIOS! PENSÉ QUE ESTABA SOLO",
+	"¡AQUÍ! ¡NO DISPARE, SOY YO!", "¡SARGENTO! LOS DEMÁS SE ESTRELLARON MÁS ALLÁ"]
+
+
+func _reunir(i: int) -> void:
+	if not _reunir_lista.has(i):
+		if Escuadras.actual == null:
+			return
+		var l := []
+		for a in Escuadras.actual.datos[Escuadras.mi_escuadra]["ranuras"]:
+			if a and is_instance_valid(a) and a.has_meta("perdido"):
+				l.append(a)
+		_reunir_lista[i] = l
+	var lista: Array = _reunir_lista[i]
+	var listos := 0
+	for a in lista:
+		if not is_instance_valid(a) or a.dead:
+			listos += 1
+			continue
+		if not a.has_meta("perdido"):
+			listos += 1
+			continue
+		for j in _jugadores():
+			if j.global_position.distance_to(a.global_position) < DIST_REUNIR:
+				a.remove_meta("perdido")
+				a._pensar_t = 0.3
+				Game.say("[%s: %s]" % [a.nombre, FRASES_REUNIR[randi() % FRASES_REUNIR.size()]], Game.COLOR_GOOD)
+				Game.respuesta("resp_ok", a, 0.3)
+				listos += 1
+				break
+	reunidos = Vector2i(1 + 3 - lista.size() + listos, 4)
+	progreso[i] = 1.0 if lista.is_empty() else float(listos) / lista.size()
+	if progreso[i] >= 1.0:
+		_cumplir(i)
+
+
+## ¿Quedan compañeros perdidos? (para el botón GRILLO)
+static func hay_perdidos() -> bool:
+	if actual == null or terminado != 0:
+		return false
+	for i in LISTA.size():
+		if LISTA[i]["tipo"] == "reunir" and activo(i):
+			return true
+	return false
 
 
 ## Los jugadores vivos (el de este celular y, en el anfitrión, los demás).
@@ -499,6 +560,9 @@ func _aplicar_efectos() -> void:
 					OmahaInterior.abrir_brecha()
 				"casamata":
 					OmahaInterior.destruir_casamata()
+				var otro:
+					if otro != "" and MapaPlaneador.actual:
+						MapaPlaneador.actual.efecto(otro)
 
 
 ## Fracaso: todos los jugadores caídos y sin nadie que los releve.
@@ -573,5 +637,7 @@ static func texto() -> String:
 	if o["tipo"] == "carga" and progreso[f] > 1.0:
 		txt = "¡CARGA PUESTA! ALÉJATE: %d S" % ceili(progreso[f] - 1.0)
 	if o["tipo"] == "defender" and perdiendo > 0.0:
-		txt = "¡RECUPERA EL CRUCE! %d S" % int(SEG_PERDER - perdiendo)
+		txt = "%s %d S" % [o.get("txt_recupera", "¡RECUPERA EL CRUCE!"), int(SEG_PERDER - perdiendo)]
+	if o["tipo"] == "reunir":
+		txt = "REÚNE A TU ESCUADRA (%d/%d): USA EL GRILLO" % [reunidos.x, reunidos.y]
 	return txt

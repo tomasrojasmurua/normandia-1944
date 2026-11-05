@@ -15,6 +15,9 @@ const BASE_DB := -4.0
 const VOZ_CADA := 2.5          # segundos mínimos entre dos voces
 
 static var actual: Fragor
+## De noche (misión 2): solo el campo de batalla de fondo, más bajo, y los
+## sucesos más espaciados (la batalla está más lejos y más dispersa).
+var noche := false
 
 var _playa: AudioStreamPlayer
 var _campo: AudioStreamPlayer
@@ -57,9 +60,10 @@ func _process(delta: float) -> void:
 	if cam == null:
 		return
 	# Base: playa abajo, campo arriba (en la meseta)
-	var arriba := cam.global_position.y > 8.0
-	_playa.volume_db = move_toward(_playa.volume_db, -60.0 if arriba else BASE_DB, delta * 20.0)
-	_campo.volume_db = move_toward(_campo.volume_db, BASE_DB if arriba else -60.0, delta * 20.0)
+	var arriba := cam.global_position.y > 8.0 or noche
+	var base := BASE_DB - (7.0 if noche else 0.0)
+	_playa.volume_db = move_toward(_playa.volume_db, -60.0 if arriba else base, delta * 20.0)
+	_campo.volume_db = move_toward(_campo.volume_db, base if arriba else -60.0, delta * 20.0)
 	# El que no se oye queda en pausa (no gasta en decodificarse)
 	for b in [_playa, _campo]:
 		b.stream_paused = b.volume_db <= -59.0
@@ -75,6 +79,8 @@ func _process(delta: float) -> void:
 	if _t_evento <= 0.0:
 		var cerca := _alemanes_a(cam.global_position, 45.0)
 		_t_evento = _rng.randf_range(2.5, 5.0) if cerca > 2 else _rng.randf_range(4.0, 9.0)
+		if noche:
+			_t_evento *= 1.6
 		_evento(cam)
 
 

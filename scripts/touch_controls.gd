@@ -50,7 +50,7 @@ func _process(_delta: float) -> void:
 	if not visible or _player == null:
 		return
 	var f: Array = [size, _has_role("move"), _move_origin, _move_pos, _player.touch_sprint, _player.touch_aim,
-		_player.crouching, _player.pickup_near != null, Game.garra, _pressed.keys()]
+		_player.crouching, _player.pickup_near != null, Game.garra, _pressed.keys(), Objetivos.hay_perdidos()]
 	if f != _firma:
 		_firma = f
 		queue_redraw()
@@ -70,6 +70,8 @@ func _buttons() -> Array:
 	]
 	if _player and _player.pickup_near != null:
 		list.append(["use", "TOMAR", Vector2(w - 150, b - 82), 17.0])
+	if Objetivos.hay_perdidos():      # misión 2: buscar a los compañeros dispersos
+		list.append(["grillo", "GRILLO", Vector2(w - 146, b - 140), 17.0])
 	if Game.garra:
 		list.append(["fire_left", "FUEGO", Vector2(58, 64), 30.0])
 	return list
@@ -120,6 +122,7 @@ func _touch_down(index: int, pos: Vector2) -> void:
 				else:
 					_player.weapons.pull_trigger()
 			"use": _player.recoger()
+			"grillo": _player.grillo()
 			"aim": _player.touch_aim = not _player.touch_aim
 			"reload": _player.weapons.reload()
 			"grenade": _player.preparar_granada()    # al soltar el dedo se lanza

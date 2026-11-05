@@ -113,6 +113,7 @@ static func _multi_alambre(d: Node3D, lugares: Array) -> MultiMeshInstance3D:
 	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	mat.albedo_color = Color(0.8, 0.8, 0.8)
+	Noche.tenir(mat)
 	quad.material = mat
 	var mm := MultiMesh.new()
 	mm.transform_format = MultiMesh.TRANSFORM_3D
@@ -341,7 +342,7 @@ static func _pieza(d: Node3D, tipo: String, base: Vector3, ancho: float, giro: f
 
 
 ## Todas las piezas de un tipo en una sola malla múltiple (pocas llamadas de dibujo).
-static func _armar_kit(d: Node3D) -> void:
+static func _armar_kit(d: Node3D, lejos := 100.0) -> void:
 	for tipo in _kit:
 		var mm := MultiMesh.new()
 		mm.transform_format = MultiMesh.TRANSFORM_3D
@@ -360,7 +361,7 @@ static func _armar_kit(d: Node3D) -> void:
 		mi.multimesh = mm
 		mi.position = centro
 		# Desde la playa el pueblo queda a más de 100 m y detrás del acantilado: no se dibuja
-		mi.visibility_range_end = 100.0
+		mi.visibility_range_end = lejos
 		# las paredes, con la piedra; el techo quemado, con su propio color (madera)
 		mi.material_override = Ambiente.material_modelo() if tipo == "techo_quemado" else material_piedra()
 		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF

@@ -27,6 +27,10 @@ var _slot_rects: Array[Rect2] = []
 var _ci: CanvasItem = self        # dónde dibujan las funciones de abajo
 var _capa_textos: Control
 var _capa_barra: Control
+## El arma en la mano va en su propia capa, DETRÁS de lo que dibuja el HUD
+## (mira, efectos): así de noche se tiñe sola (Noche.tinte_vista) sin oscurecer
+## la mira ni los textos.
+var _capa_arma: Control
 var _firma_textos: Array = []
 var _firma_barra: Array = []
 var _cuadro := 0
@@ -37,6 +41,10 @@ func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	Game.message.connect(_on_message)
 	_cargar_retratos()
+	_capa_arma = _capa(func() -> void:
+		_draw_viewmodel(_player.weapons)
+		_draw_volando())
+	_capa_arma.show_behind_parent = true
 	_capa_textos = _capa(_dibujar_textos)
 	_capa_barra = _capa(_dibujar_barra)
 	Game.warmup.call_deferred()
@@ -79,6 +87,9 @@ func _process(delta: float) -> void:
 		_expulsar(_player.weapons, delta)
 	_medir(delta)
 	queue_redraw()
+	_capa_arma.queue_redraw()
+	if _player:
+		_capa_arma.modulate = Noche.tinte_vista(_player)
 	_cuadro += 1
 	var tapar := Game.warming
 	_capa_textos.visible = not tapar
@@ -106,7 +117,7 @@ func _firma_de_barra() -> Array:
 	var f: Array = [size, p.nombre, p.dead, p.crouching, roundi(clampf(p.health / p.max_health, 0.0, 1.0) * 40.0),
 		Game.clock_text(), roundi(rad_to_deg(atan2(p.global_basis.z.x, -p.global_basis.z.z))), p.grenades,
 		w.current, w.slots[0], w.slots[1], w.ammo[w.current], w.reserve[w.current], w.is_reloading(),
-		int(Time.get_ticks_msec() / 250) % 2 if w.is_reloading() else 0, Aliado.orden]
+		int(Time.get_ticks_msec() / 250) % 2 if w.is_reloading() else 0, Aliado.orden, Noche.amanecer >= 0.8]
 	for a in Escuadras.ranuras_jugador():
 		if a == null or not is_instance_valid(a):
 			f.append(0)
@@ -181,8 +192,6 @@ func _draw() -> void:
 		return
 	var s := size
 	var w := _player.weapons
-	_draw_viewmodel(w)
-	_draw_volando()
 	if w.granada_en_mano and not _player.dead:
 		_draw_curva_granada()
 	var top := s.y - BAR_H
@@ -219,7 +228,7 @@ func _draw() -> void:
 		for tam in [Estilo.TAM, Estilo.TAM_GRANDE]:
 			Estilo.texto(_ci, "ABCDEFGHIJKLMNÑOPQRSTUVWXYZÁÉÍÓÚÜ0123456789[]:-.,!¡?¿+/|%()'", Vector2(0, 40), Estilo.CREMA, tam)
 		_ci.draw_rect(Rect2(Vector2.ZERO, s), Estilo.NEGRO)
-		Estilo.texto_c(_ci, "PREPARANDO LA PLAYA...", s.x / 2, s.y / 2, Estilo.AMBAR)
+		Estilo.texto_c(_ci, "PREPARANDO LA MISIÓN...", s.x / 2, s.y / 2, Estilo.AMBAR)
 		return
 
 	if Objetivos.actual and Objetivos.terminado == 0:
@@ -753,8 +762,18 @@ func _draw_portrait(r: Rect2) -> void:
 func _draw_status(r: Rect2) -> void:
 	Estilo.marco(_ci, r, "chapa")
 	# Clima
-	Estilo.icono(_ci, Estilo.ICONO_NIEBLA, r.position + Vector2(14, 8))
-	Estilo.texto(_ci, "NIEBLA", r.position + Vector2(24, 12), Estilo.CREMA)
+	if Noche.activa and Noche.amanecer < 0.8:
+		# Luna llena (un círculo con una sombra corrida)
+		var c := r.position + Vector2(14, 8)
+		_ci.draw_circle(c, 4.0, Estilo.CREMA)
+		_ci.draw_circle(c + Vector2(1.5, -0.5), 1.2, Color(Estilo.CREMA.darkened(0.25)))
+		Estilo.texto(_ci, "NOCHE", r.position + Vector2(24, 12), Estilo.CREMA)
+	elif Noche.activa:
+		Estilo.icono(_ci, Estilo.ICONO_NIEBLA, r.position + Vector2(14, 8))
+		Estilo.texto(_ci, "ALBA", r.position + Vector2(24, 12), Estilo.CREMA)
+	else:
+		Estilo.icono(_ci, Estilo.ICONO_NIEBLA, r.position + Vector2(14, 8))
+		Estilo.texto(_ci, "NIEBLA", r.position + Vector2(24, 12), Estilo.CREMA)
 	# Hora
 	var clock := Rect2(r.position + Vector2(5, 15), Vector2(r.size.x - 10, 15))
 	Estilo.marco(_ci, clock, "hundido")

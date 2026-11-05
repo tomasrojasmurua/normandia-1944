@@ -21,7 +21,8 @@ RATE = 44100
 # Volumen objetivo (RMS de la parte con sonido, en dBFS) por tipo
 NIVEL = {"grito": -17.0, "muerte": -17.0, "explosion_cerca": -14.0, "explosion_lejos": -18.0,
          "mg42": -18.0, "bala": -18.0, "impacto": -20.0, "silbido": -17.0, "rampa": -14.0,
-         "maquina": -20.0, "amb": -24.0, "musica": -20.0}
+         "maquina": -20.0, "amb": -24.0, "musica": -20.0,
+         "orden": -16.0, "pedir": -16.0, "resp": -18.0}   # voces del sargento y su escuadra
 
 
 def leer(f, canales):

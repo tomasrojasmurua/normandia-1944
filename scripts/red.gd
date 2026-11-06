@@ -395,6 +395,14 @@ func _recibir_titeres(lista: Array, bando: String) -> void:
 		t.recibir(ahora, Vector3(a[1], a[2], a[3]), float(a[4]), POSES[int(a[5])], ANDARES[int(a[6])])
 
 
+## Un caído que se borra (Game._retirar_caido): se saca de las listas.
+func olvidar(n: Node) -> void:
+	if n.has_meta("rid"):
+		soldados.erase(int(n.get_meta("rid")))
+	if n is AlemanRemoto:
+		titeres.erase(n.rid)
+
+
 ## Un títere vivo del que no llega nada hace rato: se quita (por las dudas).
 func _limpiar_titeres() -> void:
 	var ahora := Time.get_ticks_msec() / 1000.0

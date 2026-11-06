@@ -22,6 +22,8 @@ class_name Misiones
 ##   morteros                    intervalo (min, max) en s; sin la clave = sin morteros
 ##   bengalas                    (de noche) intervalo (min, max) en s entre bengalas alemanas
 ##   refuerzos_us                refuerzos americanos que se suman a CADA escuadra
+##   punteria                    multiplica la puntería alemana contra los jugadores (1 = normal)
+##   gracia                      los primeros N s de la fase, la puntería contra los jugadores va a la mitad
 ##   llegada                     dónde aparecen los refuerzos americanos: [centro, ancho X]
 ##                               (sin la clave: en la orilla de su sector)
 ##   alemanes                    alemanes que aparecen al empezar la fase: [[zona, n], ...]
@@ -76,6 +78,10 @@ const DATOS := {
 				"ancla": Vector3(0, 0, -42),
 				"morteros": Vector2(7.0, 12.0),
 				"refuerzos_us": 4,
+				# v0.36: la primera fase es la primera vez de todos (un amigo de Tomás
+				# perdió 3 veces sin tomar nada): más perdonadora al empezar
+				"punteria": 0.75,
+				"gracia": 25.0,
 				"refuerzos": {"n": 12, "zona": [-40.0, 40.0, -50.0, -24.0], "cada": Vector2(25.0, 35.0)},
 				"objetivos": [
 					{"id": "bunker", "n": "VOLAR EL BÚNKER", "corto": "BÚNKER", "pos": Vector3(0, 0, -37.5),

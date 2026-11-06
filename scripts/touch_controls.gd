@@ -1,4 +1,5 @@
 extends Control
+class_name TouchControls
 ## Controles táctiles para el celular (en PC se ocultan solos).
 ## - Mitad izquierda: joystick para caminar (aparece donde pones el dedo).
 ##   Empujarlo a fondo hacia adelante = correr (el aro se pone naranjo).
@@ -8,9 +9,15 @@ extends Control
 ##   SALTAR y AGACHAR (los chicos se ven con ícono:
 ##   balas = recarga, granada, flecha arriba = saltar, flecha abajo = agachar).
 ## - Tocar las armas 1 / 2 de la barra inferior cambia de arma.
-## - Modo "GARRA" (se elige en el menú o en la pausa, Game.garra): agrega un
-##   segundo FUEGO arriba a la izquierda para el índice izquierdo, así el
-##   pulgar derecho queda libre para apuntar.
+## - Distribución (Game.esquema, se elige en el menú o en la pausa; v0.36):
+##     0 2 DEDOS      todo a la derecha, en arco alrededor de FUEGO
+##     1 DOBLE FUEGO  + otro FUEGO a la izquierda, sobre el joystick: el pulgar
+##                    derecho apunta y el izquierdo dispara (estando quieto)
+##     2 GARRA        + otro FUEGO arriba a la izquierda, para el índice
+##     3 ZURDO        espejo de 2 DEDOS: caminar a la derecha, botones a la izquierda
+## - Botones contextuales (TOMAR, GRILLO) aparecen en un puesto fijo junto al
+##   arco, y laten para que se vean.
+## - Mantener AGACHAR llena un anillo: al completarse, cuerpo a tierra.
 ## - Disparo "AL SOLTAR" (Game.disparo_soltar, se elige en el menú o la pausa):
 ##   mantener FUEGO sube el arma a la mira (puedes seguir arrastrando para
 ##   apuntar) y al soltar sale el tiro. Con armas automáticas, mantener FUEGO
@@ -50,7 +57,9 @@ func _process(_delta: float) -> void:
 	if not visible or _player == null:
 		return
 	var f: Array = [size, _has_role("move"), _move_origin, _move_pos, _player.touch_sprint, _player.touch_aim,
-		_player.crouching, _player.pickup_near != null, Game.garra, _pressed.keys(), Objetivos.hay_perdidos()]
+		_player.crouching, _player.prone, _player.pickup_near != null, Game.esquema, _pressed.keys(), Objetivos.hay_perdidos(),
+		snappedf(_player._agachar_desde, 0.1) if _pressed.has("crouch") else -1.0,
+		int(Time.get_ticks_msec() / 250) % 4 if (_player.pickup_near != null or Objetivos.hay_perdidos()) else 0]
 	if f != _firma:
 		_firma = f
 		queue_redraw()
@@ -58,23 +67,44 @@ func _process(_delta: float) -> void:
 
 ## [nombre, texto, centro, radio]
 func _buttons() -> Array:
-	var w := size.x
-	var b := size.y - HUD_H
-	var list := [
-		["fire", "FUEGO", Vector2(w - 62, b - 58), 28.0],
-		["aim", "MIRA", Vector2(w - 128, b - 26), 17.0],
-		["reload", "RECARGA", Vector2(w - 26, b - 112), 16.0],
-		["grenade", "GRANADA", Vector2(w - 82, b - 118), 16.0],
-		["jump", "SALTAR", Vector2(w - 24, b - 22), 15.0],
-		["crouch", "AGACHAR", Vector2(w - 180, b - 20), 15.0],
+	return disposicion(Game.esquema, size, _player != null and _player.pickup_near != null, Objetivos.hay_perdidos())
+
+
+const ESQUEMAS := ["2 DEDOS", "DOBLE FUEGO", "GARRA", "ZURDO"]
+
+## Dónde va cada botón (también la usa el menú para dibujar la vista previa).
+## Medidas desde la esquina de abajo a la derecha (encima de la barra); en
+## ZURDO, desde la de la izquierda. v0.36: ~15 % más grandes y en arco: lo
+## que más se usa (MIRA, AGACHAR) queda al alcance del pulgar sin estirarse.
+static func disposicion(esquema: int, tam: Vector2, tomar := false, grillo := false) -> Array:
+	var b := tam.y - HUD_H
+	var lista := [
+		["fire", "FUEGO", Vector2(66, 64), 32.0],
+		["aim", "MIRA", Vector2(136, 34), 20.0],
+		["crouch", "AGACHAR", Vector2(138, 100), 19.0],
+		["grenade", "GRANADA", Vector2(100, 134), 18.0],
+		["reload", "RECARGA", Vector2(34, 134), 18.0],
+		["jump", "SALTAR", Vector2(24, 22), 15.0],
 	]
-	if _player and _player.pickup_near != null:
-		list.append(["use", "TOMAR", Vector2(w - 150, b - 82), 17.0])
-	if Objetivos.hay_perdidos():      # misión 2: buscar a los compañeros dispersos
-		list.append(["grillo", "GRILLO", Vector2(w - 146, b - 140), 17.0])
-	if Game.garra:
-		list.append(["fire_left", "FUEGO", Vector2(58, 64), 30.0])
-	return list
+	if tomar:
+		lista.append(["use", "TOMAR", Vector2(198, 66), 20.0])
+	if grillo:      # misión 2: buscar a los compañeros dispersos
+		lista.append(["grillo", "GRILLO", Vector2(196, 128) if tomar else Vector2(198, 66), 20.0])
+	var zurdo := esquema == 3
+	var out := []
+	for x in lista:
+		var d: Vector2 = x[2]
+		out.append([x[0], x[1], Vector2(d.x if zurdo else tam.x - d.x, b - d.y), x[3]])
+	if esquema == 1:
+		out.append(["fire_left", "FUEGO", Vector2(58, b - 122), 30.0])
+	elif esquema == 2:
+		out.append(["fire_left", "FUEGO", Vector2(60, 96), 34.0])
+	return out
+
+
+## En ZURDO se camina con la mitad derecha y se mira con la izquierda.
+func _zona_caminar(pos: Vector2) -> bool:
+	return (pos.x >= size.x * 0.5) if Game.esquema == 3 else (pos.x < size.x * 0.5)
 
 
 func _button_at(pos: Vector2) -> String:
@@ -144,7 +174,7 @@ func _touch_down(index: int, pos: Vector2) -> void:
 				if a:
 					a.orden_personal()
 		return
-	if pos.x < size.x * 0.5:
+	if _zona_caminar(pos):
 		if not _has_role("move"):
 			_fingers[index] = {"role": "move", "last": pos}
 			_move_origin = pos
@@ -200,12 +230,20 @@ func _draw() -> void:
 			or (name == "crouch" and _player.crouching)
 		var label: String = btn[1]
 		var tex: Texture2D = _BOTON_G_ON if active else _BOTON_G
-		if r < 16.5:
+		if r < 18.5:
 			tex = _BOTON_C_ON if active else _BOTON_C
 		elif r < 25.0:
 			tex = _BOTON_M_ON if active else _BOTON_M
 		var d := roundf(r * 2.0 + 2.0)
+		# Los contextuales (TOMAR, GRILLO) laten: un aro que crece y se apaga
+		if name in ["use", "grillo"]:
+			var k := (Time.get_ticks_msec() % 1000) / 1000.0
+			draw_arc(c, r + 2.0 + k * 6.0, 0, TAU, 28, Color(Estilo.AMBAR_CLARO, 0.8 * (1.0 - k)), 2.0)
 		draw_texture_rect(tex, Rect2(c - Vector2(d, d) / 2.0, Vector2(d, d)), false)
+		# AGACHAR mantenido: el anillo se llena hasta quedar cuerpo a tierra
+		if name == "crouch" and _pressed.has("crouch") and _player._agachar_desde > 0.12 and not _player.prone:
+			var lleno := clampf(_player._agachar_desde / Player.PRONE_HOLD, 0.0, 1.0)
+			draw_arc(c, r + 3.0, -PI / 2.0, -PI / 2.0 + TAU * lleno, 28, Estilo.AMBAR_CLARO, 2.0)
 		var tinte := Color(1, 1, 1, 0.9)
 		match name:
 			"reload":
@@ -215,6 +253,8 @@ func _draw() -> void:
 				Estilo.icono(self, Estilo.ICONO_GRANADA, c, tinte)
 			"crouch":
 				Estilo.icono(self, Estilo.ICONO_AGACHADO, c + Vector2(0, 1), tinte)
+				if _player.prone:
+					Estilo.texto_c(self, "A TIERRA", c.x, c.y - r - 4, Estilo.AMBAR_CLARO)
 			"jump":
 				draw_set_transform(c, PI, Vector2.ONE)
 				Estilo.icono(self, Estilo.ICONO_AGACHADO, Vector2(0, 1), tinte)

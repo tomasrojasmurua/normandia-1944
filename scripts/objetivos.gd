@@ -605,6 +605,7 @@ func terminar(resultado: int) -> void:
 	if terminado != 0:
 		return
 	terminado = resultado
+	Game.anotar_resultado(resultado)
 	if Red.es_anfitrion():
 		Red.evento(["fin", resultado, Game.bajas, Game.caidos, int(Game.elapsed)])
 	FinMision.mostrar(get_tree(), resultado, Game.bajas, Game.caidos, int(Game.elapsed))

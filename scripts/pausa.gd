@@ -19,7 +19,7 @@ var _firma: Array = []
 
 ## Solo se redibuja si cambió algo (abierta/cerrada, tamaño, ajustes).
 func _process(_delta: float) -> void:
-	var f: Array = [abierta, size, Game.warming, Objetivos.terminado, Game.garra, Game.disparo_soltar,
+	var f: Array = [abierta, size, Game.warming, Objetivos.terminado, Game.esquema, Game.disparo_soltar,
 		Game.soldados_3d, Game.datos_tecnicos, _encima]
 	if f != _firma:
 		_firma = f
@@ -57,7 +57,7 @@ func _botones() -> Array:
 	var y := Y0 + 34.0
 	var lista := [["seguir", Rect2(x, Y0, 220, 26), "CONTINUAR", true, ""]]
 	if _tactil:
-		lista.append(["garra", Rect2(x, y, 220, 26), "MODO TÁCTIL", true, "GARRA" if Game.garra else "2 DEDOS"])
+		lista.append(["garra", Rect2(x, y, 220, 26), "BOTONES", true, TouchControls.ESQUEMAS[Game.esquema]])
 		lista.append(["disparo", Rect2(x, y + 34, 220, 26), "DISPARO", true, "AL SOLTAR" if Game.disparo_soltar else "AL TOCAR"])
 		y += 68.0
 	lista.append(["soldados", Rect2(x, y, 220, 26), "SOLDADOS", true, "3D" if Game.soldados_3d else "SPRITES"])
@@ -76,7 +76,7 @@ func _pulsado(id: String) -> void:
 		"seguir":
 			pausar(false)
 		"garra":
-			Game.cambiar_garra()
+			Game.cambiar_esquema()
 		"disparo":
 			Game.cambiar_disparo()
 		"datos":     # FPS, ms y versión arriba a la izquierda

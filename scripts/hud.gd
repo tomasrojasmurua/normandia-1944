@@ -36,6 +36,19 @@ var _firma_barra: Array = []
 var _cuadro := 0
 
 
+
+## Al caer, un consejo (uno distinto cada vez): para el que recién empieza.
+const CONSEJOS := [
+	"CONSEJO: AL DESCUBIERTO DURAS POCO. CORRE DE COBERTURA EN COBERTURA",
+	"CONSEJO: AGACHADO DETRÁS DE UN ERIZO O EN UN CRÁTER CASI NO TE DAN",
+	"CONSEJO: SI OYES BALAS PASAR CERCA, TE TIENEN VISTO: CÚBRETE YA",
+	"CONSEJO: TRAS CUBRIRTE, ESPERA UNOS SEGUNDOS: LA VIDA SE RECUPERA",
+	"CONSEJO: ORDENA \"AVANCEN\" Y DEJA QUE TU ESCUADRA ATRAIGA EL FUEGO",
+	"CONSEJO: CON LA MIRA LOS TIROS VAN DONDE APUNTAS; DE CADERA SE ABREN",
+]
+var _consejo := -1
+var _consejos_dados := 0
+
 func _ready() -> void:
 	add_to_group("hud")
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -238,6 +251,12 @@ func _draw() -> void:
 		Estilo.texto_c(_ci, "HAS CAÍDO", s.x / 2, top / 2 + 2, Estilo.ROJO, Estilo.TAM_GRANDE)
 		Estilo.texto_c(_ci, "ESPERANDO RELEVO..." if _player.esperando_relevo else "TU ESCUADRA NO TIENE MÁS HOMBRES",
 			s.x / 2, top / 2 + 18, Estilo.CREMA)
+		if _consejo < 0:
+			_consejo = _consejos_dados % CONSEJOS.size()
+			_consejos_dados += 1
+		Estilo.texto_c(_ci, CONSEJOS[_consejo], s.x / 2, top / 2 + 40, Estilo.AMBAR_CLARO)
+	else:
+		_consejo = -1
 
 	if Game.warming:   # pantalla de espera mientras se preparan los efectos
 		# Dibuja todas las letras una vez (tapadas por el negro): la fuente
@@ -319,7 +338,8 @@ func _dibujar_textos() -> void:
 		elif pr > 0.0 and pr < 1.0:
 			_ci.draw_rect(Rect2(2, oy + 4, 122, 5), Color(Estilo.NEGRO, 0.7))
 			_ci.draw_rect(Rect2(3, oy + 5, 120 * pr, 3), Estilo.AMBAR)
-	_draw_messages(Vector2(4, top - 4))
+	# En ZURDO los botones van abajo a la izquierda: los mensajes, a la derecha del centro
+	_draw_messages(Vector2(s.x * 0.5 + 8, top - 4) if Game.esquema == 3 and DisplayServer.is_touchscreen_available() else Vector2(4, top - 4))
 
 
 ## Capa de la barra de abajo (escuadra, retrato, hora, granadas, munición, armas).

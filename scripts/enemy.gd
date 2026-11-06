@@ -337,6 +337,8 @@ func _shoot() -> void:
 	if auto:
 		chance *= 0.5 if jugador else 0.4   # las ráfagas son menos precisas, pero son muchas balas
 	chance *= objetivo.factor_blanco()
+	if jugador:
+		chance *= Game.factor_punteria()   # fase perdonadora, gracia al empezar, reintentos (v0.36)
 	# Los primeros tiros a un blanco nuevo pasan cerca (avisan): la puntería
 	# llega a su máximo después de ~1,8 s siguiéndolo. Da tiempo a cubrirse.
 	chance *= clampf((Game.elapsed - _blanco_desde - 0.3) / 1.5, 0.3, 1.0)

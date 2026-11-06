@@ -15,6 +15,9 @@ const COLOR_GOOD := Color(0.55, 0.95, 0.45)
 var start_minutes := 6 * 60 + 30   # hora de la misión en curso (Misiones)
 var mision := Misiones.PRIMERA     # id de la misión en curso (ver misiones.gd)
 var elapsed := 0.0
+var fallos := {}              # misión → intentos fracasados seguidos (ver factor_punteria)
+var _fase_desde := 0.0        # cuándo empezó la fase actual (para la "gracia")
+var _fase_vista := -1
 
 var _sounds := {}
 var _players: Array[AudioStreamPlayer] = []
@@ -24,8 +27,9 @@ var _mat_cache := {}
 
 ## Ajustes guardados en el celular/PC.
 const AJUSTES := "user://ajustes.cfg"
-## Controles táctiles en modo GARRA (FUEGO extra arriba a la izquierda).
-var garra := false
+## Distribución de los botones táctiles (ver TouchControls.ESQUEMAS):
+## 0 2 DEDOS, 1 DOBLE FUEGO, 2 GARRA, 3 ZURDO.
+var esquema := 0
 var datos_tecnicos := false    # FPS, ms y versión arriba a la izquierda (se activan en la pausa)
 ## Disparo táctil "al soltar": mantener FUEGO apunta por la mira, soltarlo dispara.
 var disparo_soltar := false
@@ -57,7 +61,7 @@ func _ready() -> void:
 	_rng.seed = 1944
 	var cfg := ConfigFile.new()
 	if cfg.load(AJUSTES) == OK:
-		garra = cfg.get_value("controles", "garra", false)
+		esquema = int(cfg.get_value("controles", "esquema", 2 if cfg.get_value("controles", "garra", false) else 0))
 		disparo_soltar = cfg.get_value("controles", "disparo_soltar", false)
 		soldados_3d = cfg.get_value("graficos", "soldados_3d", false)
 		datos_tecnicos = cfg.get_value("pantalla", "datos_tecnicos", false)
@@ -157,6 +161,7 @@ func reset_mission() -> void:
 	_creciendo.clear()
 	_caidos.clear()
 	elapsed = 0.0
+	_fase_vista = -1
 	bajas = 0
 	caidos = 0
 
@@ -170,11 +175,11 @@ func cambiar_soldados() -> void:
 	cfg.save(AJUSTES)
 
 
-func cambiar_garra() -> void:
-	garra = not garra
+func cambiar_esquema() -> void:
+	esquema = (esquema + 1) % TouchControls.ESQUEMAS.size()
 	var cfg := ConfigFile.new()
 	cfg.load(AJUSTES)
-	cfg.set_value("controles", "garra", garra)
+	cfg.set_value("controles", "esquema", esquema)
 	cfg.save(AJUSTES)
 
 
@@ -234,8 +239,62 @@ func _cerrar_compania() -> void:
 		Campana.cerrar_mision(0)
 
 
+## Cooperativo: se anota la sala al empezar. Si el celular recarga la página
+## en medio de la partida (Safari a veces cierra la pestaña por memoria), el
+## menú ofrece "VOLVER A LA SALA" y se entra directo a la partida en curso.
+const SALA_EN_CURSO := "user://sala_en_curso.cfg"
+
+
+func anotar_sala() -> void:
+	var cfg := ConfigFile.new()
+	cfg.set_value("sala", "codigo", sala)
+	cfg.set_value("sala", "hora", Time.get_unix_time_from_system())
+	cfg.save(SALA_EN_CURSO)
+
+
+func sala_reciente() -> String:
+	var cfg := ConfigFile.new()
+	if cfg.load(SALA_EN_CURSO) != OK:
+		return ""
+	if Time.get_unix_time_from_system() - float(cfg.get_value("sala", "hora", 0.0)) > 20.0 * 60.0:
+		return ""
+	return str(cfg.get_value("sala", "codigo", ""))
+
+
+func olvidar_sala() -> void:
+	if FileAccess.file_exists(SALA_EN_CURSO):
+		DirAccess.remove_absolute(SALA_EN_CURSO)
+
+
+## Cuánto se afina la puntería alemana contra los jugadores ahora:
+## - la fase puede ser más perdonadora (`punteria` en misiones.gd) y tener
+##   unos segundos de gracia al empezar (`gracia`: en el desembarco hay cien
+##   blancos a la vez);
+## - cada intento fracasado seguido de la misma misión la baja un 12 %
+##   (hasta −36 %): el que recién aprende no se estrella siempre contra lo mismo.
+func factor_punteria() -> float:
+	var i := Objetivos.fase()
+	if i != _fase_vista:
+		_fase_vista = i
+		_fase_desde = elapsed
+	var f: Dictionary = Misiones.fase(i)
+	var k := float(f.get("punteria", 1.0))
+	if elapsed - _fase_desde < float(f.get("gracia", 0.0)):
+		k *= 0.5
+	return k * maxf(0.64, 1.0 - 0.12 * int(fallos.get(mision, 0)))
+
+
+func anotar_resultado(resultado: int) -> void:
+	if resultado < 0:
+		fallos[mision] = int(fallos.get(mision, 0)) + 1
+	elif resultado > 0:
+		fallos.erase(mision)
+
+
 func empezar_mision(id := "", sin_cinematica := false) -> void:
 	_cerrar_compania()
+	if modo_red:
+		anotar_sala()
 	if id != "" and Misiones.existe(id):
 		mision = id
 	# Jugando solo, antes de la misión va su cinemática (que después vuelve aquí)
@@ -572,8 +631,27 @@ func cuerpo_caido(c: Node3D) -> void:
 	while _caidos.size() > MAX_CAIDOS:
 		var viejo = _caidos.pop_front()
 		if is_instance_valid(viejo):
-			viejo.visible = false
-			viejo.process_mode = Node.PROCESS_MODE_DISABLED
+			_retirar_caido(viejo)
+
+
+## Un caído viejo deja de verse. Los alemanes (de verdad o títeres) se borran
+## del todo: en partidas largas se juntaban cientos de cuerpos ocultos (cada
+## uno con su esqueleto) y la memoria del celular no paraba de subir. Los
+## compañeros y los tiradores de MG42 solo se ocultan (el HUD y los objetivos
+## los siguen mirando).
+func _retirar_caido(viejo: Node3D) -> void:
+	var borrar := false
+	if viejo is Enemy:
+		borrar = viejo.rol != "fijo"
+	elif viejo is AlemanRemoto:
+		borrar = viejo.bando == "aleman"
+	if borrar:
+		if Red.actual:
+			Red.actual.olvidar(viejo)
+		viejo.queue_free()
+	else:
+		viejo.visible = false
+		viejo.process_mode = Node.PROCESS_MODE_DISABLED
 
 
 func _crear_sangre() -> void:

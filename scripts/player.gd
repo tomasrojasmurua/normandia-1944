@@ -14,8 +14,8 @@ class_name Player
 @export var touch_look_sensitivity := 0.006
 @export var aim_friction := 0.55      # 1 = sin asistencia al apuntar en el celular
 @export var max_health := 100.0
-@export var regen_delay := 8.0        # segundos sin recibir daño antes de recuperarse (v0.32: antes 5)
-@export var regen_per_second := 4.0   # 0 = sin recuperación (v0.32: antes 8)
+@export var regen_delay := 6.0        # segundos sin recibir daño antes de recuperarse (v0.32: 8; v0.36: 6)
+@export var regen_per_second := 6.0   # 0 = sin recuperación (v0.32: 4; v0.36: 6)
 ## Daño máximo de un solo tiro: un balazo de fusil te deja grave (30 de vida),
 ## el segundo te mata. Los alemanes, en cambio, caen de un tiro.
 const DANO_MAX_TIRO := 70.0

@@ -102,6 +102,7 @@ func morir(dir: Vector3, cabeza: bool) -> void:
 	collision_layer = 0
 	cuerpo.andar = ""
 	cuerpo.morir(dir, cabeza)
+	Game.cuerpo_caido(self)    # (antes los cuerpos se juntaban sin límite en los invitados)
 
 
 func _process(_delta: float) -> void:

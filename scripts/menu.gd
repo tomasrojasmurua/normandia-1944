@@ -11,6 +11,7 @@ var pantalla := "inicio"
 var _confirmar := 0.0         # "NUEVA CAMPAÑA" pide un segundo toque si ya hay una
 var _codigo := ""             # código de sala que se está escribiendo
 var _tactil := DisplayServer.is_touchscreen_available()
+var _sala_vieja := ""         # sala de una partida cooperativa que se cortó (recarga)
 
 
 const LOGO := preload("res://assets/ui/logo.png")
@@ -19,6 +20,8 @@ func _ready() -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	if Red.actual:   # volvió de una partida cooperativa: se sale de la sala
 		Red.actual.queue_free()
+		Game.olvidar_sala()
+	_sala_vieja = Game.sala_reciente()
 	Game.modo_red = false
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 
@@ -54,12 +57,13 @@ func _botones() -> Array:
 				["controles", Rect2(X, y0 + paso * 3, ANCHO, ALTO), "CONTROLES", true, ""],
 				["creditos", Rect2(X, y0 + paso * 4, ANCHO, ALTO), "CRÉDITOS", true, ""],
 				["carga", Rect2(X, y0 + paso * 5, ANCHO, ALTO), "PRUEBA DE CARGA", true, ""],
-			]
+			] + ([["volver_sala", Rect2(X + ANCHO + 16, y0 + paso * 2, ANCHO + 20, ALTO),
+				"VOLVER A LA SALA %s" % _sala_vieja, true, "LA PARTIDA SIGUE"]]
+				if _sala_vieja != "" else [])
 		"controles":
 			var lista := [["volver", Rect2(X, size.y - 44, 120, ALTO), "VOLVER", true, ""]]
 			if _tactil:
-				lista.append(["garra", Rect2(X, 96, 220, ALTO), "MODO TÁCTIL", true,
-					"GARRA" if Game.garra else "2 DEDOS"])
+				lista.append(["garra", Rect2(X, 96, 220, ALTO), "BOTONES", true, TouchControls.ESQUEMAS[Game.esquema]])
 				lista.append(["disparo", Rect2(X + 230, 96, 220, ALTO), "DISPARO", true,
 					"AL SOLTAR" if Game.disparo_soltar else "AL TOCAR"])
 			return lista
@@ -136,12 +140,16 @@ func _pulsado(id: String) -> void:
 		"empezar":
 			Red.empezar_partida()
 			Game.empezar_mision(Misiones.PRIMERA)    # el cooperativo, por ahora, solo en Omaha
+		"volver_sala":
+			_entrar_sala(_sala_vieja)
 		"salir_sala":
+			Game.olvidar_sala()
+			_sala_vieja = ""
 			if Red.actual:
 				Red.actual.queue_free()
 			pantalla = "coop"
 		"garra":
-			Game.cambiar_garra()
+			Game.cambiar_esquema()
 		"disparo":
 			Game.cambiar_disparo()
 
@@ -289,8 +297,9 @@ func _controles() -> void:
 			"MITAD DERECHA: MIRAR",
 			"FUEGO: DISPARAR (ARRASTRA PARA SEGUIR MIRANDO)",
 			"MIRA, RECARGA, GRANADA, SALTAR, AGACHAR",
+			"MANTÉN AGACHAR (SE LLENA EL ANILLO): CUERPO A TIERRA",
 			"TOCA EL ARMA 1 O 2 DE LA BARRA PARA CAMBIAR",
-			"GARRA: AGREGA OTRO FUEGO ARRIBA A LA IZQUIERDA",
+			"BOTONES: ELIGE LA DISTRIBUCIÓN (MIRA EL DIBUJO)",
 			"AL SOLTAR: MANTÉN FUEGO PARA APUNTAR, SUELTA PARA DISPARAR",
 			"BOTONES DE LA BARRA, A LA IZQUIERDA: ÓRDENES",
 			"A LA ESCUADRA (SÍGANME, AVANCEN, ALTO)",
@@ -298,6 +307,7 @@ func _controles() -> void:
 		]
 		for i in lineas.size():
 			Estilo.texto(self, lineas[i], Vector2(X, 140 + i * 15), Estilo.CREMA)
+		_vista_botones(Rect2(size.x - 236, 96, 208, 117))
 	else:
 		var teclas := [
 			["W A S D", "CAMINAR"], ["SHIFT", "CORRER"], ["MOUSE", "MIRAR"],
@@ -312,6 +322,24 @@ func _controles() -> void:
 			var y := 76.0 + i * 15.0
 			Estilo.texto(self, teclas[i][0], Vector2(X, y), Estilo.AMBAR_CLARO)
 			Estilo.texto(self, teclas[i][1], Vector2(X + 120, y), Estilo.CREMA)
+
+
+## Dibujo chico de la pantalla con los botones de la distribución elegida.
+func _vista_botones(r: Rect2) -> void:
+	Estilo.marco(self, r.grow(3), "hundido")
+	draw_rect(r, Color(0.16, 0.2, 0.13))
+	var pant := Vector2(780, 360)     # un celular apaisado típico (en píxeles del juego)
+	var k := r.size.x / pant.x
+	draw_rect(Rect2(r.position + Vector2(0, (pant.y - 52) * k), Vector2(r.size.x, 52 * k)), Color(Estilo.NEGRO, 0.6))
+	var zurdo := Game.esquema == 3
+	var cam := Rect2(r.position + Vector2(r.size.x * (0.5 if zurdo else 0.0), 0), Vector2(r.size.x * 0.5, (pant.y - 52) * k))
+	draw_rect(cam, Color(Estilo.AMBAR, 0.1))
+	Estilo.texto_c(self, "CAMINAR", cam.get_center().x, cam.get_center().y + 3, Color(Estilo.CREMA, 0.55))
+	for b in TouchControls.disposicion(Game.esquema, pant, true):
+		var c: Vector2 = r.position + (b[2] as Vector2) * k
+		var col := Estilo.ROJO if b[0] in ["fire", "fire_left"] else (Estilo.AMBAR_CLARO if b[0] == "use" else Estilo.CREMA)
+		draw_circle(c, b[3] * k, Color(col, 0.75))
+	Estilo.texto_c(self, TouchControls.ESQUEMAS[Game.esquema], r.get_center().x, r.end.y + 14, Estilo.AMBAR_CLARO)
 
 
 func _creditos() -> void:

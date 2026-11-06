@@ -83,6 +83,7 @@ func _process(delta: float) -> void:
 	for m in _messages:
 		m[2] += delta
 	_messages = _messages.filter(func(m: Array) -> bool: return m[2] < 7.0)
+	_obj_cambio_t += delta
 	if _player and _player.weapons:
 		_expulsar(_player.weapons, delta)
 	_medir(delta)
@@ -109,6 +110,10 @@ func _process(delta: float) -> void:
 
 
 var _n_mensajes := 0
+var _obj_visto := ""            # el último objetivo mostrado (para destacar cuando cambia)
+var _obj_cambio_t := 99.0
+const ENTRA := 0.22             # lo que tarda un mensaje en entrar deslizándose
+const DESTACA := 1.6            # lo que dura el parpadeo del objetivo nuevo
 
 
 ## Lo que muestra la barra de abajo. Si nada de esto cambió, no se redibuja.
@@ -116,7 +121,7 @@ func _firma_de_barra() -> Array:
 	var p := _player
 	var w := p.weapons
 	var f: Array = [size, p.nombre, p.dead, p.crouching, roundi(clampf(p.health / p.max_health, 0.0, 1.0) * 40.0),
-		Game.clock_text(), roundi(rad_to_deg(atan2(p.global_basis.z.x, -p.global_basis.z.z))), p.grenades,
+		Game.clock_text(), roundi(rad_to_deg(atan2(p.global_basis.z.x, -p.global_basis.z.z)) / 45.0), p.grenades,
 		w.current, w.slots[0], w.slots[1], w.ammo[w.current], w.reserve[w.current], w.is_reloading(),
 		int(Time.get_ticks_msec() / 250) % 2 if w.is_reloading() else 0, Aliado.orden, Noche.amanecer >= 0.8]
 	for a in Escuadras.ranuras_jugador():
@@ -143,11 +148,23 @@ func _firma_de_textos() -> Array:
 	if Objetivos.actual and Objetivos.terminado == 0:
 		var foco := Objetivos.foco_mio()
 		var pr: float = Objetivos.progreso[foco] if foco >= 0 else 0.0
-		f.append_array([Objetivos.texto_fase(), Objetivos.texto(), foco, Objetivos.perdiendo > 0.0,
+		var txt := Objetivos.texto()
+		if txt != _obj_visto:
+			# Objetivo nuevo (no cuenta un mero cambio de número, como 1/4 → 2/4)
+			if _obj_visto == "" or _sin_numeros(txt) != _sin_numeros(_obj_visto):
+				_obj_cambio_t = 0.0
+			_obj_visto = txt
+		f.append(roundi(minf(_obj_cambio_t, DESTACA) * 12.0))
+		f.append_array([Objetivos.texto_fase(), txt, foco, Objetivos.perdiendo > 0.0,
 			roundi(pr * 118.0) if pr < 1.0 else roundi(clampf((pr - 1.0) / 6.0, 0.0, 1.0) * 118.0) + 1000])
 	for m in _messages:
-		f.append_array([m[0], roundi(clampf(7.0 - m[2], 0.0, 1.0) * 12.0)])
+		f.append_array([m[0], roundi(clampf(7.0 - m[2], 0.0, 1.0) * 12.0), roundi(minf(m[2], ENTRA * 2.0) * 40.0)])
 	return f
+
+
+static func _sin_numeros(t: String) -> String:
+	var r := RegEx.create_from_string("[0-9]+")
+	return r.sub(t, "", true)
 
 
 # --- Medidor de fluidez (para comparar celulares): cuadros por segundo del
@@ -281,19 +298,27 @@ func _dibujar_textos() -> void:
 	# Objetivo de mi escuadra (y la barra de la carga / la toma, si va avanzando)
 	if Objetivos.actual and Objetivos.terminado == 0:
 		var foco := Objetivos.foco_mio()
-		Estilo.texto(_ci, Objetivos.texto_fase(), Vector2(4, oy), Color(Estilo.CREMA, 0.6))
-		oy += 11.0
+		Estilo.texto(_ci, Objetivos.texto_fase(), Vector2(6, oy), Color(Estilo.CREMA, 0.6))
+		oy += 12.0
 		var propio: bool = foco >= 0 and Objetivos.mio() in Objetivos.LISTA[foco].get("esc", [])
 		var color := Estilo.ROJO if Objetivos.perdiendo > 0.0 else (Estilo.AMBAR_CLARO if propio else Estilo.VERDE_LED)
-		Estilo.texto(_ci, Objetivos.texto(), Vector2(4, oy), color)
+		var txt := Objetivos.texto()
+		# Plaquita oscura con una barra de color; parpadea cuando el objetivo cambia
+		var destaca := _obj_cambio_t < DESTACA and int(_obj_cambio_t / 0.27) % 2 == 0
+		var ancho := Estilo.ancho_texto(txt) + 9.0
+		_ci.draw_rect(Rect2(2, oy - 9, ancho, 12), Color(color, 0.32) if destaca else Color(Estilo.NEGRO, 0.62))
+		_ci.draw_rect(Rect2(2, oy - 9, 2, 12), color)
+		if destaca:
+			_ci.draw_rect(Rect2(2, oy - 9, ancho, 12), Color(color, 0.9), false, 1.0)
+		Estilo.texto(_ci, txt, Vector2(7, oy), Color.WHITE if destaca else color)
 		var pr: float = Objetivos.progreso[foco] if foco >= 0 else 0.0
 		if pr > 1.0:
 			var falta := clampf((pr - 1.0) / 6.0, 0.0, 1.0)
-			_ci.draw_rect(Rect2(4, oy + 4, 120, 5), Color(Estilo.NEGRO, 0.7))
-			_ci.draw_rect(Rect2(5, oy + 5, 118 * falta, 3), Estilo.ROJO)
+			_ci.draw_rect(Rect2(2, oy + 4, 122, 5), Color(Estilo.NEGRO, 0.7))
+			_ci.draw_rect(Rect2(3, oy + 5, 120 * falta, 3), Estilo.ROJO)
 		elif pr > 0.0 and pr < 1.0:
-			_ci.draw_rect(Rect2(4, oy + 4, 120, 5), Color(Estilo.NEGRO, 0.7))
-			_ci.draw_rect(Rect2(5, oy + 5, 118 * pr, 3), Estilo.AMBAR)
+			_ci.draw_rect(Rect2(2, oy + 4, 122, 5), Color(Estilo.NEGRO, 0.7))
+			_ci.draw_rect(Rect2(3, oy + 5, 120 * pr, 3), Estilo.AMBAR)
 	_draw_messages(Vector2(4, top - 4))
 
 
@@ -572,15 +597,27 @@ func _draw_hit_indicator(c: Vector2, angle: float, alpha: float) -> void:
 
 
 ## Mensajes encima de la barra, a la izquierda (el más nuevo abajo).
+## Los mensajes (avisos de la escuadra, la radio, el grillo...): cada uno en
+## una franja oscura con una barra del color del aviso (rojo peligro, verde
+## bueno, ámbar información). Entra deslizándose desde la izquierda con un
+## destello y se apaga a los 7 s.
 func _draw_messages(abajo: Vector2) -> void:
-	var y := abajo.y - (_messages.size() - 1) * 10
+	var y := abajo.y - (_messages.size() - 1) * 12
 	for m in _messages:
 		var col: Color = m[1]
-		col.a = clampf(7.0 - m[2], 0.0, 1.0)
-		var sombra := Color(0, 0, 0, col.a * 0.8)
-		Estilo.texto(_ci, m[0], Vector2(abajo.x + 1, y + 1), sombra)
-		Estilo.texto(_ci, m[0], Vector2(abajo.x, y), col)
-		y += 10
+		var a := clampf(7.0 - m[2], 0.0, 1.0)
+		var t: String = m[0]
+		if t.begins_with("[") and t.ends_with("]"):
+			t = t.substr(1, t.length() - 2)
+		var k := clampf(m[2] / ENTRA, 0.0, 1.0)
+		var x := abajo.x - (1.0 - k) * (1.0 - k) * 60.0
+		var destello := clampf(1.0 - (m[2] - ENTRA) / 0.5, 0.0, 1.0) if m[2] > ENTRA else 1.0
+		var ancho := Estilo.ancho_texto(t) + 10.0
+		_ci.draw_rect(Rect2(x - 2, y - 9, ancho, 12), Color(Estilo.NEGRO, 0.6 * a).lerp(Color(col, 0.45 * a), destello * 0.6))
+		_ci.draw_rect(Rect2(x - 2, y - 9, 2, 12), Color(col, a))
+		var c := Color(col, a).lerp(Color(1, 1, 1, a), destello * 0.7)
+		Estilo.texto(_ci, t, Vector2(x + 3, y), c)
+		y += 12
 
 
 # --- Escuadra: retratos de los compañeros y las tres órdenes (como los
@@ -782,25 +819,24 @@ func _draw_status(r: Rect2) -> void:
 	var tw := t.length() * 9   # 9 px por dígito mediano
 	Estilo.numero(_ci, t, Vector2(roundf(clock.position.x + (clock.size.x - tw) / 2.0), clock.position.y + 1),
 		Estilo.DIG_MEDIANO)
-	# Brújula (norte = el mar, como en la playa de Omaha)
+	# Brújula (el norte de cada misión: Omaha, el mar; Sainte-Mère-Église, el pueblo)
 	var comp := Rect2(r.position + Vector2(5, 31), Vector2(r.size.x - 10, 13))
 	Estilo.marco(_ci, comp, "hundido")
 	var fwd := -_player.global_basis.z
-	var bearing := fmod(rad_to_deg(atan2(-fwd.x, fwd.z)) + 360.0, 360.0)
+	var bearing := Game.rumbo(fwd)
+	# Tres rótulos fijos que no se pisan: hacia dónde miras (al centro, en ámbar)
+	# y los dos rumbos vecinos (tenues), con flechitas entre ellos.
 	var names := ["N", "NE", "E", "SE", "S", "SO", "O", "NO"]
+	var i := int(roundf(bearing / 45.0)) % 8
 	var mid := roundf(comp.position.x + comp.size.x / 2)
-	for i in 16:
-		var deg := i * 22.5
-		var diff := wrapf(deg - bearing, -180.0, 180.0)
-		if absf(diff) > 60.0:
-			continue
-		var px := roundf(mid + diff / 60.0 * (comp.size.x / 2 - 7))
-		if i % 2 == 0:
-			var col := Estilo.CREMA if i != 0 else Estilo.AMBAR_CLARO
-			Estilo.texto_c(_ci, names[i / 2], px, comp.position.y + 11, col)
-		else:
-			_ci.draw_line(Vector2(px, comp.position.y + 7), Vector2(px, comp.position.y + 10), Estilo.OLIVA_4, 1.0)
-	_ci.draw_rect(Rect2(mid, comp.position.y + 1, 1, 3), Estilo.AMBAR)
+	var base_y := comp.position.y + 11
+	Estilo.texto_c(_ci, names[(i + 7) % 8], comp.position.x + 9, base_y, Color(Estilo.CREMA, 0.45))
+	Estilo.texto_c(_ci, names[(i + 1) % 8], comp.end.x - 9, base_y, Color(Estilo.CREMA, 0.45))
+	Estilo.texto_c(_ci, names[i], mid, base_y, Estilo.AMBAR_CLARO)
+	for lado in [-1.0, 1.0]:
+		var ax: float = mid + lado * 13.0
+		_ci.draw_line(Vector2(ax, base_y - 7), Vector2(ax - lado * 2.0, base_y - 4), Estilo.OLIVA_4, 1.0)
+		_ci.draw_line(Vector2(ax - lado * 2.0, base_y - 4), Vector2(ax, base_y - 1), Estilo.OLIVA_4, 1.0)
 
 
 func _draw_grenades(r: Rect2) -> void:

@@ -256,6 +256,18 @@ func clock_text() -> String:
 	return "%02d:%02d" % [(total / 60) % 24, total % 60]
 
 
+## Rumbo de una dirección en grados (0 = norte, 90 = este). El norte de cada
+## misión está en sus datos ("norte"; Omaha: +Z, el mar; Sainte-Mère-Église: -Z).
+static func rumbo(dir: Vector3) -> float:
+	var n: Vector3 = Misiones.actual().get("norte", Vector3(0, 0, 1))
+	var e := n.cross(Vector3.UP)
+	return fmod(rad_to_deg(atan2(dir.dot(e), dir.dot(n))) + 360.0, 360.0)
+
+
+static func cardinal(dir: Vector3) -> String:
+	return ["N", "NE", "E", "SE", "S", "SO", "O", "NO"][int(roundf(rumbo(dir) / 45.0)) % 8]
+
+
 func say(text: String, color: Color = COLOR_INFO) -> void:
 	message.emit(text, color)
 

@@ -157,7 +157,8 @@ func _contesta_grillo(a: Node3D, retraso: float) -> void:
 		donde = "ATRÁS"
 	elif ang > 35.0:
 		donde = "A TU DERECHA" if plano.dot(global_basis.x) > 0.0 else "A TU IZQUIERDA"
-	Game.say("[CLIC-CLAC, CLIC-CLAC: %s, ~%d M]" % [donde, int(roundf(dist / 10.0) * 10.0)], Game.COLOR_GOOD)
+	var cardinal := Game.cardinal(plano)      # como la brújula de la barra
+	Game.say("[CLIC-CLAC, CLIC-CLAC: %s (%s), A UNOS %d M]" % [donde, cardinal, int(roundf(dist / 10.0) * 10.0)], Game.COLOR_GOOD)
 
 
 ## Gira la cámara. `delta` en radianes (x = horizontal, y = vertical).

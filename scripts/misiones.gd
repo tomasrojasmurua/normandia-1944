@@ -170,6 +170,7 @@ const DATOS := {
 		"clima": "noche",
 		"entrada": "paracaidas",
 		"suelo": 0.0,               # altura del terreno (Omaha: la meseta a 14 m)
+		"norte": Vector3(0, 0, -1), # el pueblo queda al norte (Omaha: +Z, el mar)
 		"briefing": [
 			"SARGENTO, SU COMPAÑÍA SALTA EN",
 			"PARACAÍDAS AL SUR DE SAINTE-MÈRE-",

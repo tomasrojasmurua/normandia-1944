@@ -52,6 +52,8 @@ jobs:
           ~/godot/godot --headless --import || true
           ~/godot/godot --headless --export-release "Web" build/web/index.html
           test -f build/web/index.wasm
+          # Arreglos al motor web de Godot (ver tools/web/parchear.py)
+          python3 tools/web/parchear.py build/web/index.js
           touch build/web/.nojekyll
 
       - name: Preparar la publicación

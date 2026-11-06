@@ -79,7 +79,10 @@ func _ready() -> void:
 	collision.shape = _capsule
 	_base_fov = camera.fov
 	Game.reset_mission()
-	Game.say("[DESEMBARCO - OMAHA]")
+	if Game.mision == "omaha":
+		Game.say("[DESEMBARCO - OMAHA]")
+	else:
+		Game.say("[%s - %s]" % [Misiones.dato("nombre"), Misiones.dato("lugar")])
 
 
 func _unhandled_input(event: InputEvent) -> void:

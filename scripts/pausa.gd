@@ -20,7 +20,7 @@ var _firma: Array = []
 ## Solo se redibuja si cambió algo (abierta/cerrada, tamaño, ajustes).
 func _process(_delta: float) -> void:
 	var f: Array = [abierta, size, Game.warming, Objetivos.terminado, Game.esquema, Game.disparo_soltar,
-		Game.soldados_3d, Game.datos_tecnicos, _encima]
+		Game.soldados_3d, Game.datos_tecnicos, _encima, Game.informe.size()]
 	if f != _firma:
 		_firma = f
 		queue_redraw()
@@ -95,4 +95,22 @@ func _draw() -> void:
 		var panel := Rect2(size.x / 2.0 - 130, Y0 - 46, 260, 58 + n * 34)
 		Estilo.marco(self, panel, "chapa")
 		Estilo.texto_c(self, "PAUSA", size.x / 2.0, Y0 - 14, Estilo.AMBAR, Estilo.TAM_GRANDE)
+		if Game.datos_tecnicos:
+			_dibujar_fluidez(panel)
 	_dibujar_botones()
+
+
+## Informe de fluidez de la misión (Game.informe), bajo el panel o al lado:
+## para que Tomás mande una captura después de jugar.
+func _dibujar_fluidez(panel: Rect2) -> void:
+	var lineas: Array = Game.informe_lineas()
+	var ancho := 8.0 + Estilo.ancho_texto("SALTO  60 FPS  100% LENTO  999 TIR  9999 MS")
+	# A la izquierda del panel (si no cabe, arriba a la izquierda, encima)
+	var x := maxf(4.0, panel.position.x - ancho - 10.0)
+	var r := Rect2(x, panel.position.y, ancho, 22 + maxi(lineas.size(), 1) * 14)
+	draw_rect(r, Color(Estilo.NEGRO, 0.85))
+	Estilo.texto(self, "FLUIDEZ  v%s" % ProjectSettings.get_setting("application/config/version"), r.position + Vector2(6, 14), Estilo.AMBAR_CLARO)
+	if lineas.is_empty():
+		Estilo.texto(self, "(JUEGA UN POCO)", r.position + Vector2(6, 28), Estilo.CREMA)
+	for i in lineas.size():
+		Estilo.texto(self, lineas[i], r.position + Vector2(6, 28 + i * 14), Estilo.CREMA)

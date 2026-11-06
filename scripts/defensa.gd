@@ -69,7 +69,8 @@ func _process(delta: float) -> void:
 		_t_cola = 0.12
 		var c: Array = _cola.pop_front()
 		var e := _nuevo(c[0], c[1], c[2])
-		e.granadas = 1 if _rng.randf() < 0.3 else 0
+		if c.size() < 5:          # los refuerzos llegan sin granadas
+			e.granadas = 1 if _rng.randf() < 0.3 else 0
 		if c[2] == "asalto":
 			e.meta = c[3]
 			e._alert = 0.5
@@ -99,7 +100,9 @@ func _process(delta: float) -> void:
 		var usados: Array = []
 		for i in mini(3, restantes):
 			restantes -= 1
-			_nuevo(_lugar(r["zona"], usados, 30.0), Armas.botin_aleman(_rng), "flanqueador" if _rng.randf() < 0.35 else "defensor")
+			# Por la cola, de a uno (crear tres en el mismo cuadro trababa)
+			_cola.append([_lugar(r["zona"], usados, 30.0), Armas.botin_aleman(_rng),
+				"flanqueador" if _rng.randf() < 0.35 else "defensor", Vector3.ZERO, "sin_granadas"])
 		Red.anunciar("[REFUERZOS ALEMANES]", Game.COLOR_BAD)
 	# Olas del contraataque
 	if ola >= 0:

@@ -44,7 +44,7 @@ var soldados_3d := false       # true = modelos 3D (pesados); false = sprites
 var sea_from_z := INF
 ## true mientras se "precalientan" los efectos al empezar (el HUD tapa la pantalla).
 var warming := false
-var _warmed := false
+var _warmed := 0               # id de la escena ya preparada (ver warmup)
 
 
 # Sangre en el suelo y caídos (ver mancha() y cuerpo_caido())
@@ -131,6 +131,7 @@ var carga_texto := ""         # para el medidor en la prueba de carga
 
 func _process(delta: float) -> void:
 	_preparar_sonidos(delta)
+	_anotar_fluidez(delta)
 	if not get_tree().paused:
 		elapsed += delta
 		# Los charcos crecen despacio
@@ -151,6 +152,41 @@ func _process(delta: float) -> void:
 					f.visible = false
 				else:
 					_fogonazos_vivos += 1
+
+
+# --- Informe de fluidez: cómo corrió cada fase de la misión en curso. Se ve
+# en la pausa con DATOS TÉCNICOS (para mandar una captura). Por fase:
+# [nombre, cuadros, segundos, cuadros lentos (<25 FPS), tirones (>100 ms), peor ms]
+var informe: Array = []
+var _inf_clave := ""
+
+
+func _anotar_fluidez(delta: float) -> void:
+	if warming or get_tree().paused or Objetivos.actual == null or Objetivos.terminado != 0:
+		return
+	var clave := "SALTO" if Salto.activo else "F%d" % (Objetivos.fase() + 1)
+	if clave != _inf_clave:
+		_inf_clave = clave
+		informe.append([clave, 0, 0.0, 0, 0, 0.0])
+	var r: Array = informe[-1]
+	r[1] += 1
+	r[2] += delta
+	if delta > 0.04:
+		r[3] += 1
+	if delta > 0.1:
+		r[4] += 1
+	r[5] = maxf(r[5], delta * 1000.0)
+
+
+## Una línea por fase, para la pausa.
+func informe_lineas() -> Array:
+	var l: Array = []
+	for r in informe:
+		if r[2] < 1.0:
+			continue
+		l.append("%s  %d FPS  %d%% LENTO  %d TIR  %d MS" % [r[0], roundi(r[1] / r[2]),
+			roundi(100.0 * r[3] / maxf(r[1], 1.0)), r[4], roundi(r[5])])
+	return l
 
 
 ## Se llama al empezar una misión (y al reiniciar tras morir).
@@ -712,10 +748,16 @@ func splash(pos: Vector3) -> void:
 ## frente a la cámara al empezar, mientras el HUD muestra "PREPARANDO".
 func warmup() -> void:
 	var cam := get_viewport().get_camera_3d()
-	if cam == null or _warmed:
+	var escena := get_tree().current_scene
+	# Una vez por MISIÓN (antes era una vez por sesión: la segunda misión, o
+	# volver a jugar desde el menú, empezaba sin preparar). Reintentar tras
+	# caer sigue en la misma escena y no repite.
+	if cam == null or escena == null or _warmed == escena.get_instance_id():
 		return
-	_warmed = true
+	_warmed = escena.get_instance_id()
 	warming = true
+	informe.clear()
+	_inf_clave = ""
 	var p := cam.global_position - cam.global_basis.z * 3.0
 	blood(p)
 	_burst(p, Color(0.7, 0.64, 0.5), 8, 2.0, 0.5, 0.05, Vector3.UP, 0.6)
@@ -734,7 +776,61 @@ func warmup() -> void:
 		if g.visibility_range_end > 0.0:
 			rangos[g] = g.visibility_range_end
 			g.visibility_range_end = 0.0
-	for i in 4:
+	# Los modelos de las armas del jugador (en el salto, la que se cae al
+	# abrirse el paracaídas; en combate, las que quedan en el suelo)
+	var modelos: Array = []
+	var jug := get_tree().get_first_node_in_group("player") as Player
+	if jug and jug.weapons:
+		for k in jug.weapons.slots.size():
+			var id: String = jug.weapons.slots[k]
+			if id != "nada" and Armas.DATOS.has(id):
+				var mi := Armas.modelo_3d(id)
+				escena.add_child(mi)
+				mi.global_position = p + cam.global_basis.x * (0.6 * k - 0.3)
+				modelos.append(mi)
+	# Bengala (noche): su resplandor aditivo se prepara ahora, no al primer disparo
+	var bengala: Bengala = null
+	if str(Misiones.dato("clima")) == "noche":
+		bengala = Bengala.new()
+		bengala._desde = p
+		bengala._arriba = p
+		escena.add_child(bengala)
+		bengala.global_position = p
+		bengala.set_process(false)
+		bengala._brillo.visible = true
+	# Una luz de paso que alcanza todo: el navegador prepara también la versión
+	# "iluminada por una luz cercana" de cada material (bengalas, fuegos). Sin
+	# esto se preparaba en plena misión, al encenderse la primera bengala.
+	var luz := OmniLight3D.new()
+	luz.omni_range = 400.0
+	luz.light_energy = 0.05
+	luz.shadow_enabled = false
+	escena.add_child(luz)
+	luz.global_position = cam.global_position
+	# Vuelta completa con una cámara de paso (8 direcciones, mirando un poco
+	# abajo): así se dibuja una vez lo que queda a la espalda y a los lados.
+	var vuelta := Camera3D.new()
+	vuelta.fov = maxf(cam.fov, 75.0)
+	vuelta.near = cam.near
+	vuelta.far = cam.far
+	escena.add_child(vuelta)
+	vuelta.global_position = cam.global_position
+	vuelta.current = true
+	for i in 8:
+		vuelta.global_rotation = Vector3(deg_to_rad(-12.0), cam.global_rotation.y + TAU * i / 8.0, 0.0)
+		await get_tree().process_frame
+		await get_tree().process_frame
+		if not is_instance_valid(cam):
+			break
+	if is_instance_valid(cam):
+		cam.current = true
+	vuelta.queue_free()
+	luz.queue_free()
+	if bengala:
+		bengala.queue_free()
+	for mi in modelos:
+		mi.queue_free()
+	for i in 2:
 		await get_tree().process_frame
 	for g: GeometryInstance3D in rangos:
 		if is_instance_valid(g):

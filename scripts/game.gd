@@ -171,7 +171,8 @@ func _anotar_fluidez(delta: float) -> void:
 		return
 	if warming or get_tree().paused or Objetivos.actual == null or Objetivos.terminado != 0:
 		return
-	var clave := "SALTO" if Salto.activo else "F%d" % (Objetivos.fase() + 1)
+	var en_aire := Salto.activo and Salto.actual != null and not Salto.actual._aterrizado
+	var clave := "SALTO" if en_aire else "F%d" % (Objetivos.fase() + 1)
 	if clave != _inf_clave:
 		_inf_clave = clave
 		informe.append([clave, 0, 0.0, 0, 0, 0.0])
@@ -849,6 +850,11 @@ func warmup() -> void:
 	for g: GeometryInstance3D in rangos:
 		if is_instance_valid(g):
 			g.visibility_range_end = rangos[g]
+	# Los sonidos grabados que aún no se registraron (en la web se registran de
+	# a uno desde que se abre el juego): ahora, tapados por el negro, y no la
+	# primera vez que suenan (en el salto trababa al salir del avión).
+	while not _por_preparar.is_empty():
+		AudioServer.register_stream_as_sample(_por_preparar.pop_front())
 	await get_tree().create_timer(1.2).timeout     # que caigan los escombros antes de mostrar la playa
 	warming = false
 

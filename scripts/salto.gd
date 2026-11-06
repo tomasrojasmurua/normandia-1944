@@ -114,6 +114,9 @@ func _process(delta: float) -> void:
 		if _t > 3.0 and _negro <= 0.0 and (_walsh_visto or _t > 120.0):
 			queue_free()
 		return
+	# En el aire el reloj avanza a lo más 1/30 s por cuadro: si el celular
+	# traba un instante al salir del avión, la caída libre no se salta.
+	delta = minf(delta, 1.0 / 30.0)
 	_t += delta
 	_p.health = _p.max_health          # en el aire no te matan
 	_mover(delta)

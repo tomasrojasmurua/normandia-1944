@@ -64,7 +64,9 @@ func _pulsado(id: String) -> void:
 		"menu":
 			Game.ir_al_menu()
 		"otra":
-			if resultado > 0 and Compania.activa():
+			if Game.mision_suelta:
+				Game.empezar_mision(Game.mision, true)
+			elif resultado > 0 and Compania.activa():
 				Game.ir_al_mapa()
 			else:
 				Game.ir_a_previa()

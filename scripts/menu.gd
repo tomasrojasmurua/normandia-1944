@@ -23,6 +23,7 @@ func _ready() -> void:
 		Game.olvidar_sala()
 	_sala_vieja = Game.sala_reciente()
 	Game.modo_red = false
+	Game.mision_suelta = false
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 
 
@@ -57,6 +58,7 @@ func _botones() -> Array:
 				["controles", Rect2(X, y0 + paso * 3, ANCHO, ALTO), "CONTROLES", true, ""],
 				["creditos", Rect2(X, y0 + paso * 4, ANCHO, ALTO), "CRÉDITOS", true, ""],
 				["carga", Rect2(X, y0 + paso * 5, ANCHO, ALTO), "PRUEBA DE CARGA", true, ""],
+				["salto", Rect2(X + ANCHO + 16, y0 + paso * 5, ANCHO, ALTO), "PROBAR EL SALTO", true, "SIN CAMPAÑA"],
 			] + ([["volver_sala", Rect2(X + ANCHO + 16, y0 + paso * 2, ANCHO + 20, ALTO),
 				"VOLVER A LA SALA %s" % _sala_vieja, true, "LA PARTIDA SIGUE"]]
 				if _sala_vieja != "" else [])
@@ -117,6 +119,12 @@ func _pulsado(id: String) -> void:
 			Game.modo_red = false
 			Game.prueba_carga = true
 			Game.empezar_mision(Misiones.PRIMERA)
+		"salto":
+			# La misión 2 aparte: no cuenta en la campaña ni arriesga a la compañía
+			Game.modo_red = false
+			Game.prueba_carga = false
+			Game.mision_suelta = true
+			Game.empezar_mision("planeador")
 		"seguir":
 			Game.prueba_carga = false
 			Game.modo_red = false

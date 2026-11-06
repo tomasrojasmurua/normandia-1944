@@ -37,6 +37,7 @@ var modo_red := false
 var bajas := 0        # alemanes abatidos en la misión (para la pantalla final)
 var caidos := 0       # americanos caídos (compañeros y jugadores)         # prototipo del cooperativo (ver red.gd)
 var sala := ""                # código de la sala (4 números)
+var mision_suelta := false    # menú "PROBAR EL SALTO": la misión aparte, sin campaña ni compañía
 var prueba_carga := false     # menú "PRUEBA DE CARGA": playa llena (ver prueba_carga.gd)
 var soldados_3d := false       # true = modelos 3D (pesados); false = sprites
 
@@ -159,9 +160,15 @@ func _process(delta: float) -> void:
 # [nombre, cuadros, segundos, cuadros lentos (<25 FPS), tirones (>100 ms), peor ms]
 var informe: Array = []
 var _inf_clave := ""
+var _inf_ignorar := 0.0
 
 
 func _anotar_fluidez(delta: float) -> void:
+	# Al bajar el centro de notificaciones (o salir de la app) Safari frena la
+	# página: eso no es el juego, no se anota (ni el medio segundo siguiente)
+	if _inf_ignorar > 0.0:
+		_inf_ignorar -= minf(delta, 0.1)
+		return
 	if warming or get_tree().paused or Objetivos.actual == null or Objetivos.terminado != 0:
 		return
 	var clave := "SALTO" if Salto.activo else "F%d" % (Objetivos.fase() + 1)
@@ -176,6 +183,13 @@ func _anotar_fluidez(delta: float) -> void:
 	if delta > 0.1:
 		r[4] += 1
 	r[5] = maxf(r[5], delta * 1000.0)
+
+
+func _notification(what: int) -> void:
+	if what in [NOTIFICATION_APPLICATION_FOCUS_OUT, NOTIFICATION_APPLICATION_FOCUS_IN,
+			NOTIFICATION_APPLICATION_PAUSED, NOTIFICATION_APPLICATION_RESUMED,
+			NOTIFICATION_WM_WINDOW_FOCUS_OUT, NOTIFICATION_WM_WINDOW_FOCUS_IN]:
+		_inf_ignorar = 0.6
 
 
 ## Una línea por fase, para la pausa.

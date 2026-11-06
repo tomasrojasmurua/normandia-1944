@@ -67,7 +67,7 @@ static var ultimos_heridos: Array = []
 
 ## ¿Cuenta la compañía en esta partida?
 static func activa() -> bool:
-	return not Game.modo_red and not Game.prueba_carga
+	return not Game.modo_red and not Game.prueba_carga and not Game.mision_suelta
 
 
 static func cargar() -> void:

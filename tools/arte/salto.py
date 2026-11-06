@@ -1,9 +1,9 @@
 """Imágenes del salto en paracaídas (misión 2) -> assets/salto/
 
-    arte_fuente/salto/paracaidista.png        (fondo negro)  \\
+    arte_fuente/salto/paracaidista.png        (fondo verde)  \\
     arte_fuente/salto/paracaidista_caida.png  (fondo verde)   >  paracaidistas.png  (2 cuadros de 64x64)
     arte_fuente/salto/steele.png              (fondo verde)  ->  colgado.png  (paracaidista colgado del arnés)
-    arte_fuente/salto/bandas_manos.png        (fondo negro)  ->  bandas.png   (manos en las bandas, 480x320)
+    arte_fuente/salto/bandas_manos.png        (fondo verde)  ->  bandas.png   (manos en las bandas, 480x320)
     arte_fuente/salto/tela_desde_abajo.png    (fondo verde)  ->  tela.png     (la tela vista desde abajo, 256x256)
 
 Uso: python3 tools/arte/salto.py
@@ -98,16 +98,26 @@ if __name__ == "__main__":
     DESTINO.mkdir(parents=True, exist_ok=True)
     # Paracaidistas: cuadro 1 con la tela abierta, cuadro 2 en caída libre
     hoja = Image.new("RGBA", (128, 64), (0, 0, 0, 0))
-    # La tela sale de paracaidista.png (fondo negro); el hombre, de steele.png
-    # (fondo verde, más limpio): se cuelga debajo de los cordones.
-    fuente = Image.open(FUENTE / "paracaidista.png")
-    tela_y = int(fuente.height * 0.44)          # la tela y el comienzo de los cordones
-    a = recortar(quitar_negro(fuente.crop((0, 0, fuente.width, tela_y))))
-    a, t = encajar(a, (62, 30))
-    hoja.paste(a, ((64 - t[0]) // 2, 1), a)
-    h = recortar(quitar_verde(Image.open(FUENTE / "steele.png")))
-    h, th = encajar(h, (14, 34))
-    hoja.paste(h, ((64 - th[0]) // 2, 1 + t[1] - 4), h)
+    a = recortar(quitar_verde(Image.open(FUENTE / "paracaidista.png")))
+    a, t = encajar(a, (62, 64))
+    hoja.paste(a, ((64 - t[0]) // 2, 64 - t[1]), a)
+    # Los cordones son muy finos y se pierden al achicar: se dibujan de nuevo,
+    # del borde de la tela a las manos del hombre.
+    from PIL import ImageDraw
+    al = hoja.crop((0, 0, 64, 64)).getchannel("A")
+    filas = [any(al.getpixel((x, y)) > 0 for x in range(64)) for y in range(64)]
+    tela_fin = next(y for y in range(64) if filas[y]) 
+    while tela_fin < 63 and filas[tela_fin + 1]:
+        tela_fin += 1
+    hombre = next(y for y in range(tela_fin + 2, 64) if filas[y])
+    xs = [x for x in range(64) if al.getpixel((x, tela_fin)) > 0]
+    xs_h = [x for x in range(64) if al.getpixel((x, hombre)) > 0] or [32]
+    mano = (min(xs_h) + max(xs_h)) / 2.0
+    d = ImageDraw.Draw(hoja)
+    for k in range(6):
+        x0 = min(xs) + (max(xs) - min(xs)) * k / 5.0
+        lado = -1 if k < 3 else 1
+        d.line([(x0, tela_fin), (mano + lado * 1.5, hombre)], fill=(178, 170, 140, 255), width=1)
     b = recortar(quitar_verde(Image.open(FUENTE / "paracaidista_caida.png")))
     b, t = encajar(b, (40, 26))
     hoja.paste(b, (64 + (64 - t[0]) // 2, 64 - t[1] - 18), b)
@@ -119,7 +129,7 @@ if __name__ == "__main__":
     c.save(DESTINO / "colgado.png")
     print("colgado", t)
     # Las manos en las bandas (primera persona)
-    m = quitar_halo(Image.open(FUENTE / "bandas_manos.png"))
+    m = quitar_verde(Image.open(FUENTE / "bandas_manos.png"))
     m = reducir(m, (480, 320), colores=48, nitidez=1.0)
     m.save(DESTINO / "bandas.png")
     print("bandas")

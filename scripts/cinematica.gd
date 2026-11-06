@@ -92,6 +92,13 @@ const _PLANEADOR := [
 		"fx": ["sacudida", "farol"], "amb": {"lancha": -10.0, "campo_batalla": -18.0}, "musica": ["", -7.0],
 		"sonidos": [[2.0, "explosion_lejos", -4.0, 1.0], [4.6, "bala_pasa", -4.0, 0.9], [4.8, "hit", -2.0, 0.6],
 			[7.2, "explosion_lejos", -2.0, 0.9]]},
+	# Esperando la luz verde, la antiaérea atraviesa el fuselaje: le dan a Kaplan en la fila
+	{"img": "salto_2b", "dur": 6.0, "z": Vector2(1.12, 1.3), "c": [Vector2(0.55, 0.52), Vector2(0.5, 0.56)],
+		"subs": [[0.7, "@0", "¡AL SUELO...!"], [1.8, "JEFE DE SALTO", "¡KAPLAN! ¡LE DIERON A KAPLAN!"],
+			[3.8, "MURPHY", "¡SÁQUENLO DE LA FILA! ¡LOS DEMÁS, ENGANCHADOS!"]],
+		"fx": ["sacudida", "farol"], "amb": {"lancha": -8.0, "campo_batalla": -14.0}, "musica": ["", -5.0],
+		"sonidos": [[0.2, "explosion_cerca", 0.0, 1.0], [0.35, "hit", 2.0, 0.6], [0.45, "bala_pasa", 0.0, 1.0],
+			[0.55, "hit", 0.0, 0.8], [0.9, "muerte", -2.0, 1.0], [3.0, "explosion_lejos", -2.0, 0.9]]},
 	{"img": "salto_3", "dur": 5.5, "z": Vector2(1.1, 1.35), "c": [Vector2(0.5, 0.45), Vector2(0.42, 0.55)],
 		"subs": [[0.9, "@2", "¡NOS DIERON! ¡EL MOTOR IZQUIERDO ARDE!"], [3.0, "PILOTO", "¡NO LO SOSTENGO! ¡SALTEN, SALTEN!"]],
 		"fx": ["sacudida", "fogonazos"], "amb": {"lancha": -6.0, "campo_batalla": -10.0}, "musica": ["", -3.0],

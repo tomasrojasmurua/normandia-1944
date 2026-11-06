@@ -231,6 +231,10 @@ static func _pose(b: Node3D) -> int:
 static func factor_vista(b: Node3D) -> float:
 	if not activa or amanecer >= 1.0:
 		return 1.0
+	# Recién aterrizado (salto.gd): nadie te vio caer, hasta que dispares
+	if Game.elapsed < float(b.get_meta("gracia_hasta", -1.0)) \
+			and Game.elapsed - float(b.get_meta("disparo_t", -100.0)) > DELATA_DISPARO:
+		return 0.22
 	var pose := _pose(b)
 	var f: float = VISTA[pose]
 	var luz := luz_en(b.global_position)

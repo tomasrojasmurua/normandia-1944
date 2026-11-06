@@ -185,7 +185,7 @@ const DATOS := {
 		# izquierda (la granja); Reyes en el de la derecha.
 		"sectores": [Vector2(-16, 14), Vector2(-44, -30), Vector2(22, 42), Vector2(-32, -22)],
 		"escuadra_jugador": [[Vector3(28, 0, -22), "thompson", "DELUCA"],
-			[Vector3(16.4, 0, -6), "garand", "HAYES"], [Vector3(-18.4, 0, 7), "bar", "BRENNAN"]],
+			[Vector3(19.4, 0, -14), "garand", "HAYES"], [Vector3(-21.4, 0, 8), "bar", "BRENNAN"]],
 		"perdidos": [0, 1, 2],      # todos dispersos tras el salto (objetivo "reunir")
 		"lider_z": 8.0,
 		"hombres_z": Vector2(8.0, 11.0),

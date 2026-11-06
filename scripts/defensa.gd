@@ -344,7 +344,8 @@ func _cobertura_cerca(pos: Vector3, radio: float) -> Vector3:
 ## Un alemán cerca del frente dispara una bengala sobre un jugador (o cerca).
 func _bengala() -> void:
 	var jugadores: Array = get_tree().get_nodes_in_group("americanos").filter(
-		func(a: Node) -> bool: return (a is Player or a is JugadorRemoto) and not a.dead)
+		func(a: Node) -> bool: return (a is Player or a is JugadorRemoto) and not a.dead \
+			and Game.elapsed >= float(a.get_meta("gracia_hasta", -1.0)))
 	if jugadores.is_empty():
 		return
 	var j: Node3D = jugadores[_rng.randi() % jugadores.size()]

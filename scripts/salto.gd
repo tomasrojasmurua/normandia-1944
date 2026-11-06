@@ -29,7 +29,9 @@ const RATE := 22050
 
 var desde := Vector3(-6, 135, 22)
 var viento := Vector3(0.35, 0, -0.75)
-var zona := Rect2(-40, -30, 80, 40)       # dónde se puede caer (x, z): potreros de la fase 1
+# Dónde se puede caer (x, z): el potrero del medio, lejos de la MG42 del seto
+# (z -34) y de la granja (x < -24). Tuviste suerte: nadie te dispara al llegar.
+var zona := Rect2(-14, -4, 30, 14)
 
 var _p: Player
 var _t := 0.0
@@ -59,6 +61,9 @@ var _t_cerca := 3.0
 var _t_tierra := 0.5
 var _t_latido := 1.0
 var _herido_hecho := false
+var _arma_perdida := "garand"
+var _walsh: Node3D
+var _walsh_visto := false
 var _bengala_hecha := false
 var _arma_cae: Node3D
 var _viento_snd: AudioStreamPlayer
@@ -102,9 +107,11 @@ func _process(delta: float) -> void:
 	if _aterrizado:
 		_negro = maxf(_negro - delta * 0.8, 0.0)
 		_capa.queue_redraw()
-		_p.health = _p.max_health
 		_t += delta
-		if _t > 2.0 and _negro <= 0.0:
+		if _t < 3.0:
+			_p.health = _p.max_health
+		_mirar_walsh()
+		if _t > 3.0 and _negro <= 0.0 and (_walsh_visto or _t > 120.0):
 			queue_free()
 		return
 	_t += delta
@@ -180,6 +187,7 @@ func _abrir() -> void:
 	var w := _p.weapons
 	if w.slots[0] != "nada":
 		var perdida := w.perder_principal()
+		_arma_perdida = perdida
 		Game.say("[¡EL TIRÓN TE ARRANCA EL %s! SOLO TE QUEDA LA PISTOLA]" % Armas.datos(perdida)["name"], Game.COLOR_BAD)
 		_arma_cae = Node3D.new()
 		var mi := Armas.modelo_3d(perdida)
@@ -201,6 +209,9 @@ func _aterrizar() -> void:
 	_p.camera.v_offset = 0.0
 	_p.head.rotation.x = deg_to_rad(-8.0)
 	_p.set_meta("inicio", _p.global_position)
+	# Tuviste suerte: los alemanes no te vieron caer. Por un rato no te ven de
+	# lejos (salvo que dispares o te les acerques): ver Noche.factor_vista
+	_p.set_meta("gracia_hasta", Game.elapsed + 45.0)
 	_p.shake(1.0)
 	Game.play("hit", 4.0, 0.45)
 	Game.play("bounce", 0.0, 0.5)
@@ -213,6 +224,81 @@ func _aterrizar() -> void:
 		_lejos.queue_free()
 		_lejos = null
 	Game.say("[ESTÁS EN EL SUELO. TU ESCUADRA ESTÁ DISPERSA: USA EL GRILLO]", Game.COLOR_INFO)
+	_colgar_walsh()
+
+
+## Walsh, al que le dieron en el aire: su paracaídas quedó enganchado en un
+## árbol cerca de donde caíste y él cuelga del arnés, sin vida. Su arma está
+## en el suelo, debajo (él no la perdió): se puede recoger.
+func _colgar_walsh() -> void:
+	var escena := get_parent()
+	var frente := -_p.global_basis.z
+	frente.y = 0.0
+	frente = frente.normalized() if frente.length() > 0.1 else Vector3(0, 0, -1)
+	# Hacia el centro del potrero y un poco hacia atrás: lejos de la MG42 del seto
+	var hacia_centro := -1.0 if _p.global_position.x > 0.0 else 1.0
+	var base := _p.global_position + Vector3(hacia_centro * 11.0, 0, 4.0)
+	base.x = clampf(base.x, -16.0, 16.0)
+	base.z = clampf(base.z, -2.0, 11.0)
+	if Navegacion.listo:
+		base = Navegacion.cerca_de(base)
+	base.y = 0.0
+	_walsh = Node3D.new()
+	_walsh.name = "Walsh"
+	escena.add_child(_walsh)
+	_walsh.global_position = base
+	Ambiente._plantas(_walsh, "arbol_1", [[Vector3.ZERO, 0.8]])
+	# Lo primero que ves al levantarte: él
+	var ver := base - _p.global_position
+	_p.rotation.y = atan2(-ver.x, -ver.z)
+	# Hacia donde caíste (para que el árbol no lo tape) y un poco al costado
+	var hacia := _p.global_position - base
+	hacia.y = 0.0
+	hacia = hacia.normalized() if hacia.length() > 0.1 else Vector3(0, 0, 1)
+	var costado := hacia.cross(Vector3.UP)
+	var junto := hacia * 1.4 + costado * 2.6     # fuera del tronco: se recorta contra el cielo
+	# La tela enredada en la copa
+	var tela_pos := junto * 0.6 + Vector3(0, 7.6, 0)
+	if MapaPlaneador.actual:
+		var t := MapaPlaneador.actual._paracaidas(base + tela_pos, 0.85, 0.5, Vector3(-30, 35, 20))
+		t.reparent(_walsh)
+	# Él, colgando (quieto: un cuadro del dibujo, sin animar)
+	var cuerpo := SoldadoSprite.new()
+	cuerpo.bando = "aliado"
+	cuerpo.arma = _arma_perdida
+	_walsh.add_child(cuerpo)
+	cuerpo.position = junto + Vector3(0, 2.0, 0)
+	get_tree().create_timer(0.4).timeout.connect(func() -> void:
+		if is_instance_valid(cuerpo):
+			cuerpo.set_process(false)
+			# Sin luz propia se perdería contra el árbol: un poco más claro, como la luna
+			cuerpo._spr.shaded = false
+			cuerpo._spr.modulate = Noche.tinte.lerp(Color.WHITE, 0.4))
+	# Los cordones, de los hombros a la tela
+	var cord := StandardMaterial3D.new()
+	cord.albedo_color = Color(0.55, 0.55, 0.5)
+	for lado in [-0.25, 0.25]:
+		var a := cuerpo.position + Vector3(lado, 1.6, 0)
+		var b := tela_pos + Vector3(lado * 4.0, -0.8, 0)
+		var m := Game.box(_walsh, Vector3(0.03, a.distance_to(b), 0.03), (a + b) / 2.0, cord)
+		m.look_at_from_position(_walsh.global_position + (a + b) / 2.0, _walsh.global_position + b, Vector3.FORWARD)
+		m.rotate_object_local(Vector3.RIGHT, PI / 2.0)
+	# Su arma, caída al pie del árbol, cargada
+	var d := Armas.datos(_arma_perdida)
+	ArmaSuelta.soltar(escena, base + junto + hacia * 0.8 + Vector3(0, 0.05, 0), _arma_perdida, int(d["mag"]), int(d["reserve"]))
+	# Los alemanes se oyen cerca, pero no te vieron
+	get_tree().create_timer(3.5).timeout.connect(func() -> void:
+		if is_instance_valid(self):
+			Game.play_at("grito_aleman", _p.global_position + frente.rotated(Vector3.UP, 1.9) * 40.0, -4.0))
+
+
+func _mirar_walsh() -> void:
+	if _walsh_visto or _walsh == null or not is_instance_valid(_walsh):
+		return
+	var d := _p.global_position.distance_to(_walsh.global_position)
+	if d < 9.0:
+		_walsh_visto = true
+		Game.say("[ES WALSH... CUELGA DEL ÁRBOL, SIN VIDA. SU ARMA ESTÁ EN EL SUELO]", Game.COLOR_INFO)
 
 
 # ================================================================ lo que se ve en pantalla

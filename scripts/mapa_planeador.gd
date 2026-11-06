@@ -389,8 +389,10 @@ func _pueblo() -> void:
 	var torre := Vector3(-14.0, 1.12 * esc, -141.0 + 0.8 * esc)
 	var tela := _paracaidas(torre + Vector3(2.2, 0.2, 0.6), 0.62, 0.55, Vector3(-15, 30, -62))
 	tela.visibility_range_end = 0.0
-	Game.box(self, Vector3(0.04, 3.0, 0.04), torre + Vector3(3.0, -1.6, 0.9), _mt_metal)
-	Game.box(self, Vector3(0.42, 1.45, 0.32), torre + Vector3(3.0, -3.7, 0.9), _mt_metal)
+	var steele := Salto.colgado(self, torre + Vector3(3.0, -4.6, 0.9))
+	steele.visibility_range_end = 0.0
+	var arriba: Vector3 = steele.get_meta("arriba")
+	Game.box(self, Vector3(0.04, 2.4, 0.04), arriba + Vector3(0, 1.1, 0), _mt_metal)   # los cordones hasta la tela
 	# El cañón de la calle (objetivo de la fase 3) y sus sacos
 	_canon = OmahaInterior._modelo(self, "canon", Vector3(26, 0, -140), 90.0, 5.5)
 	_sandbag_wall(Vector3(26, 0, -136.6), 4.0, 6, 2, 0.0, _rng_m)

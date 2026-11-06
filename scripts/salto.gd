@@ -262,23 +262,14 @@ func _colgar_walsh() -> void:
 	if MapaPlaneador.actual:
 		var t := MapaPlaneador.actual._paracaidas(base + tela_pos, 0.85, 0.5, Vector3(-30, 35, 20))
 		t.reparent(_walsh)
-	# Él, colgando (quieto: un cuadro del dibujo, sin animar)
-	var cuerpo := SoldadoSprite.new()
-	cuerpo.bando = "aliado"
-	cuerpo.arma = _arma_perdida
-	_walsh.add_child(cuerpo)
-	cuerpo.position = junto + Vector3(0, 2.0, 0)
-	get_tree().create_timer(0.4).timeout.connect(func() -> void:
-		if is_instance_valid(cuerpo):
-			cuerpo.set_process(false)
-			# Sin luz propia se perdería contra el árbol: un poco más claro, como la luna
-			cuerpo._spr.shaded = false
-			cuerpo._spr.modulate = Noche.tinte.lerp(Color.WHITE, 0.4))
-	# Los cordones, de los hombros a la tela
+	# Él, colgando del arnés
+	var cuerpo := Salto.colgado(_walsh, junto + Vector3(0, 2.0, 0))
+	# Los cordones, de las bandas a la tela
 	var cord := StandardMaterial3D.new()
 	cord.albedo_color = Color(0.55, 0.55, 0.5)
-	for lado in [-0.25, 0.25]:
-		var a := cuerpo.position + Vector3(lado, 1.6, 0)
+	var arriba: Vector3 = cuerpo.get_meta("arriba")
+	for lado in [-0.2, 0.2]:
+		var a := arriba + Vector3(lado, 0, 0)
 		var b := tela_pos + Vector3(lado * 4.0, -0.8, 0)
 		var m := Game.box(_walsh, Vector3(0.03, a.distance_to(b), 0.03), (a + b) / 2.0, cord)
 		m.look_at_from_position(_walsh.global_position + (a + b) / 2.0, _walsh.global_position + b, Vector3.FORWARD)
@@ -316,39 +307,32 @@ func _armar_capa() -> void:
 	cl.add_child(_capa)
 
 
+const TEX_BANDAS := "res://assets/salto/bandas.png"
+const TEX_TELA := "res://assets/salto/tela.png"
+static var _bandas: Texture2D
+static var _tela: Texture2D
+
+
 func _dibujar() -> void:
 	var s := _capa.size
 	if not _aterrizado and _abierto:
+		if _bandas == null and ResourceLoader.exists(TEX_BANDAS):
+			_bandas = load(TEX_BANDAS)
+			_tela = load(TEX_TELA)
 		var mira := _p.head.rotation.x          # >0 mirando arriba
-		var col := Color(0.16, 0.17, 0.13)
-		var luz := Color(0.32, 0.34, 0.3)
-		# Las bandas: suben desde los hombros, fuera de cuadro
-		var arriba_y := lerpf(-s.y * 0.2, s.y * 0.15, clampf(mira, 0.0, 1.0))
-		var cx := s.x / 2.0
-		for lado in [-1.0, 1.0]:
-			var hombro := Vector2(cx + lado * s.x * 0.36, s.y + 6)
-			var cima := Vector2(cx + lado * s.x * 0.17, arriba_y)
-			_capa.draw_line(hombro, cima, col, 7.0)
-			_capa.draw_line(hombro + Vector2(lado * -2, 0), cima + Vector2(lado * -2, 0), luz, 1.5)
-		# La tela, si se mira hacia arriba
-		if mira > 0.65:
-			var k := clampf((mira - 0.65) / 0.5, 0.0, 1.0)
-			var r := s.x * 0.62
-			var centro := Vector2(cx, lerpf(-r * 0.9, -r * 0.25, k))
-			var paneles := 12
-			for i in paneles:
-				var a0 := PI * float(i) / paneles
-				var a1 := PI * float(i + 1) / paneles
-				var c := Color(0.5, 0.52, 0.5) if i % 2 == 0 else Color(0.42, 0.44, 0.42)
-				c = c * Noche.tinte.lerp(Color.WHITE, 0.3)
-				_capa.draw_colored_polygon(PackedVector2Array([centro,
-					centro + Vector2(cos(a0), sin(a0)) * r, centro + Vector2(cos(a1), sin(a1)) * r]), c)
-			# Los cordones bajando hacia las bandas
-			for i in 9:
-				var a := PI * (0.08 + 0.84 * i / 8.0)
-				var borde := centro + Vector2(cos(a), sin(a)) * r
-				var lado := -1.0 if borde.x < cx else 1.0
-				_capa.draw_line(borde, Vector2(cx + lado * s.x * 0.17, arriba_y), Color(0.2, 0.2, 0.18), 1.0)
+		var luna := Noche.tinte.lerp(Color.WHITE, 0.45)
+		# La tela, si se mira hacia arriba (detrás de las manos)
+		if mira > 0.45 and _tela:
+			var k := clampf((mira - 0.45) / 0.7, 0.0, 1.0)
+			var lado_t := s.x * 0.95
+			var y := lerpf(-lado_t * 0.95, -lado_t * 0.2, k)
+			_capa.draw_texture_rect(_tela, Rect2((s.x - lado_t) / 2.0, y, lado_t, lado_t), false, luna)
+		# Las manos agarrando las bandas
+		if _bandas:
+			var alto := s.y * 0.92
+			var ancho := alto * 1.5
+			var baja := clampf(-mira, 0.0, 0.6) * s.y * 0.25     # mirando abajo, las manos quedan más arriba
+			_capa.draw_texture_rect(_bandas, Rect2((s.x - ancho) / 2.0, s.y - alto - baja + s.y * 0.04, ancho, alto), false, luna)
 	if _negro > 0.0:
 		_capa.draw_rect(Rect2(Vector2.ZERO, s), Color(0, 0, 0, clampf(_negro * 1.3, 0.0, 1.0)))
 
@@ -434,7 +418,8 @@ func _armar_panorama() -> void:
 		var r := _rng.randf_range(600.0, 1200.0)
 		_reflector(Vector3(cos(ang) * r, 0, -100.0 + sin(ang) * r))
 	# Paracaidistas alrededor (la textura se dibuja con código: tela + hombre)
-	_tex_para = _textura_paracaidista()
+	_tex_para = load("res://assets/salto/paracaidistas.png") if ResourceLoader.exists("res://assets/salto/paracaidistas.png") \
+		else _textura_paracaidista()
 	for i in 26:
 		var ang := _rng.randf() * TAU
 		var r := _rng.randf_range(18.0, 320.0)
@@ -665,6 +650,28 @@ func _mover_mi_avion(delta: float) -> void:
 
 # ---------------------------------------------------------------- piezas
 
+## Un paracaidista colgado del arnés, sin vida (Walsh en el árbol; el del
+## campanario). Devuelve el Sprite3D; meta "arriba": dónde terminan sus bandas
+## (para atar los cordones). `pies`: posición local de los pies.
+static func colgado(padre: Node3D, pies: Vector3) -> Sprite3D:
+	var s := Sprite3D.new()
+	var ruta := "res://assets/salto/colgado.png"
+	if ResourceLoader.exists(ruta):
+		s.texture = load(ruta)
+	s.pixel_size = 0.024
+	s.centered = false
+	s.offset = Vector2(-s.texture.get_width() / 2.0 if s.texture else 0.0, 0)
+	s.billboard = BaseMaterial3D.BILLBOARD_FIXED_Y
+	s.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+	s.alpha_cut = SpriteBase3D.ALPHA_CUT_DISCARD
+	s.shaded = false
+	s.modulate = Noche.tinte.lerp(Color.WHITE, 0.45)
+	s.position = pies
+	padre.add_child(s)
+	var alto := (s.texture.get_height() if s.texture else 100) * s.pixel_size
+	s.set_meta("arriba", pies + Vector3(0, alto, 0))
+	return s
+
 ## El suelo de varios km alrededor: un dibujo de potreros, setos y caminos (y
 ## el río Merderet, inundado, al oeste), visto de noche. Queda debajo del suelo
 ## de verdad (600 m): solo se ve más allá.
@@ -796,7 +803,7 @@ func _paracaidista(pos: Vector3, abre_en: float) -> void:
 	var s := Sprite3D.new()
 	s.texture = _tex_para
 	s.hframes = 2
-	s.pixel_size = 0.24
+	s.pixel_size = 0.14 if _tex_para.get_width() == 128 else 0.24
 	s.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	s.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
 	s.modulate = Noche.tinte.lerp(Color.WHITE, 0.45)
@@ -873,11 +880,25 @@ func _avion(pos: Vector3, vel: Vector3, ardiendo := false) -> Node3D:
 	for par in piezas:
 		st.append_from(par[0], 0, par[1])
 	var mi := MeshInstance3D.new()
-	mi.mesh = st.commit()
-	var m := StandardMaterial3D.new()
-	m.albedo_color = Color(0.42, 0.44, 0.36)     # la luna les da de lleno arriba
-	m.roughness = 0.6
-	mi.material_override = m
+	if ResourceLoader.exists(C47):
+		# El modelo de Meshy (la nariz mira a -X como los demás: se gira para mirar a -Z)
+		if _c47 == null:
+			_c47 = load(C47)
+		mi.mesh = _c47
+		var e := 29.0 / maxf(_c47.get_aabb().size.x, _c47.get_aabb().size.z)
+		mi.scale = Vector3.ONE * e
+		mi.rotation.y = -PI / 2.0
+		mi.position.y = -_c47.get_aabb().size.y * e * 0.45
+		var mm := Ambiente.material_modelo()
+		mm.albedo_color = Color(1.25, 1.25, 1.3)       # la luna les da de lleno arriba
+		mi.material_override = mm
+	else:
+		mi.mesh = st.commit()
+		var m := StandardMaterial3D.new()
+		m.albedo_color = Color(0.42, 0.44, 0.36)
+		m.roughness = 0.6
+		mi.material_override = m
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	n.add_child(mi)
 	# Luces azules de formación (arriba) y escapes
 	var luz_mat := StandardMaterial3D.new()  # (luces del avión)
@@ -917,6 +938,8 @@ func _avion(pos: Vector3, vel: Vector3, ardiendo := false) -> Node3D:
 
 # ---------------------------------------------------------------- sonidos
 
+const C47 := "res://assets/decorado/c47.res"
+static var _c47: Mesh
 static var _snd_motores: AudioStreamWAV
 static var _snd_viento: AudioStreamWAV
 
@@ -933,6 +956,7 @@ func _armar_sonidos() -> void:
 		if g is AudioStreamOggVorbis:
 			g.loop = true
 		_viento_snd.stream = g
+		_viento_snd.playback_type = AudioServer.PLAYBACK_TYPE_STREAM
 	_viento_snd.volume_db = -2.0
 	_viento_snd.bus = "Master"
 	add_child(_viento_snd)

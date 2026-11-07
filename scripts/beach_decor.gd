@@ -229,6 +229,26 @@ func _add_bluffs() -> void:
 	var depth := h / tan(deg_to_rad(slope))
 	_add_box(Vector3(0, h / 2.0 - 0.6, -56 - depth / 2.0), Vector3(500, 1.0, h / sin(deg_to_rad(slope))),
 		_grass, Vector3(slope, 0, 0))
+	# La ladera terminaba 17 cm por debajo de la meseta y ese peldaño frenaba al
+	# caminar (había que saltar). Un tramo invisible prolonga la ladera hasta
+	# tocar la meseta a 14 m (solo choque: así no parpadea sobre el pasto).
+	var sen := sin(deg_to_rad(slope))
+	var co := cos(deg_to_rad(slope))
+	var arriba_ladera := Vector3(0, sen, -co)      # hacia arriba por la ladera
+	var normal := Vector3(0, co, sen)
+	var y_centro_sup := h / 2.0 - 0.6 + 0.5 * co   # superficie de la ladera en su centro
+	var z_centro_sup := -56 - depth / 2.0 + 0.5 * sen
+	var tope := Vector3(0, h, z_centro_sup - (h - y_centro_sup) / tan(deg_to_rad(slope)))
+	var largo := 3.0
+	var tramo := StaticBody3D.new()
+	tramo.position = tope - arriba_ladera * largo / 2.0 - normal * 0.5
+	tramo.rotation_degrees = Vector3(slope, 0, 0)
+	var col := CollisionShape3D.new()
+	var forma := BoxShape3D.new()
+	forma.size = Vector3(500, 1.0, largo)
+	col.shape = forma
+	tramo.add_child(col)
+	add_child(tramo)
 	# La meseta de arriba llega hasta el bosque detrás de Vierville (sección 6)
 	_add_box(Vector3(0, h - 0.5, -56 - depth - 75), Vector3(500, 1.0, 150), _grass)
 

@@ -107,8 +107,15 @@ func _process(delta: float) -> void:
 		_capa_arma.modulate = Noche.tinte_vista(_player)
 	_cuadro += 1
 	var tapar := Game.warming
-	_capa_textos.visible = not tapar
-	_capa_barra.visible = not tapar
+	# Mientras dice PREPARANDO, la barra y los textos se dibujan casi
+	# transparentes (detrás del negro): si se dibujaban por primera vez al
+	# terminar, ese cuadro trababa (al salir del avión, al pisar la playa).
+	var alfa := 0.02 if tapar else 1.0
+	if _capa_barra.modulate.a != alfa:
+		_capa_barra.modulate.a = alfa
+		_capa_textos.modulate.a = alfa
+		_capa_barra.queue_redraw()
+		_capa_textos.queue_redraw()
 	if _player == null or _player.weapons == null or tapar:
 		return
 	var fb := _firma_de_barra()

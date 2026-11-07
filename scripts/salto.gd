@@ -90,10 +90,27 @@ func _ready() -> void:
 	_armar_capa()
 	_armar_panorama()
 	_armar_sonidos()
+	# Lo que aparece al abrirse el paracaídas se carga YA, no en ese instante
+	# (se leía del disco justo al abrirse y trababa): las manos con las
+	# correas, la tela y el arma que se cae.
+	if _bandas == null and ResourceLoader.exists(TEX_BANDAS):
+		_bandas = load(TEX_BANDAS)
+		_tela = load(TEX_TELA)
+	# Un paracaidista de muestra frente a la cámara mientras dice PREPARANDO:
+	# los de verdad salen durante la caída y el primero que se dibujaba trababa
+	if _tex_para:
+		_paracaidista(desde + _p.global_basis * Vector3(0, -2.0, -12.0), 0.0)
+		_muestra_para = _paracaidistas.pop_back()[0]
+	var principal: String = _p.weapons.slots[0] if _p.weapons else "nada"
+	if principal != "nada":
+		_modelo_cae = Armas.modelo_3d(principal)
+		_modelo_cae.set_meta("arma", principal)
 	Noche.niebla_mult = 0.1
 
 
 func _exit_tree() -> void:
+	if _modelo_cae and not _modelo_cae.is_inside_tree():
+		_modelo_cae.free()
 	if actual == self:
 		actual = null
 		activo = false
@@ -103,7 +120,11 @@ func _exit_tree() -> void:
 func _process(delta: float) -> void:
 	if Game.warming:                  # mientras dice PREPARANDO, quieto arriba
 		_p.global_position = desde
+		_capa.queue_redraw()           # y las manos y la tela se dibujan una vez (ver _dibujar)
 		return
+	if _muestra_para:
+		_muestra_para.queue_free()
+		_muestra_para = null
 	if _aterrizado:
 		_negro = maxf(_negro - delta * 0.8, 0.0)
 		_capa.queue_redraw()
@@ -193,7 +214,14 @@ func _abrir() -> void:
 		_arma_perdida = perdida
 		Game.say("[¡EL TIRÓN TE ARRANCA EL %s! SOLO TE QUEDA LA PISTOLA]" % Armas.datos(perdida)["name"], Game.COLOR_BAD)
 		_arma_cae = Node3D.new()
-		var mi := Armas.modelo_3d(perdida)
+		var mi: Node3D
+		if _modelo_cae and _modelo_cae.get_meta("arma", "") == perdida:
+			mi = _modelo_cae
+		else:
+			if _modelo_cae:
+				_modelo_cae.free()
+			mi = Armas.modelo_3d(perdida)
+		_modelo_cae = null
 		mi.scale = Vector3.ONE * 1.4
 		_arma_cae.add_child(mi)
 		add_child(_arma_cae)
@@ -312,12 +340,21 @@ func _armar_capa() -> void:
 
 const TEX_BANDAS := "res://assets/salto/bandas.png"
 const TEX_TELA := "res://assets/salto/tela.png"
+var _muestra_para: Sprite3D = null  # ver _ready
+var _modelo_cae: Node3D = null      # el arma que se cae, armada al empezar (ver _ready)
 static var _bandas: Texture2D
 static var _tela: Texture2D
 
 
 func _dibujar() -> void:
 	var s := _capa.size
+	if Game.warming:
+		# Casi transparentes, tapadas por PREPARANDO: que su primera vez en
+		# pantalla no sea justo al abrirse el paracaídas.
+		if _bandas:
+			_capa.draw_texture_rect(_bandas, Rect2(0, 0, s.x * 0.5, s.y * 0.5), false, Color(1, 1, 1, 0.02))
+			_capa.draw_texture_rect(_tela, Rect2(s.x * 0.5, 0, s.x * 0.5, s.y * 0.5), false, Color(1, 1, 1, 0.02))
+		return
 	if not _aterrizado and _abierto:
 		if _bandas == null and ResourceLoader.exists(TEX_BANDAS):
 			_bandas = load(TEX_BANDAS)

@@ -779,6 +779,11 @@ func warmup() -> void:
 	splash(p)
 	tracer(p + cam.global_basis.x, p - cam.global_basis.x)
 	_explosion_fx(p)
+	# Las reservas de fogonazos (24) y de sonidos 3D (16) se armaban en el
+	# primer tiroteo; en el salto, justo mientras caías (trababa)
+	fogonazo(p, true)
+	fogonazo(p + cam.global_basis.x * 0.5, false)
+	play_at("click", p, -80.0)
 	mancha(p, 0.5, false)
 	if Telones.actual:
 		Telones.actual.calentar(p)

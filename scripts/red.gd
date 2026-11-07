@@ -16,7 +16,10 @@ class_name Red
 ##   x explosión - w silbido de mortero - m aviso - h daño a un jugador ·
 ##   g golpe a un títere - o orden a mi escuadra - r pido relevo - R respuesta
 ##   - q quitar títere - c cuerpos (para el que recién entra) - gr granada
-##   alemana - fin fin de misión.
+##   alemana - ex (v0.40) "te tienen en la mira" a un invitado - fin fin de misión.
+## - Armas del suelo: cada celular tiene las suyas. Cuando cae un soldado, cada
+##   uno deja caer su arma en su propio celular (v0.40: antes solo en el
+##   anfitrión, y los invitados se quedaban sin munición).
 ## - Si un invitado le pega a un títere, el golpe va al anfitrión; si la IA le
 ##   pega a un invitado, el daño va a ese jugador. Las explosiones las calcula
 ##   cada uno para su propio jugador.
@@ -576,6 +579,9 @@ func _suceso(ev: Array, de: String) -> void:
 				g.global_position = _vec(ev, 1)
 				g.linear_velocity = _vec(ev, 4)
 				Game.play_at("throw", _vec(ev, 1), 0.0)
+		"ex":  # (v0.40) llevo rato corriendo al descubierto: me tienen en la mira
+			if str(ev[1]) == mi_id:
+				Game.say(Enemy.AVISO_EXPUESTO, Game.COLOR_BAD)
 		"m":   # aviso del anfitrión
 			Game.say(str(ev[1]), Color.html(str(ev[2])))
 		"h":   # un soldado de IA (del anfitrión) le pegó a alguien

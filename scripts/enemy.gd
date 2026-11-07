@@ -83,14 +83,17 @@ func _physics_process(delta: float) -> void:
 		objetivo = elegir_objetivo("americanos", sight_range)
 		# Que no le disparen más de 4 a la vez a un jugador (3 en el cooperativo,
 		# donde no hay escuadras con IA que repartan el fuego): el resto busca otro
+		# (v0.40) Al que lleva rato corriendo al descubierto le tiran hasta 2 más
 		if (objetivo is Player or objetivo is JugadorRemoto) and objetivo != antes \
-				and _tiradores_a(objetivo) >= (3 if Game.modo_red else 4):
+				and _tiradores_a(objetivo) >= (3 if Game.modo_red else 4) + (2 if castigo(objetivo) > 0.0 else 0):
 			objetivo = elegir_objetivo("americanos", sight_range, null, objetivo)
 		if objetivo != antes:
 			_blanco_desde = Game.elapsed
 		_sees = objetivo != null
 		if _sees:
 			_actualizar_amenaza(objetivo.global_position)
+			if objetivo is Player or objetivo is JugadorRemoto:
+				_anotar_visto(objetivo)
 
 	if not is_instance_valid(objetivo):   # sin blanco, o el jugador tomó su lugar (liberado)
 		objetivo = null
@@ -114,15 +117,16 @@ func _physics_process(delta: float) -> void:
 			if objetivo and not objetivo.dead:
 				_shoot()
 
+	var k_expuesto := castigo(objetivo) if _sees else 0.0
 	if _sees:
-		_alert += delta
+		_alert += delta * (1.0 + k_expuesto)     # al que corre al descubierto lo ven antes
 		var to := objetivo.global_position - global_position
 		rotation.y = lerp_angle(rotation.y, atan2(-to.x, -to.z), delta * 4.0)
 		cuerpo.apuntar_a = objetivo.pos_cabeza() - Vector3(0, 0.3, 0)
 		if not en_cobertura:
 			cuerpo.pose = "pie" if _alert > 0.3 else "reposo"
 		if _alert >= reaction_time:
-			_fire_timer -= delta
+			_fire_timer -= delta * (1.0 + 0.8 * k_expuesto)   # y le disparan más seguido
 			# Desde la cobertura se asoma un poco antes de disparar
 			if en_cobertura and _fire_timer < 0.7 and _asomado <= 0.0:
 				_asomado = 0.7 + _duracion_rafaga() + randf_range(0.4, 1.0)
@@ -137,7 +141,45 @@ func _physics_process(delta: float) -> void:
 
 	if en_cobertura:
 		_asomado -= delta
-		cuerpo.pose = "rodilla" if _asomado > 0.0 or _rafaga > 0 else "agachado"
+		var asoma := "pie" if cobertura.get("ventana", false) else "rodilla"   # (v0.40) en la ventana, de pie
+		cuerpo.pose = asoma if _asomado > 0.0 or _rafaga > 0 else "agachado"
+
+
+## (v0.40) Correr de trinchera en trinchera sí, correr como loco no. Cuánto
+## rato lleva un jugador corriendo o caminando de pie a la vista de los
+## alemanes, sin agacharse ni cubrirse. Lo anotan los alemanes que lo tienen en
+## la mira (cada 0,3 s); si nadie lo ve o se agacha, vuelve a cero.
+const EXPUESTO_DESDE := 2.2      # s: un pique corto entre coberturas no se castiga
+const EXPUESTO_TOPE := 4.5       # s: desde aquí, el castigo completo
+const AVISO_EXPUESTO := "[¡TE TIENEN EN LA MIRA! ¡A CUBIERTO!]"
+
+static func exposicion(b: Node) -> float:
+	if b == null or not is_instance_valid(b) or Game.elapsed - float(b.get_meta("visto_t", -100.0)) > 0.8:
+		return 0.0
+	return Game.elapsed - float(b.get_meta("visto_desde", Game.elapsed))
+
+
+## 0 = nada; 1 = castigo completo (lleva más de EXPUESTO_TOPE s al descubierto).
+static func castigo(b: Node) -> float:
+	if not (b is Player or b is JugadorRemoto):
+		return 0.0
+	return clampf((exposicion(b) - EXPUESTO_DESDE) / (EXPUESTO_TOPE - EXPUESTO_DESDE), 0.0, 1.0)
+
+
+static func _anotar_visto(b: Node) -> void:
+	if not b.en_campo_abierto():
+		b.set_meta("visto_t", -100.0)      # agachado o quieto: se cortó la carrera
+		return
+	if Game.elapsed - float(b.get_meta("visto_t", -100.0)) > 0.8:
+		b.set_meta("visto_desde", Game.elapsed)
+	b.set_meta("visto_t", Game.elapsed)
+	# Aviso (uno cada 20 s como mucho): que se entienda por qué de pronto llueven balas
+	if exposicion(b) > EXPUESTO_DESDE and Game.elapsed - float(b.get_meta("avisado_t", -100.0)) > 20.0:
+		b.set_meta("avisado_t", Game.elapsed)
+		if b is Player:
+			Game.say(AVISO_EXPUESTO, Game.COLOR_BAD)
+		elif b is JugadorRemoto:
+			Red.evento(["ex", b.id])
 
 
 func _tiradores_a(blanco: Node) -> int:
@@ -173,7 +215,7 @@ func _pensar() -> void:
 	# lo flanquea está cerca y a la vista, correr sería morir de espaldas: se
 	# da vuelta y le dispara (v0.32)
 	var flanqueado := not cobertura.is_empty() and Coberturas.protege(cobertura, amenaza) < 0.35
-	if flanqueado and _sees and dist < 22.0 and randf() < 0.75:
+	if flanqueado and _sees and dist < 22.0 and randf() < 0.9:
 		_reaccionar()
 		return
 	if cobertura.is_empty() or flanqueado:
@@ -341,7 +383,17 @@ func _shoot() -> void:
 		chance *= Game.factor_punteria()   # fase perdonadora, gracia al empezar, reintentos (v0.36)
 	# Los primeros tiros a un blanco nuevo pasan cerca (avisan): la puntería
 	# llega a su máximo después de ~1,8 s siguiéndolo. Da tiempo a cubrirse.
-	chance *= clampf((Game.elapsed - _blanco_desde - 0.3) / 1.5, 0.3, 1.0)
+	# (v0.40) Salvo que el jugador lleve rato corriendo al descubierto (ahí ya
+	# lo vienen siguiendo y la puntería sube hasta ×2,6) o esté muy cerca
+	# (flanquear corriendo a 15 m de un alemán es jugársela).
+	var piso := 0.3
+	if jugador:
+		var k := castigo(objetivo)
+		chance *= 1.0 + 1.6 * k
+		piso = lerpf(0.3, 1.0, k)
+		if dist < 16.0:
+			piso = maxf(piso, 0.65)
+	chance *= clampf((Game.elapsed - _blanco_desde - 0.3) / 1.5, piso, 1.0)
 	if tiro_ia(objetivo, chance, 2.0):
 		# Letal: un tiro de fusil (Kar98k: 115) mata; las automáticas, 2 o 3 balas
 		objetivo.take_damage(Armas.datos(arma)["damage"], global_position)

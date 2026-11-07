@@ -103,6 +103,19 @@ func morir(dir: Vector3, cabeza: bool) -> void:
 	cuerpo.andar = ""
 	cuerpo.morir(dir, cabeza)
 	Game.cuerpo_caido(self)    # (antes los cuerpos se juntaban sin límite en los invitados)
+	_soltar_arma(dir)
+
+
+## (v0.40) Su arma queda en el suelo también en este celular (antes solo en el
+## anfitrión: los invitados no veían armas que recoger y se quedaban sin balas).
+## Cada celular tiene su copia: lo que recoge uno no se le quita a otro.
+func _soltar_arma(dir: Vector3) -> void:
+	if not Armas.DATOS.has(arma):
+		return
+	var d := Armas.datos(arma)
+	var lado := global_basis.x * randf_range(-0.6, 0.6) + dir.normalized() * 0.5
+	ArmaSuelta.soltar(get_parent(), global_position + Vector3(lado.x, 0.05, lado.z), arma,
+		randi_range(int(d["mag"]) / 2, int(d["mag"])), int(d["mag"]))
 
 
 func _process(_delta: float) -> void:

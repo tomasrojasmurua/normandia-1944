@@ -337,8 +337,20 @@ static func _pieza(d: Node3D, tipo: String, base: Vector3, ancho: float, giro: f
 		var cuerpo: StaticBody3D = d._add_box(medio + Vector3(0, (y0 + y1) / 2.0, 0), Vector3(x1 - x0, y1 - y0, GRUESO),
 			d._dark, Vector3(0, giro, 0))
 		cuerpo.get_child(0).visible = false
-		if y0 == 0.0:
+		if y0 == 0.0 and tipo != "muro_ventana":
 			Coberturas.agregar_muro(medio, x1 - x0, giro, GRUESO, y1)
+	# (v0.40) La pared con ventana: a los lados, muro alto; bajo la ventana, un
+	# punto "ventana" (antes todo el alféizar era cobertura baja: los alemanes se
+	# asomaban de rodillas y solo sacaban la coronilla por encima)
+	if tipo == "muro_ventana":
+		var v: Array = KIT[tipo]
+		var h0: float = v[2][1]      # la ventana va de x h0 a h1 (fracciones)
+		var h1: float = v[3][0]
+		for tramo in [[0.0, h0, alto], [h0, h1, v[0][3] * alto], [h1, 1.0, alto]]:
+			var x0: float = tramo[0] * ancho - ancho / 2.0
+			var x1: float = tramo[1] * ancho - ancho / 2.0
+			Coberturas.agregar_muro(base + b * Vector3((x0 + x1) / 2.0, 0, 0), x1 - x0, giro, GRUESO,
+				tramo[2], tramo[0] == h0)
 
 
 ## Todas las piezas de un tipo en una sola malla múltiple (pocas llamadas de dibujo).

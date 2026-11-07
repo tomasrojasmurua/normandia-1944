@@ -273,6 +273,12 @@ func pos_cabeza() -> Vector3:
 	return head.global_position
 
 
+## (v0.40) De pie y moviéndose (para Enemy.exposicion): agachado, cuerpo a
+## tierra o quieto no cuenta como "correr al descubierto".
+func en_campo_abierto() -> bool:
+	return not crouching and not prone and Vector2(velocity.x, velocity.z).length() > 3.0
+
+
 func factor_blanco() -> float:
 	var f := 1.0
 	if prone:

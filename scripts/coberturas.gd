@@ -8,6 +8,7 @@ class_name Coberturas
 ## Punto = {pos: Vector3, n: Vector3, bajo: bool, parcial: bool, ocupado: Node}
 ##   bajo    = obstáculo bajo: se esconde agachado y se asoma de rodillas.
 ##   parcial = solo tapa una parte (erizo checo): ayuda, pero no del todo.
+##   ventana = bajo una ventana (v0.40): se asoma de pie, no de rodillas.
 
 static var puntos: Array[Dictionary] = []
 ## Los mismos puntos repartidos en una grilla de CELDA m: para buscar cerca de
@@ -28,10 +29,10 @@ static func _celda(pos: Vector3) -> Vector2i:
 	return Vector2i(floori(pos.x / CELDA), floori(pos.z / CELDA))
 
 
-static func _agregar(pos: Vector3, n: Vector3, bajo: bool, parcial: bool) -> void:
+static func _agregar(pos: Vector3, n: Vector3, bajo: bool, parcial: bool, ventana := false) -> void:
 	if pos.y > 0.3 and pos.z < -56.3 and pos.z > -80.5:   # en la ladera: a la altura del terreno
 		pos.y = Ambiente.alto_acantilado(pos.z)
-	var p := {"pos": pos, "n": n.normalized(), "bajo": bajo, "parcial": parcial, "ocupado": null}
+	var p := {"pos": pos, "n": n.normalized(), "bajo": bajo, "parcial": parcial, "ocupado": null, "ventana": ventana}
 	puntos.append(p)
 	var k := _celda(pos)
 	if not _celdas.has(k):
@@ -41,7 +42,9 @@ static func _agregar(pos: Vector3, n: Vector3, bajo: bool, parcial: bool) -> voi
 
 ## Muro (sacos de arena, concreto): puntos a lo largo de los dos lados.
 ## `yaw` en grados, como en beach_decor; `prof` = grosor; `alto` = altura.
-static func agregar_muro(centro: Vector3, largo: float, yaw: float, prof: float, alto: float) -> void:
+## `ventana` (v0.40): bajo una ventana; para asomarse hay que ponerse de pie
+## (de rodillas apenas asomaba la cabeza sobre el alféizar y no se le podía pegar).
+static func agregar_muro(centro: Vector3, largo: float, yaw: float, prof: float, alto: float, ventana := false) -> void:
 	var b := Basis(Vector3.UP, deg_to_rad(yaw))
 	var cuantos := maxi(1, int(largo / 1.4))
 	var piso := Vector3(centro.x, centro.y, centro.z)
@@ -49,7 +52,7 @@ static func agregar_muro(centro: Vector3, largo: float, yaw: float, prof: float,
 		var fuera: Vector3 = b.z * lado * (prof / 2.0 + 0.5)
 		for i in cuantos:
 			var x := (i - (cuantos - 1) / 2.0) * 1.4
-			_agregar(piso + b.x * x + fuera, -fuera, alto < 1.3, false)
+			_agregar(piso + b.x * x + fuera, -fuera, alto < 1.3, false, ventana)
 
 
 ## Erizo checo: cuatro puntos alrededor, solo tapan en parte.

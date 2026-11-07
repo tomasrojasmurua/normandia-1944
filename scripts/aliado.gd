@@ -145,7 +145,8 @@ func _physics_process(delta: float) -> void:
 
 	if en_cobertura:
 		_asomado -= delta
-		cuerpo.pose = "rodilla" if _asomado > 0.0 or _rafaga > 0 else "agachado"
+		var asoma := "pie" if cobertura.get("ventana", false) else "rodilla"   # (v0.40) en la ventana, de pie
+		cuerpo.pose = asoma if _asomado > 0.0 or _rafaga > 0 else "agachado"
 
 
 ## Avisa dónde vio a un alemán que el jugador no está mirando:

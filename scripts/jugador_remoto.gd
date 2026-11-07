@@ -58,13 +58,24 @@ func pos_cabeza() -> Vector3:
 	return cuerpo.pos_cabeza() if cuerpo else global_position + Vector3(0, 1.6, 0)
 
 
+## Como en player.gd. La foto trae [.., agachado, velocidad en m/s, ..].
+## (v0.40: antes cualquier paso de más de 0,6 m/s contaba como correr)
 func factor_blanco() -> float:
+	if _fotos.is_empty():
+		return 1.0
 	var f := 1.0
-	if _fotos.size() > 0 and float(_fotos[-1][4]) > 0.6:
-		f *= 0.88      # corriendo (como el jugador local, v0.32)
-	elif cuerpo and cuerpo.pose == "agachado":
+	var v := float(_fotos[-1][4])
+	if bool(_fotos[-1][3]):
 		f *= 0.6
+	if v > 5.5:
+		f *= 0.88      # corriendo
+	elif v > 2.0:
+		f *= 0.92      # caminando
 	return f
+
+
+func en_campo_abierto() -> bool:
+	return not _fotos.is_empty() and not bool(_fotos[-1][3]) and float(_fotos[-1][4]) > 3.0
 
 
 ## Un alemán (de este celular, el anfitrión) le pegó: el daño va a su celular.

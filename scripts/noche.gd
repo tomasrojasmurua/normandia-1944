@@ -232,7 +232,8 @@ static func factor_vista(b: Node3D) -> float:
 	if not activa or amanecer >= 1.0:
 		return 1.0
 	# Recién aterrizado (salto.gd): nadie te vio caer, hasta que dispares
-	if Game.elapsed < float(b.get_meta("gracia_hasta", -1.0)) \
+	# (v0.39) y los compañeros dispersos, escondidos hasta que los encuentres
+	if (Game.elapsed < float(b.get_meta("gracia_hasta", -1.0)) or b.has_meta("perdido")) \
 			and Game.elapsed - float(b.get_meta("disparo_t", -100.0)) > DELATA_DISPARO:
 		return 0.22
 	var pose := _pose(b)

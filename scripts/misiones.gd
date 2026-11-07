@@ -194,6 +194,14 @@ const DATOS := {
 		"escuadra_jugador": [[Vector3(28, 0, -22), "thompson", "DELUCA"],
 			[Vector3(19.4, 0, -14), "garand", "HAYES"], [Vector3(-21.4, 0, 8), "bar", "BRENNAN"]],
 		"perdidos": [0, 1, 2],      # todos dispersos tras el salto (objetivo "reunir")
+	# v0.39: dónde se esconden los dispersos (x, z), pegados a los setos de los
+	# tres potreros y a los planeadores. Escuadras.dispersar elige al azar los que
+	# quedan a 22–46 m de donde cae cada jugador, uno por potrero si se puede.
+	"escondites": [
+		Vector2(-18.4, -16), Vector2(-18.4, 11), Vector2(16.4, -14), Vector2(16.4, 12),   # potrero del medio
+		Vector2(-21.6, 2), Vector2(-27, 12), Vector2(-40, 10), Vector2(-33, 4),           # izquierdo (granja)
+		Vector2(19.6, 6), Vector2(36, -14), Vector2(28, -4), Vector2(40, 10), Vector2(42, -22),   # derecho
+	],
 		"lider_z": 8.0,
 		"hombres_z": Vector2(8.0, 11.0),
 		"refuerzos_z": Vector2(8.0, 11.5),
@@ -284,7 +292,13 @@ const DATOS := {
 						"txt_llegan": "[RADIO: LOS TANQUES DE UTAH LLEGAN EN %d S. ¡AGUANTEN!]",
 						"txt_fin": "[¡AMANECE Y LLEGAN LOS SHERMAN! ¡SAINTE-MÈRE-ÉGLISE ES NUESTRA!]",
 						"txt_recupera": "¡RECUPERA LA BARRICADA!",
-						"olas": {"cada": Vector2(28.0, 36.0), "n": 4, "max_vivos": 16, "morteros": Vector2(16.0, 24.0),
+						# v0.39: como Vierville (v0.32). Antes 4 por ola cada ~32 s, máx.
+						# 16 vivos, sin pueblo, sin MG42 ni gran contraataque: se sentía
+						# vacío. El gran contraataque, al 60 % (el tanque baja al 30 % y
+						# los Sherman entran al 85 %).
+						"txt_mg": "[¡UNA MG42 SE INSTALA FRENTE A LA BARRICADA!]",
+						"olas": {"cada": Vector2(24.0, 30.0), "n": 4, "crece": 3, "max_vivos": 18,
+							"morteros": Vector2(12.0, 18.0), "pueblo": true, "mg": true, "gran": 0.6,
 							"desde": [Vector3(-30, 0, -214), Vector3(4, 0, -218), Vector3(34, 0, -212),
 								Vector3(-42, 0, -196), Vector3(42, 0, -196)]}},
 				],

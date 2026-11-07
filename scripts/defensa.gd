@@ -198,7 +198,7 @@ func _ola(i: int, o: Dictionary) -> void:
 	for k in n:
 		_asalto(bases[k % bases.size()], meta)
 	if o.get("mg", false) and _olas >= 2 and _olas % 2 == 0:
-		_mg_de_ola(bases[0], meta)
+		_mg_de_ola(bases[0], meta, i)
 	Red.anunciar("[¡CONTRAATAQUE ALEMÁN! - OLA %d]" % _olas, Game.COLOR_BAD)
 
 
@@ -223,7 +223,7 @@ func _sale_el_pueblo(meta: Vector3) -> void:
 
 
 ## Un equipo de MG42 se instala a ~36 m del lugar, del lado de donde vino la ola.
-func _mg_de_ola(base: Vector3, meta: Vector3) -> void:
+func _mg_de_ola(base: Vector3, meta: Vector3, i: int) -> void:
 	_mgs_ola = _mgs_ola.filter(func(e: Variant) -> bool: return is_instance_valid(e) and not e.dead)
 	if _mgs_ola.size() >= 2:
 		return
@@ -234,7 +234,7 @@ func _mg_de_ola(base: Vector3, meta: Vector3) -> void:
 	var e := _aleman(pos, "mg42", "fijo")
 	e._alert = 0.5
 	_mgs_ola.append(e)
-	Red.anunciar("[¡UNA MG42 SE INSTALA FRENTE AL CRUCE!]", Game.COLOR_BAD)
+	Red.anunciar(Objetivos.LISTA[i].get("txt_mg", "[¡UNA MG42 SE INSTALA FRENTE AL CRUCE!]"), Game.COLOR_BAD)
 
 
 ## El gran contraataque: por todos los lados a la vez, con más hombres de lo normal.
@@ -246,7 +246,7 @@ func _gran_contraataque(i: int, o: Dictionary) -> void:
 	for k in maxi(n, 4):
 		_asalto(desde[k % desde.size()], meta)
 	if o.get("mg", false):
-		_mg_de_ola(desde[0], meta)
+		_mg_de_ola(desde[0], meta, i)
 	_t_mortero = 2.0
 	_t_ola = maxf(_t_ola, 20.0)
 	Red.anunciar("[¡GRAN CONTRAATAQUE ALEMÁN! ¡AGUANTEN!]", Game.COLOR_BAD)

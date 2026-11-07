@@ -61,6 +61,7 @@ func _ready() -> void:
 			"llegan": []})
 	_fase_lista = Objetivos.fase() if not adoptar.is_empty() and Objetivos.actual else 0
 	if not adoptar.is_empty():
+		_dispersadas = [0, 1, 2, 3]    # traspaso de anfitrión: nadie se dispersa de nuevo
 		_adoptar()
 		return
 	# Escuadra del jugador: los 3 que eligió de su compañía (jugando solo) o los de siempre
@@ -84,7 +85,6 @@ func _ready() -> void:
 			a.set_meta("perdido", true)
 			a.set_meta("fue_perdido", true)
 			a.set_meta("gracia_hasta", 75.0)    # escondidos: los alemanes casi no los ven (Noche.factor_vista)
-	_dispersadas = [0]
 	# Las otras tres, con su sargento, repartidas en su sector
 	for i in range(1, 4):
 		var s: Vector2 = SECTORES[i]
@@ -189,10 +189,6 @@ static func poner_jefe(esc: int, jugador: Node3D) -> void:
 ## por escuadra y solo al empezar (no si el jugador entra con la misión avanzada
 ## ni en un traspaso de anfitrión).
 var _dispersadas: Array = []
-# (x respecto del centro del sector, z del mapa): al sur de su potrero, lejos
-# de la granja y fuera de la vista de la MG42 del seto
-const DISPERSOS := [Vector2(-7, 13), Vector2(7, 11), Vector2(-11, 6), Vector2(10, 4)]
-
 
 func dispersar(esc: int) -> void:
 	if esc in _dispersadas or Misiones.actual().get("perdidos", []).is_empty():
@@ -202,34 +198,114 @@ func dispersar(esc: int) -> void:
 		return
 	if not Navegacion.listo:      # para dejarlos en un lugar caminable (se reintenta)
 		return
-	var s: Vector2 = SECTORES[esc]
-	var cx := (s.x + s.y) / 2.0
-	var k := 0
+	var hombres := []
 	for a in get_tree().get_nodes_in_group("aliados"):
-		if not a is Aliado or a.dead or a.escuadra != esc:
-			continue
-		var o: Vector2 = DISPERSOS[k % DISPERSOS.size()]
-		k += 1
-		# Dentro del potrero de su sector (los setos a lo largo están en x -20 y 18)
-		var borde := Vector2(-18.0, 16.0)
-		if cx < -20.0:
-			borde = Vector2(-43.0, -22.0)
-		elif cx > 18.0:
-			borde = Vector2(20.0, 43.0)
-		var quiero := Vector3(clampf(cx + o.x, borde.x, borde.y), 0.0, o.y)
+		if a is Aliado and not a.dead and a.escuadra == esc:
+			hombres.append(a)
+	if hombres.is_empty():        # sus hombres todavía no estaban: se reintenta (ver _process)
+		return
+	var lugares := _escondites(esc, hombres.size())
+	for k in hombres.size():
+		var a: Aliado = hombres[k]
+		var quiero: Vector3 = lugares[k]
 		var pos := Navegacion.cerca_de(quiero)
 		if pos.distance_to(quiero) > 3.0:     # el mapa de caminos aún no responde bien
 			pos = quiero
+		# Agachado detrás del seto o el planeador más cercano, si hay uno a mano
+		Coberturas.liberar(a)
+		a.cobertura = {}
+		a.en_cobertura = false
+		var c := Coberturas.cercano(a, pos, 5.0)
+		if not c.is_empty():
+			pos = c["pos"]
 		a.global_position = pos
 		a.velocity = Vector3.ZERO
 		a._ruta = PackedVector3Array()     # que no siga camino a donde iba
 		a._destino = {}
 		a.moviendo = false
+		a.tomar_cobertura_inicial()
+		if not a.en_cobertura:
+			a.cuerpo.pose = "agachado"     # sin seto a mano: agachado en el pasto
 		a.set_meta("perdido", true)
 		a.set_meta("fue_perdido", true)
-		a.set_meta("gracia_hasta", Game.elapsed + 75.0)   # escondidos: los alemanes casi no los ven
-	if k > 0:         # si sus hombres todavía no estaban, se reintenta (ver _process)
-		_dispersadas.append(esc)
+		a.set_meta("gracia_hasta", Game.elapsed + 75.0)   # además, mientras sigan perdidos casi no se ven (Noche)
+	_dispersadas.append(esc)
+
+
+## Dónde cae cada jugador en el salto (centro de su zona, como en mapa_planeador.gd).
+func _aterrizaje(esc: int) -> Vector3:
+	if esc == 0 or not Game.modo_red:
+		return Vector3(1, 0, 3)          # Salto.zona por defecto: Rect2(-14, -4, 30, 14)
+	var s: Vector2 = SECTORES[esc]
+	var x0 := clampf((s.x + s.y) / 2.0 - 8.0, -43.0, 27.0)
+	return Vector3(x0 + 8.0, 0, 5)
+
+
+## v0.39: los escondites de la misión a 22–46 m de donde cae el jugador, al
+## azar y uno por potrero si se puede (hay que cruzar los setos para juntarlos).
+## Si no alcanzan (cooperativo con 3–4 jugadores), los de 12–22 m, y si tampoco,
+## un punto al azar a 15–22 m de donde cae.
+var _usados: Array = []
+
+func _escondites(esc: int, n: int) -> Array:
+	var cae := _aterrizaje(esc)
+	var lista: Array = Misiones.actual().get("escondites", []).duplicate()
+	lista.shuffle()
+	var buenos := []
+	var medios := []
+	for e in lista:
+		if e in _usados:
+			continue
+		var d := Vector2(e.x - cae.x, e.y - cae.z).length()
+		if d >= 22.0 and d <= 46.0:
+			buenos.append(e)
+		elif d >= 12.0 and d < 22.0:
+			medios.append(e)
+	var elegidos := []
+	var potreros := []
+	for e in buenos:                       # primero, uno por potrero y separados
+		if elegidos.size() >= n:
+			break
+		var p := _potrero(e.x)
+		if not p in potreros and _separado(e, elegidos):
+			potreros.append(p)
+			elegidos.append(e)
+	for grupo in [buenos, medios]:         # después, los que falten, separados
+		for e in grupo:
+			if elegidos.size() >= n:
+				break
+			if not e in elegidos and _separado(e, elegidos):
+				elegidos.append(e)
+	var r := []
+	for e in elegidos:
+		_usados.append(e)
+		r.append(Vector3(e.x, 0, e.y))
+	while r.size() < n:                    # no quedan escondites: al azar, a 15–22 m
+		var mejor := Vector2.ZERO
+		for intento in 12:
+			var ang := _rng.randf() * TAU
+			var dist := _rng.randf_range(15.0, 22.0)
+			var qx := clampf(cae.x + cos(ang) * dist, -43.0, 43.0)
+			# al sur del potrero, lejos de la MG42 y de la granja (alemanes hasta z -12)
+			var q := Vector2(qx, clampf(cae.z + sin(ang) * dist, 2.0 if qx < -20.0 else -6.0, 13.0))
+			mejor = q
+			if _separado(q, []) and Vector2(q.x - cae.x, q.y - cae.z).length() >= 12.0:
+				break
+		_usados.append(mejor)
+		r.append(Vector3(mejor.x, 0, mejor.y))
+	return r
+
+
+## A más de 12 m de los ya elegidos (y de los de otras escuadras).
+func _separado(e: Vector2, elegidos: Array) -> bool:
+	for o in elegidos + _usados:
+		if e.distance_to(o) < 12.0:
+			return false
+	return true
+
+
+static func _potrero(x: float) -> int:
+	return 0 if x < -20.0 else (2 if x > 18.0 else 1)
 
 
 static func dar_orden_remota(esc: int, o: String) -> void:
@@ -416,7 +492,7 @@ func _process(delta: float) -> void:
 	_t = 1.0
 	# Cooperativo, misión con salto: la escuadra de cada jugador cae dispersa
 	for esc in 4:
-		if tiene_jefe(esc) and not esc in _dispersadas:
+		if (esc == 0 or tiene_jefe(esc)) and not esc in _dispersadas:
 			dispersar(esc)
 	# Fase nueva: llegan más refuerzos para cada escuadra
 	if Objetivos.actual and not Game.prueba_carga:

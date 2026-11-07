@@ -140,7 +140,7 @@ func _physics_process(delta: float) -> void:
 				_fuego_t = randf_range(1.3, 2.6)
 			_rafaga_t = 0.3 if en_cobertura else 0.0
 	elif not en_cobertura:
-		cuerpo.pose = "reposo"
+		cuerpo.pose = "agachado" if has_meta("perdido") else "reposo"   # disperso: agachado en el pasto
 		cuerpo.apuntar_a = Vector3.ZERO
 
 	if en_cobertura:

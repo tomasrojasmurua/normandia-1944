@@ -103,14 +103,19 @@ func _ready() -> void:
 		_muestra_para = _paracaidistas.pop_back()[0]
 	var principal: String = _p.weapons.slots[0] if _p.weapons else "nada"
 	if principal != "nada":
-		_modelo_cae = Armas.modelo_3d(principal)
-		_modelo_cae.set_meta("arma", principal)
+		# El arma que se caerá, armada ya y frente a la cámara mientras dice
+		# PREPARANDO (se dibuja una vez tal cual); luego se oculta hasta el tirón
+		_arma_lista = Node3D.new()
+		var mi := Armas.modelo_3d(principal)
+		mi.scale = Vector3.ONE * 1.4
+		_arma_lista.add_child(mi)
+		_arma_lista.set_meta("arma", principal)
+		add_child(_arma_lista)
+		_arma_lista.global_position = _p.camera.global_position + _p.global_basis * Vector3(0.4, -1.2, -1.4)
 	Noche.niebla_mult = 0.1
 
 
 func _exit_tree() -> void:
-	if _modelo_cae and not _modelo_cae.is_inside_tree():
-		_modelo_cae.free()
 	if actual == self:
 		actual = null
 		activo = false
@@ -125,6 +130,8 @@ func _process(delta: float) -> void:
 	if _muestra_para:
 		_muestra_para.queue_free()
 		_muestra_para = null
+		if _arma_lista:
+			_arma_lista.visible = false
 	if _aterrizado:
 		_negro = maxf(_negro - delta * 0.8, 0.0)
 		_capa.queue_redraw()
@@ -213,18 +220,18 @@ func _abrir() -> void:
 		var perdida := w.perder_principal()
 		_arma_perdida = perdida
 		Game.say("[¡EL TIRÓN TE ARRANCA EL %s! SOLO TE QUEDA LA PISTOLA]" % Armas.datos(perdida)["name"], Game.COLOR_BAD)
-		_arma_cae = Node3D.new()
-		var mi: Node3D
-		if _modelo_cae and _modelo_cae.get_meta("arma", "") == perdida:
-			mi = _modelo_cae
+		if _arma_lista and _arma_lista.get_meta("arma", "") == perdida:
+			_arma_cae = _arma_lista
+			_arma_cae.visible = true
 		else:
-			if _modelo_cae:
-				_modelo_cae.free()
-			mi = Armas.modelo_3d(perdida)
-		_modelo_cae = null
-		mi.scale = Vector3.ONE * 1.4
-		_arma_cae.add_child(mi)
-		add_child(_arma_cae)
+			if _arma_lista:
+				_arma_lista.queue_free()
+			_arma_cae = Node3D.new()
+			var mi := Armas.modelo_3d(perdida)
+			mi.scale = Vector3.ONE * 1.4
+			_arma_cae.add_child(mi)
+			add_child(_arma_cae)
+		_arma_lista = null
 		_arma_cae.global_position = _p.camera.global_position + _p.global_basis * Vector3(0.4, -1.2, -1.4)
 		_arma_cae.set_meta("vel", Vector3(_rng.randf_range(-1, 1), -4.0, _rng.randf_range(-1, 1)))
 
@@ -341,7 +348,7 @@ func _armar_capa() -> void:
 const TEX_BANDAS := "res://assets/salto/bandas.png"
 const TEX_TELA := "res://assets/salto/tela.png"
 var _muestra_para: Sprite3D = null  # ver _ready
-var _modelo_cae: Node3D = null      # el arma que se cae, armada al empezar (ver _ready)
+var _arma_lista: Node3D = null      # el arma que se caerá, armada al empezar (ver _ready)
 static var _bandas: Texture2D
 static var _tela: Texture2D
 

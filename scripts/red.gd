@@ -61,14 +61,16 @@ var _ultimo_dr := 9            # refuerzos alemanes que quedaban (por si hay tra
 # Sala de espera (antes de la misión): quién más está y si ya empezaron
 var sala := {}                 # id → [puesto (-1 = aún no se sabe), anfitrión]
 var en_curso := false          # el anfitrión ya empezó la misión
+var mision_sala := "omaha"     # la misión que eligió el anfitrión (Misiones), la que juegan todos
 var _t_lob := 0.0
+var _avisos_bengala := 0
 
 
 ## El anfitrión empieza la misión desde la sala de espera: avisa a los demás.
 static func empezar_partida() -> void:
 	if actual:
 		actual.en_curso = true
-		actual._ws.send_text('{"t":"ir"}')
+		actual._ws.send_text(JSON.stringify({"t": "ir", "m": actual.mision_sala}))
 
 
 ## Se conecta a la sala (desde el menú). Queda en la raíz del árbol.
@@ -120,7 +122,10 @@ func _process(delta: float) -> void:
 			_t_lob -= delta
 			if _t_lob <= 0.0 and mi_id != "" and _jugador() == null:
 				_t_lob = 1.0
-				_ws.send_text(JSON.stringify({"t": "lob", "id": mi_id, "pu": puesto, "a": anfitrion}))
+				var lob := {"t": "lob", "id": mi_id, "pu": puesto, "a": anfitrion}
+				if anfitrion:
+					lob["m"] = mision_sala
+				_ws.send_text(JSON.stringify(lob))
 			_t_envio -= delta
 			if _t_envio <= 0.0 and mi_id != "":
 				_t_envio += 1.0 / ENVIOS_POR_SEGUNDO
@@ -180,6 +185,11 @@ func _enviar_paquete() -> void:
 		paq["b"] = _lista_aliados()
 		paq["o"] = Objetivos.estado()
 		paq["dr"] = Defensa.restantes
+		paq["m"] = mision_sala
+		var tq := Tanque.actual
+		if tq and is_instance_valid(tq):
+			paq["tk"] = [snappedf(tq.global_position.x, 0.01), snappedf(tq.global_position.y, 0.01),
+				snappedf(tq.global_position.z, 0.01), snappedf(tq.rotation.y, 0.01), 1 if tq.dead else 0]
 	if paq.size() > 2:
 		_ws.send_text(JSON.stringify(paq))
 
@@ -214,7 +224,7 @@ func _lista_aliados() -> Array:
 		lista.append([rid_de(a), snappedf(q.x, 0.01), snappedf(q.y, 0.01), snappedf(q.z, 0.01),
 			snappedf(a.rotation.y, 0.01), maxi(POSES.find(a.cuerpo.pose), 0),
 			maxi(ANDARES.find(a.cuerpo.andar), 0), a.arma, a.escuadra, Escuadras.puesto_de(a),
-			a.nombre, int(a.health)])
+			a.nombre, int(a.health), (1 if a.has_meta("perdido") else 0) + (2 if a.has_meta("fue_perdido") else 0)])
 	return lista
 
 
@@ -250,6 +260,24 @@ func _anotar_cuerpo(bando: String, arma: String, pos: Vector3, giro: float) -> v
 	_cuerpos.append([bando, arma] + _v(pos) + [snappedf(giro, 0.01)])
 	if _cuerpos.size() > MAX_CUERPOS:
 		_cuerpos.pop_front()
+
+
+## Bengala alemana (misión de noche): los invitados la ven subir e iluminar.
+static func bengala(desde: Vector3, hacia: Vector3) -> void:
+	if es_anfitrion():
+		evento(["bg"] + _v(desde) + _v(hacia))
+
+
+## Tanque alemán (misión 2): ráfaga de su ametralladora o cañonazo, para verlo
+## en los invitados (el daño llega aparte: "h" y "x").
+static func tiro_tanque(desde: Vector3, hasta: Vector3, canon: bool) -> void:
+	if es_anfitrion():
+		evento(["tt"] + _v(desde) + _v(hasta) + [1 if canon else 0])
+
+
+## Invitado: le pegué al tanque (lo que de verdad cuenta pasa en el anfitrión).
+static func golpe_tanque(dano: float) -> void:
+	evento(["tg", snappedf(dano, 0.1)])
 
 
 static func silbido(pos: Vector3) -> void:
@@ -291,6 +319,12 @@ static func pedir_relevo() -> void:
 
 # ================================================================ recibir
 
+## La misión que eligió el anfitrión (solo las que existen).
+func _tomar_mision(m: Variant) -> void:
+	if Misiones.existe(str(m)):
+		mision_sala = str(m)
+
+
 func _recibir(texto: String) -> void:
 	var d: Variant = JSON.parse_string(texto)
 	if not d is Dictionary:
@@ -305,14 +339,18 @@ func _recibir(texto: String) -> void:
 				sala[str(o)] = [-1, false]
 		"lob":
 			sala[str(d["id"])] = [int(d.get("pu", -1)), bool(d.get("a", false))]
+			if d.has("m") and not anfitrion:
+				_tomar_mision(d["m"])
 		"ir":
+			if d.has("m"):
+				_tomar_mision(d["m"])
 			en_curso = true
 		"llena":
 			estado = "sala llena"
 		"entra":
 			sala[str(d["id"])] = [-1, false]
 			if anfitrion and en_curso:   # la misión ya empezó: que entre directo
-				_ws.send_text('{"t":"ir"}')
+				_ws.send_text(JSON.stringify({"t": "ir", "m": mision_sala}))
 			Game.say("[ENTRÓ UN JUGADOR]", Game.COLOR_GOOD)
 			if anfitrion and not _cuerpos.is_empty():
 				evento(["c", str(d["id"]), _cuerpos])
@@ -336,6 +374,8 @@ func _recibir(texto: String) -> void:
 		"est":
 			var id := str(d["id"])
 			if d.has("a"):     # el anfitrión ya está en la misión
+				if d.has("m"):
+					_tomar_mision(d["m"])
 				en_curso = true
 			if d.has("p"):
 				sala[id] = [int(d["p"][9]) if d["p"].size() > 9 else -1, d.has("a")]
@@ -347,6 +387,8 @@ func _recibir(texto: String) -> void:
 					_recibir_titeres(d["b"], "aliado")
 				if d.has("o"):
 					Objetivos.recibir(d["o"])
+				if d.has("tk"):
+					_recibir_tanque(d["tk"])
 				if d.has("dr"):
 					_ultimo_dr = int(d["dr"])
 			if d.has("l"):
@@ -392,7 +434,31 @@ func _recibir_titeres(lista: Array, bando: String) -> void:
 			t.puesto = int(a[9])
 			t.nombre = str(a[10])
 			t.health = float(a[11])
+			if a.size() > 12:     # misión 2: disperso tras el salto (para el grillo)
+				var f := int(a[12])
+				if f & 2:
+					t.set_meta("fue_perdido", true)
+				if f & 1:
+					t.set_meta("perdido", true)
+				elif t.has_meta("perdido"):
+					t.remove_meta("perdido")
+					if t.escuadra == puesto:      # lo encontraste (o te encontró otro jugador)
+						Game.say("[%s: %s]" % [t.nombre, Objetivos.FRASES_REUNIR[randi() % Objetivos.FRASES_REUNIR.size()]], Game.COLOR_GOOD)
 		t.recibir(ahora, Vector3(a[1], a[2], a[3]), float(a[4]), POSES[int(a[5])], ANDARES[int(a[6])])
+
+
+## Invitado: el tanque del anfitrión (se crea la primera vez que llega).
+func _recibir_tanque(a: Array) -> void:
+	var escena := _escena()
+	if escena == null:
+		return
+	var pos := Vector3(a[0], a[1], a[2])
+	var tq := Tanque.actual
+	if tq == null or not is_instance_valid(tq):
+		tq = Tanque.crear(escena, [pos])
+		tq.titere = true
+		tq.rotation.y = float(a[3])
+	tq.recibir(pos, float(a[3]), int(a[4]) == 1)
 
 
 ## Un caído que se borra (Game._retirar_caido): se saca de las listas.
@@ -482,6 +548,24 @@ func _suceso(ev: Array, de: String) -> void:
 			Game.explode(_vec(ev, 1), float(ev[4]), float(ev[5]), true)
 		"w":   # silbido de mortero
 			Game.play_at("silbido", _vec(ev, 1), 2.0)
+		"bg":  # bengala alemana
+			var escena := _escena()
+			if escena:
+				Bengala.disparar(escena, _vec(ev, 1), _vec(ev, 4))
+				_avisos_bengala += 1
+				if _avisos_bengala <= 3:
+					Game.say("[¡BENGALA! ¡CUERPO A TIERRA! (MANTÉN AGACHAR)]", Game.COLOR_BAD)
+		"tt":  # tiro del tanque
+			var desde := _vec(ev, 1)
+			if int(ev[7]) == 1:
+				Game.play_at("explosion_cerca", desde, 2.0)
+				Game.fogonazo(desde, true)
+			else:
+				Game.tracer(desde, _vec(ev, 4))
+				Game.play_at("rifle_far", desde, 0.0)
+		"tg":  # un invitado le pegó al tanque
+			if anfitrion and Tanque.actual and is_instance_valid(Tanque.actual):
+				Tanque.actual.danar(float(ev[1]))
 		"gr":  # granada alemana volando (solo se ve: la explosión llega aparte)
 			var escena := _escena()
 			if escena:

@@ -14,6 +14,7 @@ var _tactil := DisplayServer.is_touchscreen_available()
 var _sala_vieja := ""         # sala de una partida cooperativa que se cortó (recarga)
 
 
+const MISIONES_COOP := ["omaha", "planeador"]
 const LOGO := preload("res://assets/ui/logo.png")
 
 func _ready() -> void:
@@ -39,7 +40,7 @@ func _process(delta: float) -> void:
 		if Red.actual == null:
 			pantalla = "coop"
 		elif not Red.actual.anfitrion and Red.actual.en_curso:
-			Game.empezar_mision(Misiones.PRIMERA)    # el cooperativo, por ahora, solo en Omaha
+			Game.empezar_mision(Red.actual.mision_sala)    # la que eligió el anfitrión
 
 
 func _botones() -> Array:
@@ -80,6 +81,8 @@ func _botones() -> Array:
 		"espera":
 			var lista := [["salir_sala", Rect2(X, size.y - 44, 120, ALTO), "SALIR", true, ""]]
 			if Red.actual and Red.actual.anfitrion:
+				lista.append(["mision_coop", Rect2(X + 320, 118 - 14, ANCHO, ALTO), "MISIÓN", true,
+					Misiones.DATOS[Red.actual.mision_sala]["nombre"]])
 				lista.append(["empezar", Rect2(X, 236, ANCHO, ALTO), "¡EMPEZAR!", true,
 					"%d JUGADOR%s" % [_jugadores(), "ES" if _jugadores() > 1 else ""]])
 			return lista
@@ -147,7 +150,11 @@ func _pulsado(id: String) -> void:
 			pantalla = "inicio"
 		"empezar":
 			Red.empezar_partida()
-			Game.empezar_mision(Misiones.PRIMERA)    # el cooperativo, por ahora, solo en Omaha
+			Game.empezar_mision(Red.actual.mision_sala)
+		"mision_coop":   # el anfitrión elige: Omaha o el salto (las dos que se juegan en cooperativo)
+			if Red.actual:
+				var i := MISIONES_COOP.find(Red.actual.mision_sala)
+				Red.actual.mision_sala = MISIONES_COOP[(i + 1) % MISIONES_COOP.size()]
 		"volver_sala":
 			_entrar_sala(_sala_vieja)
 		"salir_sala":
@@ -253,6 +260,8 @@ func _espera() -> void:
 		if anf[i]:
 			estado += " - ANFITRIÓN"
 		Estilo.texto(self, estado, Vector2(X + 130, y), col)
+	if not r.anfitrion:
+		Estilo.texto(self, "MISIÓN: %s" % Misiones.DATOS[r.mision_sala]["nombre"], Vector2(X + 320, 118), Estilo.AMBAR)
 	if r.anfitrion:
 		Estilo.texto(self, "EMPIEZA CUANDO QUIERAS: LOS QUE LLEGUEN DESPUÉS ENTRAN EN MARCHA.", Vector2(X, 226),
 			Color(Estilo.CREMA, 0.75))

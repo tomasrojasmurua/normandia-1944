@@ -82,6 +82,9 @@ func _ready() -> void:
 		var a: Aliado = datos[0]["ranuras"][k]
 		if a:
 			a.set_meta("perdido", true)
+			a.set_meta("fue_perdido", true)
+			a.set_meta("gracia_hasta", 75.0)    # escondidos: los alemanes casi no los ven (Noche.factor_vista)
+	_dispersadas = [0]
 	# Las otras tres, con su sargento, repartidas en su sector
 	for i in range(1, 4):
 		var s: Vector2 = SECTORES[i]
@@ -178,6 +181,55 @@ static func poner_jefe(esc: int, jugador: Node3D) -> void:
 		l.es_lider = false
 		l.nombre = l.nombre.replace("SGT. ", "")
 	actual.datos[esc]["lider"] = null
+	actual.dispersar(esc)
+
+
+## Cooperativo, misión con salto: la escuadra de otro jugador también cae
+## dispersa por los potreros de su sector (como la del anfitrión). Una sola vez
+## por escuadra y solo al empezar (no si el jugador entra con la misión avanzada
+## ni en un traspaso de anfitrión).
+var _dispersadas: Array = []
+# (x respecto del centro del sector, z del mapa): al sur de su potrero, lejos
+# de la granja y fuera de la vista de la MG42 del seto
+const DISPERSOS := [Vector2(-7, 13), Vector2(7, 11), Vector2(-11, 6), Vector2(10, 4)]
+
+
+func dispersar(esc: int) -> void:
+	if esc in _dispersadas or Misiones.actual().get("perdidos", []).is_empty():
+		return
+	if Game.elapsed > 60.0 or Objetivos.fase() > 0:
+		_dispersadas.append(esc)
+		return
+	if not Navegacion.listo:      # para dejarlos en un lugar caminable (se reintenta)
+		return
+	var s: Vector2 = SECTORES[esc]
+	var cx := (s.x + s.y) / 2.0
+	var k := 0
+	for a in get_tree().get_nodes_in_group("aliados"):
+		if not a is Aliado or a.dead or a.escuadra != esc:
+			continue
+		var o: Vector2 = DISPERSOS[k % DISPERSOS.size()]
+		k += 1
+		# Dentro del potrero de su sector (los setos a lo largo están en x -20 y 18)
+		var borde := Vector2(-18.0, 16.0)
+		if cx < -20.0:
+			borde = Vector2(-43.0, -22.0)
+		elif cx > 18.0:
+			borde = Vector2(20.0, 43.0)
+		var quiero := Vector3(clampf(cx + o.x, borde.x, borde.y), 0.0, o.y)
+		var pos := Navegacion.cerca_de(quiero)
+		if pos.distance_to(quiero) > 3.0:     # el mapa de caminos aún no responde bien
+			pos = quiero
+		a.global_position = pos
+		a.velocity = Vector3.ZERO
+		a._ruta = PackedVector3Array()     # que no siga camino a donde iba
+		a._destino = {}
+		a.moviendo = false
+		a.set_meta("perdido", true)
+		a.set_meta("fue_perdido", true)
+		a.set_meta("gracia_hasta", Game.elapsed + 75.0)   # escondidos: los alemanes casi no los ven
+	if k > 0:         # si sus hombres todavía no estaban, se reintenta (ver _process)
+		_dispersadas.append(esc)
 
 
 static func dar_orden_remota(esc: int, o: String) -> void:
@@ -362,6 +414,10 @@ func _process(delta: float) -> void:
 	if _t > 0.0:
 		return
 	_t = 1.0
+	# Cooperativo, misión con salto: la escuadra de cada jugador cae dispersa
+	for esc in 4:
+		if tiene_jefe(esc) and not esc in _dispersadas:
+			dispersar(esc)
 	# Fase nueva: llegan más refuerzos para cada escuadra
 	if Objetivos.actual and not Game.prueba_carga:
 		var f := Objetivos.fase()

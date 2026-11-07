@@ -53,7 +53,6 @@ var _sin_tirador := {}             # objetivo "mg" → desde cuándo no tiene ti
 var _mecha := {}                   # objetivo "carga" → segundos que faltan para que explote
 var _fase_vista := -1
 var _hecho_visto: Array = []
-var _reunir_lista := {}            # objetivo "reunir" → [Aliado] los que estaban perdidos
 static var reunidos := Vector2i(1, 1)   # para el HUD: hombres juntos / total (contándote a ti)
 
 
@@ -181,9 +180,11 @@ static func foco(esc: int) -> int:
 		var v := 0.0
 		if not activo(i):
 			v += 1000.0                     # todavía no se puede: solo si no hay otro
-		if not esc in o.get("esc", []):
+		if not es_de(o, esc):
 			var c: Vector2 = o.get("carril", Vector2(-10, 10))
 			v += 100.0 + absf((c.x + c.y) / 2.0 - _centro_carril(esc))
+			if o["tipo"] == "reunir":
+				v += 500.0      # la escuadra de otro jugador: mejor apoyar otro objetivo
 		if v < mejor_v:
 			mejor_v = v
 			mejor = i
@@ -206,6 +207,8 @@ static func cercano(pos: Vector3, radio := 22.0) -> int:
 	for i in LISTA.size():
 		if hecho[i] or LISTA[i]["fase"] != fase() or not activo(i):
 			continue
+		if LISTA[i]["tipo"] == "reunir" and Game.modo_red and not es_de(LISTA[i], mio()):
+			continue        # la escuadra dispersa de otro jugador
 		var d: float = (LISTA[i]["pos"] as Vector3).distance_to(pos)
 		if d < mejor_d:
 			mejor_d = d
@@ -504,29 +507,24 @@ const FRASES_REUNIR := ["¡SARGENTO! CREÍ QUE ERA UN ALEMÁN", "¡GRACIAS A DIO
 
 
 func _reunir(i: int) -> void:
-	if not _reunir_lista.has(i):
-		if Escuadras.actual == null:
-			return
-		var l := []
-		for a in Escuadras.actual.datos[Escuadras.mi_escuadra]["ranuras"]:
-			if a and is_instance_valid(a) and a.has_meta("perdido"):
-				l.append(a)
-		_reunir_lista[i] = l
-	var lista: Array = _reunir_lista[i]
+	# Todos los que cayeron dispersos (cooperativo: los de cada jugador, que
+	# pueden llegar después: la lista se arma cada vez)
+	var lista := []
+	for a in get_tree().get_nodes_in_group("aliados"):
+		if a is Aliado and a.has_meta("fue_perdido"):
+			lista.append(a)
 	var listos := 0
 	for a in lista:
-		if not is_instance_valid(a) or a.dead:
-			listos += 1
-			continue
-		if not a.has_meta("perdido"):
+		if a.dead or not a.has_meta("perdido"):
 			listos += 1
 			continue
 		for j in _jugadores():
 			if j.global_position.distance_to(a.global_position) < DIST_REUNIR:
 				a.remove_meta("perdido")
 				a._pensar_t = 0.3
-				Game.say("[%s: %s]" % [a.nombre, FRASES_REUNIR[randi() % FRASES_REUNIR.size()]], Game.COLOR_GOOD)
-				Game.respuesta("resp_ok", a, 0.3)
+				if a.escuadra == Escuadras.mi_escuadra:   # los de otro jugador se lo dicen en su celular (Red)
+					Game.say("[%s: %s]" % [a.nombre, FRASES_REUNIR[randi() % FRASES_REUNIR.size()]], Game.COLOR_GOOD)
+					Game.respuesta("resp_ok", a, 0.3)
 				listos += 1
 				break
 	reunidos = Vector2i(1 + 3 - lista.size() + listos, 4)
@@ -541,8 +539,32 @@ static func hay_perdidos() -> bool:
 		return false
 	for i in LISTA.size():
 		if LISTA[i]["tipo"] == "reunir" and activo(i):
-			return true
+			return not Game.modo_red or perdidos_de(mio()).x > 0
 	return false
+
+
+## Los dispersos de una escuadra: x = los que faltan encontrar, y = los que se
+## dispersaron. En el anfitrión (o jugando solo) son los Aliado; en un invitado,
+## los títeres (Red anota "perdido" y "fue_perdido").
+static func perdidos_de(esc: int) -> Vector2i:
+	var r := Vector2i.ZERO
+	var arbol := Engine.get_main_loop() as SceneTree
+	for g in ["aliados", "aliados_remotos"]:
+		for a in arbol.get_nodes_in_group(g):
+			if a.dead or a.escuadra != esc or not a.has_meta("fue_perdido"):
+				continue
+			r.y += 1
+			if a.has_meta("perdido"):
+				r.x += 1
+	return r
+
+
+## ¿El objetivo es de esta escuadra? En el cooperativo, "reunir" es de cada
+## escuadra mientras le queden hombres dispersos.
+static func es_de(o: Dictionary, esc: int) -> bool:
+	if o["tipo"] == "reunir" and Game.modo_red:
+		return perdidos_de(esc).x > 0
+	return esc in o.get("esc", [])
 
 
 ## Los jugadores vivos (el de este celular y, en el anfitrión, los demás).
@@ -656,7 +678,7 @@ static func texto() -> String:
 		return "OBJETIVOS CUMPLIDOS"
 	var o: Dictionary = LISTA[f]
 	var txt := "OBJETIVO: %s (%d/%d)" % [o["n"], c.x, c.y]
-	if not mio() in o.get("esc", []):
+	if not es_de(o, mio()):
 		txt = "APOYA: %s (%d/%d)" % [o["n"], c.x, c.y]
 	if not activo(f):
 		txt = "ESPERA: %s" % LISTA[o["tras_i"]]["n"]
@@ -676,5 +698,12 @@ static func texto() -> String:
 	if o["tipo"] == "defender" and perdiendo > 0.0:
 		txt = "%s %d S" % [o.get("txt_recupera", "¡RECUPERA EL CRUCE!"), int(SEG_PERDER - perdiendo)]
 	if o["tipo"] == "reunir":
-		txt = "REÚNE A TU ESCUADRA (%d/%d): USA EL GRILLO" % [reunidos.x, reunidos.y]
+		var r := reunidos
+		if Game.modo_red:     # cada uno, la suya
+			var c2 := perdidos_de(mio())
+			r = Vector2i(1 + c2.y - c2.x, 1 + c2.y)
+		if r.x < r.y or not Game.modo_red:
+			txt = "REÚNE A TU ESCUADRA (%d/%d): USA EL GRILLO" % [r.x, r.y]
+		else:
+			txt = "APOYA: %s (%d/%d)" % [o["n"], c.x, c.y]
 	return txt

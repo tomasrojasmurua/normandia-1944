@@ -12,6 +12,9 @@ const VEL := 2.4
 const VIDA := 2
 const ALCANCE := 90.0
 
+static var actual: Tanque
+
+
 static func crear(escena: Node, ruta: Array) -> Tanque:
 	var t := Tanque.new()
 	t._ruta = ruta
@@ -31,9 +34,15 @@ var _t_mg := 3.0
 var _rafaga := 0
 var _t_rafaga := 0.0
 var _blanco: Node3D
+# Cooperativo: en los invitados el tanque es un títere que sigue al del
+# anfitrión (posición y si ya lo destruyeron); los golpes se los manda a él.
+var titere := false
+var _meta_pos := Vector3.ZERO
+var _meta_giro := 0.0
 
 
 func _ready() -> void:
+	actual = self
 	add_to_group("tanques")
 	var mesh: Mesh = load("res://assets/decorado/panzer.res")
 	var a := mesh.get_aabb()
@@ -59,12 +68,35 @@ func _ready() -> void:
 
 
 ## El punto al que se le apunta (para la IA de la bazuca).
+func _exit_tree() -> void:
+	if actual == self:
+		actual = null
+
+
+## Títere (invitado): dónde está el del anfitrión.
+func recibir(pos: Vector3, giro: float, destruido: bool) -> void:
+	if _meta_pos == Vector3.ZERO:
+		global_position = pos
+	_meta_pos = pos
+	_meta_giro = giro
+	if destruido and not dead:
+		_destruido()
+
+
 func centro() -> Vector3:
 	return global_position + Vector3(0, 1.3, 0)
 
 
 func _process(delta: float) -> void:
 	if dead:
+		return
+	if titere:
+		var d0 := _meta_pos - global_position
+		if d0.length() > 0.05:
+			global_position = global_position.lerp(_meta_pos, minf(delta * 6.0, 1.0))
+			if randf() < delta * 2.0:
+				Game._burst(global_position + Vector3(0, 0.4, 0) + global_basis.x * 3.0, Color(0.3, 0.3, 0.3), 1, 0.5, 1.2, 0.2, Vector3.UP, -0.1)
+		rotation.y = lerp_angle(rotation.y, _meta_giro, minf(delta * 6.0, 1.0))
 		return
 	# Avanza por la ruta
 	if _i < _ruta.size():
@@ -127,6 +159,7 @@ func _canonazo(b: Node3D) -> void:
 	var boca := centro() + (b.global_position - global_position).normalized() * 3.5
 	Game.play_at("explosion_cerca", boca, 2.0)
 	Game.fogonazo(boca, true)
+	Red.tiro_tanque(boca, boca, true)
 	Game._burst(boca, Color(0.4, 0.38, 0.35), 8, 2.0, 1.2, 0.3, Vector3.UP, -0.1)
 	if b is Player and b.global_position.distance_to(global_position) < 60.0:
 		b.shake(0.6)
@@ -144,6 +177,7 @@ func _tiro_mg() -> void:
 	var hasta: Vector3 = _blanco.global_position + Vector3(randf_range(-2, 2), randf_range(0.2, 1.8), randf_range(-2, 2))
 	Game.tracer(desde, hasta)
 	Game.play_at("rifle_far", desde, 0.0)
+	Red.tiro_tanque(desde, hasta, false)
 	if randf() < (0.06 if _blanco is Player else 0.12):
 		if _blanco is Player:
 			_blanco.take_damage(70.0, desde)
@@ -155,17 +189,25 @@ func _tiro_mg() -> void:
 func danar(dano: float) -> void:
 	if dead:
 		return
+	if titere:          # en un invitado: el golpe lo decide el anfitrión
+		Red.golpe_tanque(dano)
+		return
 	if dano < 150.0:
-		Game.say("[LA GRANADA NO LE HACE NADA AL TANQUE]", Game.COLOR_INFO)
+		Red.anunciar("[LA GRANADA NO LE HACE NADA AL TANQUE]", Game.COLOR_INFO)
 		return
 	_vida -= 2 if dano >= 350.0 else 1
 	if _vida > 0:
-		Game.say("[¡LE DIMOS AL TANQUE! ¡OTRA VEZ!]", Game.COLOR_GOOD)
+		Red.anunciar("[¡LE DIMOS AL TANQUE! ¡OTRA VEZ!]", Game.COLOR_GOOD)
 		return
+	Red.anunciar("[¡TANQUE DESTRUIDO!]", Game.COLOR_GOOD)
+	Game.bajas += 4
+	_destruido()
+
+
+## Queda ardiendo en la carretera (también el títere de los invitados).
+func _destruido() -> void:
 	dead = true
 	remove_from_group("tanques")
-	Game.say("[¡TANQUE DESTRUIDO!]", Game.COLOR_GOOD)
-	Game.bajas += 4
 	var m := Ambiente.material_modelo()
 	m.albedo_color = Color(0.25, 0.23, 0.22)
 	_modelo.material_override = m

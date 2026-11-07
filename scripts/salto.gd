@@ -274,9 +274,10 @@ func _colgar_walsh() -> void:
 	frente.y = 0.0
 	frente = frente.normalized() if frente.length() > 0.1 else Vector3(0, 0, -1)
 	# Hacia el centro del potrero y un poco hacia atrás: lejos de la MG42 del seto
-	var hacia_centro := -1.0 if _p.global_position.x > 0.0 else 1.0
+	var medio := zona.get_center().x
+	var hacia_centro := -1.0 if _p.global_position.x > medio else 1.0
 	var base := _p.global_position + Vector3(hacia_centro * 11.0, 0, 4.0)
-	base.x = clampf(base.x, -16.0, 16.0)
+	base.x = clampf(base.x, zona.position.x - 2.0, zona.end.x + 2.0)
 	base.z = clampf(base.z, -2.0, 11.0)
 	if Navegacion.listo:
 		base = Navegacion.cerca_de(base)

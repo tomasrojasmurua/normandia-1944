@@ -365,6 +365,7 @@ func _bengala() -> void:
 		return
 	var hacia := j.global_position + Vector3(_rng.randf_range(-14, 14), 0, _rng.randf_range(-14, 6))
 	Bengala.disparar(get_parent(), desde, hacia)
+	Red.bengala(desde, hacia)
 	if _avisos_bengala < 3 and Escuadras.actual:
 		_avisos_bengala += 1
 		for a in Escuadras.ranuras_jugador():

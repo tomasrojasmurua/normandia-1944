@@ -14,6 +14,11 @@ var cuerpo: SoldadoSprite
 var _cartel: Label3D
 var _fotos: Array = []        # [tiempo local de llegada, pos, giro, agachado, velocidad, muerto]
 var _muerto := false
+# Misión con salto: mientras baja en paracaídas se ve colgando de la tela, y al
+# llegar al suelo los alemanes no lo vieron caer (gracia, como el jugador local)
+var _salto := false
+var _en_el_aire := false
+var _para: Sprite3D
 
 
 func _ready() -> void:
@@ -34,6 +39,7 @@ func _ready() -> void:
 	_cartel.fixed_size = false
 	_cartel.position = Vector3(0, 2.15, 0)
 	add_child(_cartel)
+	_salto = not Misiones.actual().get("salto", {}).is_empty()
 
 
 func recibir(d: Dictionary) -> void:
@@ -68,8 +74,39 @@ func take_damage(amount: float, from_pos: Vector3, _es_bala := true) -> void:
 
 
 func disparo() -> void:
+	set_meta("disparo_t", Game.elapsed)    # de noche, el fogonazo lo delata (Noche.factor_vista)
 	if cuerpo:
 		cuerpo.disparo()
+
+
+## Misión con salto: en el aire, el paracaídas; al aterrizar, la gracia.
+func _paracaidas() -> void:
+	var aire := global_position.y > 2.5
+	if aire == _en_el_aire:
+		return
+	_en_el_aire = aire
+	if aire:
+		if _para == null:
+			_para = Sprite3D.new()
+			_para.texture = load("res://assets/salto/paracaidistas.png") if ResourceLoader.exists("res://assets/salto/paracaidistas.png") \
+				else Salto._textura_paracaidista()
+			_para.hframes = 2
+			_para.pixel_size = 0.14 if _para.texture.get_width() == 128 else 0.24
+			_para.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+			_para.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+			_para.modulate = Noche.tinte.lerp(Color.WHITE, 0.45)
+			_para.shaded = false
+			_para.position = Vector3(0, 4.0, 0)
+			add_child(_para)
+		_para.visible = true
+		cuerpo.visible = false
+		remove_from_group("americanos")     # en el aire no le disparan (igual no lo pueden matar)
+	else:
+		if _para:
+			_para.visible = false
+		cuerpo.visible = true
+		add_to_group("americanos")
+		set_meta("gracia_hasta", Game.elapsed + 45.0)
 
 
 func _process(_delta: float) -> void:
@@ -88,6 +125,8 @@ func _process(_delta: float) -> void:
 		f = clampf((t - a[0]) / (b[0] - a[0]), 0.0, 1.0)
 	global_position = (a[1] as Vector3).lerp(b[1], f)
 	rotation.y = lerp_angle(a[2], b[2], f)
+	if _salto:
+		_paracaidas()
 	var muerto: bool = b[5]
 	if muerto and not _muerto:
 		cuerpo.morir(-global_basis.z, false)

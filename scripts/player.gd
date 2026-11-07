@@ -135,8 +135,9 @@ func grillo() -> void:
 	_grillo_listo = Game.elapsed + 2.5
 	Game.play("grillo", 0.0)
 	var n := 0
-	for a in get_tree().get_nodes_in_group("aliados"):
-		if a.dead or not a.has_meta("perdido"):
+	# Los de tu escuadra (en un invitado, los títeres de los compañeros)
+	for a in get_tree().get_nodes_in_group("aliados") + get_tree().get_nodes_in_group("aliados_remotos"):
+		if a.dead or not a.has_meta("perdido") or a.escuadra != Escuadras.mi_escuadra:
 			continue
 		if global_position.distance_to(a.global_position) > 120.0:
 			continue

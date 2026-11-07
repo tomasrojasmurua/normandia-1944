@@ -326,7 +326,7 @@ func _dibujar_textos() -> void:
 		var foco := Objetivos.foco_mio()
 		Estilo.texto(_ci, Objetivos.texto_fase(), Vector2(6, oy), Color(Estilo.CREMA, 0.6))
 		oy += 12.0
-		var propio: bool = foco >= 0 and Objetivos.mio() in Objetivos.LISTA[foco].get("esc", [])
+		var propio: bool = foco >= 0 and Objetivos.es_de(Objetivos.LISTA[foco], Objetivos.mio())
 		var color := Estilo.ROJO if Objetivos.perdiendo > 0.0 else (Estilo.AMBAR_CLARO if propio else Estilo.VERDE_LED)
 		var txt := Objetivos.texto()
 		# Plaquita oscura con una barra de color; parpadea cuando el objetivo cambia

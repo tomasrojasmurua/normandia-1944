@@ -107,10 +107,20 @@ func _ready() -> void:
 	_hornear_navegacion.call_deferred()
 	# El salto en paracaídas: el comienzo jugable (salto.gd)
 	var salto: Dictionary = Misiones.actual().get("salto", {})
-	if not salto.is_empty() and p and not Game.prueba_carga and not Game.modo_red:
+	if not salto.is_empty() and p and not Game.prueba_carga:
 		var s := Salto.new()
 		s.desde = salto["desde"]
 		s.viento = salto["viento"]
+		# Cooperativo: cada jugador salta de su propio avión, sobre su sector
+		if Game.modo_red and Escuadras.mi_escuadra != 0:
+			var sec: Array = Misiones.dato("sectores")
+			var mia: Vector2 = sec[Escuadras.mi_escuadra]
+			var s0: Vector2 = sec[0]
+			var cx := (mia.x + mia.y) / 2.0
+			var c0 := (s0.x + s0.y) / 2.0
+			s.desde.x += cx - c0
+			var x0 := clampf(cx - 8.0, -ANCHO + 3.0, ANCHO - 19.0)
+			s.zona = Rect2(x0, 0.0, 16.0, 10.0)
 		get_parent().add_child.call_deferred(s)
 
 

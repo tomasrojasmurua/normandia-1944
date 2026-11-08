@@ -12,9 +12,11 @@ class_name Compania
 ##   campaña (Campana); solo si quedan menos de 3 disponibles llegan gratis.
 ## - Tú eres el sargento MURPHY: no está en la lista (si caes, sigues como el
 ##   compañero que te releva; si ese cae, ese sí cuenta como caído).
-## Solo cuenta jugando solo (no en el cooperativo ni en la prueba de carga).
+## Cuenta jugando solo y en la campaña cooperativa (v0.41): ahí la compañía es
+## una sola y cada jugador elige sus 3 hombres en la previa (CampanaRed).
 
 const ARCHIVO := "user://campana.cfg"
+static var archivo := ARCHIVO           # Campana.usar lo cambia
 const MAXIMO := 15            # hombres vivos en la compañía (sin contar a Murphy)
 const MINIMO_LISTOS := 3      # si quedan menos disponibles, llegan reclutas gratis
 const PROB_MUERTO := 0.55     # el resto de los caídos queda herido
@@ -67,15 +69,17 @@ static var ultimos_heridos: Array = []
 
 ## ¿Cuenta la compañía en esta partida?
 static func activa() -> bool:
-	return not Game.modo_red and not Game.prueba_carga and not Game.mision_suelta
+	return (not Game.modo_red or CampanaRed.coop) and not Game.prueba_carga and not Game.mision_suelta
 
 
 static func cargar() -> void:
 	if _cargada:
 		return
 	_cargada = true
+	if CampanaRed.espejo:
+		return
 	var cfg := ConfigFile.new()
-	if cfg.load(ARCHIVO) != OK or not cfg.has_section_key("compania", "hombres"):
+	if cfg.load(archivo) != OK or not cfg.has_section_key("compania", "hombres"):
 		nueva()
 		return
 	hombres = cfg.get_value("compania", "hombres", [])
@@ -85,13 +89,27 @@ static func cargar() -> void:
 
 
 static func guardar() -> void:
+	if CampanaRed.espejo:
+		return
 	var cfg := ConfigFile.new()
-	cfg.load(ARCHIVO)
+	cfg.load(archivo)
 	cfg.set_value("compania", "hombres", hombres)
 	cfg.set_value("compania", "elegidos", elegidos)
 	cfg.set_value("compania", "misiones", misiones_jugadas)
-	cfg.save(ARCHIVO)
+	cfg.save(archivo)
 
+
+## Cooperativo: para los invitados.
+static func estado_red() -> Dictionary:
+	return {"hombres": hombres, "elegidos": elegidos, "misiones": misiones_jugadas, "informe": informe}
+
+
+static func aplicar_red(d: Dictionary) -> void:
+	hombres = d.get("hombres", hombres)
+	elegidos = d.get("elegidos", elegidos)
+	misiones_jugadas = int(d.get("misiones", misiones_jugadas))
+	informe = d.get("informe", informe)
+	_cargada = true
 
 ## Empieza de cero: los 15 de siempre, todos sanos.
 static func nueva() -> void:
@@ -150,6 +168,8 @@ static func _limpiar_elegidos() -> void:
 ## menos de 3, se completa con los primeros disponibles.
 static func equipo() -> Array:
 	cargar()
+	if CampanaRed.coop:
+		return equipo_de(CampanaRed.mi_puesto())
 	_limpiar_elegidos()
 	var lista: Array = elegidos.duplicate()
 	for h in listos():
@@ -157,6 +177,40 @@ static func equipo() -> Array:
 			break
 		if not h["n"] in lista:
 			lista.append(h["n"])
+	return _armar(lista)
+
+
+## Campaña cooperativa: los 3 de un puesto (0–3). Lo que eligió ese jugador y,
+## si faltan, los primeros disponibles que nadie eligió (siempre los mismos
+## en todos los celulares: el reparto depende solo del estado compartido).
+static func equipo_de(puesto: int) -> Array:
+	var tomados := {}
+	for pu in 4:
+		for n in CampanaRed.elegidos_de(pu):
+			if hombre(n).get("estado", "") == "ok" and not tomados.has(n):
+				tomados[n] = pu
+	var lista: Array = []
+	for n in tomados:
+		if tomados[n] == puesto and lista.size() < 3:
+			lista.append(n)
+	if lista.size() < 3:
+		# Completar: los libres se reparten en orden entre los puestos con jugador
+		var libres: Array = listos().filter(func(h: Dictionary) -> bool: return not tomados.has(h["n"])) \
+			.map(func(h: Dictionary) -> String: return h["n"])
+		for pu in CampanaRed.puestos():
+			var mios: Array = []
+			for n in tomados:
+				if tomados[n] == pu:
+					mios.append(n)
+			while mios.size() < 3 and not libres.is_empty():
+				var n: String = libres.pop_front()
+				mios.append(n)
+				if pu == puesto:
+					lista.append(n)
+	return _armar(lista)
+
+
+static func _armar(lista: Array) -> Array:
 	var out := []
 	for n in lista:
 		var h := hombre(n)
@@ -167,13 +221,19 @@ static func equipo() -> Array:
 # ================================================================ la misión
 
 static func empezar_mision() -> void:
-	en_mision = activa()
+	en_mision = activa() and not CampanaRed.espejo
 	caidos = []
 	companeros = []
-	informe = []
+	if not CampanaRed.espejo:
+		informe = []
 	if en_mision:
-		for e in equipo():
-			companeros.append(e[0])
+		if CampanaRed.coop:     # los de todos los jugadores
+			for pu in CampanaRed.puestos():
+				for e in equipo_de(pu):
+					companeros.append(e[0])
+		else:
+			for e in equipo():
+				companeros.append(e[0])
 
 
 ## Cayó un hombre de la compañía (compañero con IA o el jugador siendo él).
@@ -186,7 +246,7 @@ static func caido(nombre: String) -> void:
 ## ascensos, los que se curan, los reemplazos que se unen y los reclutas.
 ## `reemplazos` = nombres de los refuerzos de tu escuadra que siguen vivos.
 static func cerrar_mision(resultado: int, reemplazos: Array = []) -> void:
-	if not en_mision:
+	if not en_mision or CampanaRed.espejo:
 		return
 	en_mision = false
 	misiones_jugadas += 1

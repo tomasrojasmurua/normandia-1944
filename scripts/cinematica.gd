@@ -228,6 +228,9 @@ func _terminar() -> void:
 		a.stop()
 	if _musica:
 		_musica.stop()
+	if CampanaRed.espejo:
+		queue_redraw()      # el invitado espera: la siguiente pantalla la decide el anfitrión
+		return
 	if despues == "mapa":
 		Game.ir_al_mapa()
 	else:
@@ -245,6 +248,8 @@ func _input(event: InputEvent) -> void:
 	if not toque:
 		return
 	get_viewport().set_input_as_handled()
+	if CampanaRed.espejo:
+		return      # la salta el anfitrión (para todos)
 	if _saltar > 0.0:
 		_terminar()
 	else:
@@ -357,6 +362,8 @@ func _draw() -> void:
 	draw_rect(Rect2(Vector2.ZERO, size), Color.BLACK)
 	if _terminada and despues == "mision":
 		Estilo.texto_c(self, "PREPARANDO %s..." % Misiones.dato("nombre"), size.x / 2, size.y / 2, Estilo.AMBAR)
+	elif _terminada and CampanaRed.espejo:
+		Estilo.texto_c(self, "ESPERANDO AL ANFITRIÓN...", size.x / 2, size.y / 2, Estilo.AMBAR)
 	if _terminada or _i >= _planos.size():
 		return
 	var p: Dictionary = _planos[_i]

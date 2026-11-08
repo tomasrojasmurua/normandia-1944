@@ -14,7 +14,7 @@ var _tactil := DisplayServer.is_touchscreen_available()
 var _sala_vieja := ""         # sala de una partida cooperativa que se cortó (recarga)
 
 
-const MISIONES_COOP := ["omaha", "planeador"]
+const MISIONES_COOP := ["campana", "omaha", "planeador"]    # "campana": la campaña cooperativa (v0.41)
 const LOGO := preload("res://assets/ui/logo.png")
 
 func _ready() -> void:
@@ -22,6 +22,7 @@ func _ready() -> void:
 	if Red.actual:   # volvió de una partida cooperativa: se sale de la sala
 		Red.actual.queue_free()
 		Game.olvidar_sala()
+	CampanaRed.salir()    # la campaña de un jugador vuelve a ser la de este celular
 	_sala_vieja = Game.sala_reciente()
 	Game.modo_red = false
 	Game.mision_suelta = false
@@ -40,7 +41,10 @@ func _process(delta: float) -> void:
 		if Red.actual == null:
 			pantalla = "coop"
 		elif not Red.actual.anfitrion and Red.actual.en_curso:
-			Game.empezar_mision(Red.actual.mision_sala)    # la que eligió el anfitrión
+			if Red.actual.mision_sala == "campana":
+				CampanaRed.entrar_invitado()     # la campaña cooperativa: se sigue al anfitrión
+			else:
+				Game.empezar_mision(Red.actual.mision_sala)    # la que eligió el anfitrión
 
 
 func _botones() -> Array:
@@ -82,7 +86,7 @@ func _botones() -> Array:
 			var lista := [["salir_sala", Rect2(X, size.y - 44, 120, ALTO), "SALIR", true, ""]]
 			if Red.actual and Red.actual.anfitrion:
 				lista.append(["mision_coop", Rect2(X + 320, 118 - 14, ANCHO, ALTO), "MISIÓN", true,
-					Misiones.DATOS[Red.actual.mision_sala]["nombre"]])
+					_nombre_coop(Red.actual.mision_sala)])
 				lista.append(["empezar", Rect2(X, 236, ANCHO, ALTO), "¡EMPEZAR!", true,
 					"%d JUGADOR%s" % [_jugadores(), "ES" if _jugadores() > 1 else ""]])
 			return lista
@@ -109,6 +113,7 @@ func _pulsado(id: String) -> void:
 	match id:
 		"coop":
 			pantalla = "coop"
+			Game.aviso_menu = ""
 		"crear":
 			_entrar_sala("%04d" % (randi() % 10000))
 		"unirse":
@@ -149,8 +154,11 @@ func _pulsado(id: String) -> void:
 		"volver":
 			pantalla = "inicio"
 		"empezar":
-			Red.empezar_partida()
-			Game.empezar_mision(Red.actual.mision_sala)
+			if Red.actual.mision_sala == "campana":
+				CampanaRed.empezar_anfitrion()    # el mapa (y el prólogo, si es nueva)
+			else:
+				Red.empezar_partida()
+				Game.empezar_mision(Red.actual.mision_sala)
 		"mision_coop":   # el anfitrión elige: Omaha o el salto (las dos que se juegan en cooperativo)
 			if Red.actual:
 				var i := MISIONES_COOP.find(Red.actual.mision_sala)
@@ -202,6 +210,8 @@ func _draw() -> void:
 			_conectando()
 		"espera":
 			_espera()
+	if Game.aviso_menu != "" and pantalla in ["inicio", "coop"]:
+		Estilo.texto(self, Game.aviso_menu, Vector2(X, s.y - 52), Estilo.ROJO)
 	_dibujar_botones()
 
 
@@ -261,8 +271,12 @@ func _espera() -> void:
 			estado += " - ANFITRIÓN"
 		Estilo.texto(self, estado, Vector2(X + 130, y), col)
 	if not r.anfitrion:
-		Estilo.texto(self, "MISIÓN: %s" % Misiones.DATOS[r.mision_sala]["nombre"], Vector2(X + 320, 118), Estilo.AMBAR)
-	if r.anfitrion:
+		Estilo.texto(self, "MISIÓN: %s" % _nombre_coop(r.mision_sala), Vector2(X + 320, 118), Estilo.AMBAR)
+	if r.anfitrion and r.mision_sala == "campana":
+		Estilo.texto(self, "LA CAMPAÑA SE GUARDA EN TU CELULAR (APARTE DE LA DE UN JUGADOR).", Vector2(X, 214),
+			Color(Estilo.CREMA, 0.75))
+		Estilo.texto(self, "TÚ DECIDES EN EL MAPA; LOS DEMÁS LO VEN EN VIVO.", Vector2(X, 226), Color(Estilo.CREMA, 0.75))
+	elif r.anfitrion:
 		Estilo.texto(self, "EMPIEZA CUANDO QUIERAS: LOS QUE LLEGUEN DESPUÉS ENTRAN EN MARCHA.", Vector2(X, 226),
 			Color(Estilo.CREMA, 0.75))
 	else:
@@ -283,6 +297,21 @@ func _unirse() -> void:
 	for i in 4:
 		txt += (_codigo[i] if i < _codigo.length() else "_") + " "
 	Estilo.texto(self, txt, Vector2(X, 134), Estilo.AMBAR, 33)
+
+
+## Nombre de lo que se juega en la sala: una misión o la campaña cooperativa.
+func _nombre_coop(id: String) -> String:
+	if id == "campana":
+		return "CAMPAÑA" + (" (TURNO %d)" % _turno_coop() if _turno_coop() > 0 else "")
+	return Misiones.DATOS[id]["nombre"] if Misiones.existe(id) else id
+
+
+## Turno de la campaña cooperativa guardada en este celular (0 = no hay).
+func _turno_coop() -> int:
+	var cfg := ConfigFile.new()
+	if cfg.load(CampanaRed.ARCHIVO_COOP) != OK or not cfg.has_section_key("campana", "turnos"):
+		return 0
+	return int(cfg.get_value("campana", "turnos", 0)) + 1
 
 
 ## ¿Hay una campaña empezada en este celular?

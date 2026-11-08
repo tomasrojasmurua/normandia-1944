@@ -91,9 +91,19 @@ func _ready() -> void:
 		var cx := (s.x + s.y) / 2.0
 		var hz: Vector2 = Misiones.dato("hombres_z")
 		datos[i]["lider"] = _soldado(i, Vector3(cx, 0, Misiones.dato("lider_z")), "thompson", NOMBRES_SARGENTO[i], true)
+		# Campaña cooperativa (v0.41): si ese puesto tiene jugador, van los 3 que
+		# eligió de la compañía (si caen, cuentan como caídos de la compañía)
+		var eq: Array = Compania.equipo_de(i) if CampanaRed.coop and Compania.en_mision and i in CampanaRed.puestos() else []
 		for k in 3:
 			var p := Vector3(cx + (k - 1) * 4.0 + _rng.randf_range(-1, 1), 0, _rng.randf_range(hz.x, hz.y))
-			datos[i]["ranuras"][k] = _soldado(i, p, ["garand", "garand", "bar"][k], _nombre_nuevo(), false)
+			if k < eq.size():
+				var a := _soldado(i, p, eq[k][1], eq[k][0], false)
+				a.esp = eq[k][2]
+				a.rango = eq[k][3]
+				a.set_meta("compania", true)
+				datos[i]["ranuras"][k] = a
+			else:
+				datos[i]["ranuras"][k] = _soldado(i, p, ["garand", "garand", "bar"][k], _nombre_nuevo(), false)
 
 
 ## Traspaso de anfitrión: los compañeros que eran títeres ya son de verdad.

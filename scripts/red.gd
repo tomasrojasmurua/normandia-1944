@@ -143,6 +143,7 @@ func _process(delta: float) -> void:
 			if _t_limpiar <= 0.0:
 				_t_limpiar = 1.0
 				_limpiar_titeres()
+			CampanaRed.procesar(delta)     # campaña cooperativa: el anfitrión manda el mapa
 		WebSocketPeer.STATE_CLOSED:
 			if _abierto or estado == "conectando":
 				if estado != "sala llena":
@@ -324,8 +325,14 @@ static func pedir_relevo() -> void:
 
 ## La misión que eligió el anfitrión (solo las que existen).
 func _tomar_mision(m: Variant) -> void:
-	if Misiones.existe(str(m)):
+	if Misiones.existe(str(m)) or str(m) == "campana":     # "campana": la campaña cooperativa (v0.41)
 		mision_sala = str(m)
+
+
+## Manda un mensaje suelto (la campaña cooperativa usa los suyos: CampanaRed).
+func enviar(texto: String) -> void:
+	if _abierto:
+		_ws.send_text(texto)
 
 
 func _recibir(texto: String) -> void:
@@ -357,14 +364,25 @@ func _recibir(texto: String) -> void:
 			Game.say("[ENTRÓ UN JUGADOR]", Game.COLOR_GOOD)
 			if anfitrion and not _cuerpos.is_empty():
 				evento(["c", str(d["id"]), _cuerpos])
+		"cp":       # campaña cooperativa: el mapa, la previa... del anfitrión
+			CampanaRed.recibir(d)
+		"cpe", "cpa":   # campaña cooperativa: un invitado elige a sus hombres
+			CampanaRed.pedido(d)
 		"sale":
 			sala.erase(str(d["id"]))
 			_quitar(str(d["id"]))
+			if d.get("anfitrion", false) and CampanaRed.coop:
+				# La campaña vive en el celular del anfitrión: sin él no se puede seguir
+				Game.aviso_menu = "SE FUE EL ANFITRIÓN: LA CAMPAÑA QUEDÓ GUARDADA EN SU CELULAR."
+				Game.ir_al_menu.call_deferred()
+				return
 			if d.get("anfitrion", false):
 				Game.say("[SE FUE EL ANFITRIÓN: OTRO JUGADOR TOMA SU LUGAR]", Game.COLOR_BAD)
 			else:
 				Game.say("[UN JUGADOR SE FUE]", Game.COLOR_BAD)
 		"anfitrion":
+			if CampanaRed.coop:
+				return       # (ya se vuelve al menú: ver "sale")
 			if str(d["id"]) == mi_id and not anfitrion:
 				if _jugador() == null:   # aún en la sala de espera: solo cambia el papel
 					anfitrion = true
@@ -624,11 +642,18 @@ func _suceso(ev: Array, de: String) -> void:
 ## Anfitrión: un invitado cayó. Toma al compañero vivo más cercano de su
 ## escuadra; si no hay, vuelve desde la orilla (gasta un refuerzo); si no
 ## queda nada, queda fuera hasta el fin de la misión.
+var _relevos := {}             # campaña cooperativa: id del invitado → hombre de la compañía que tomó
+
 func _dar_relevo(id: String) -> void:
 	var r = remotos.get(id)
 	if r == null or not is_instance_valid(r):
 		return
+	if _relevos.has(id):        # era un hombre de la compañía (tomó su lugar) y cayó: ese cuenta
+		Compania.caido(_relevos[id])
+		_relevos.erase(id)
 	var a := Escuadras.relevo_de(r.escuadra, r.global_position)
+	if a and a.has_meta("compania"):
+		_relevos[id] = a.nombre.replace("SGT. ", "")
 	if a:
 		evento(["R", id, "a"] + _v(a.global_position) + [a.arma, a.nombre])
 		evento(["q", rid_de(a)])
@@ -720,7 +745,7 @@ func _volverse_anfitrion() -> void:
 
 func _quitar(id: String) -> void:
 	if remotos.has(id):
-		var r: Node = remotos[id]
+		var r = remotos[id]       # (sin tipo: puede estar ya liberado si se cambió de escena)
 		if is_instance_valid(r):
 			r.queue_free()
 		remotos.erase(id)

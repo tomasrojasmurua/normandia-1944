@@ -37,6 +37,7 @@ var modo_red := false
 var bajas := 0        # alemanes abatidos en la misión (para la pantalla final)
 var caidos := 0       # americanos caídos (compañeros y jugadores)         # prototipo del cooperativo (ver red.gd)
 var sala := ""                # código de la sala (4 números)
+var aviso_menu := ""          # un aviso para mostrar al volver al menú (p. ej. "se fue el anfitrión")
 var mision_suelta := false    # menú "PROBAR EL SALTO": la misión aparte, sin campaña ni compañía
 var prueba_carga := false     # menú "PRUEBA DE CARGA": playa llena (ver prueba_carga.gd)
 var soldados_3d := false       # true = modelos 3D (pesados); false = sprites
@@ -265,6 +266,7 @@ func ver_cinematica(id: String, despues: String) -> void:
 	get_tree().paused = false
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	get_tree().change_scene_to_file("res://scenes/cinematica.tscn")
+	CampanaRed.ir_a("cine:%s:%s" % [id, despues])     # campaña cooperativa: todos la ven
 
 
 ## Mapa de la campaña (jugando solo): el coronel, las misiones y el diario.
@@ -273,6 +275,7 @@ func ir_al_mapa() -> void:
 	get_tree().paused = false
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	get_tree().change_scene_to_file("res://scenes/mapa.tscn")
+	CampanaRed.ir_a("mapa")
 
 
 ## Pantalla previa a la misión (jugando solo): elegir a los hombres.
@@ -281,6 +284,7 @@ func ir_a_previa() -> void:
 	get_tree().paused = false
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	get_tree().change_scene_to_file("res://scenes/previa.tscn")
+	CampanaRed.ir_a("previa")
 
 
 ## Si se deja una misión a medias (menú, reiniciar), sus caídos cuentan igual.
@@ -349,7 +353,8 @@ func empezar_mision(id := "", sin_cinematica := false) -> void:
 	if id != "" and Misiones.existe(id):
 		mision = id
 	# Jugando solo, antes de la misión va su cinemática (que después vuelve aquí)
-	if not sin_cinematica and not modo_red and not prueba_carga and Cinematica.tiene(mision):
+	# (en la campaña cooperativa también: la ven todos, ver CampanaRed)
+	if not sin_cinematica and (not modo_red or CampanaRed.anfitrion()) and not prueba_carga and Cinematica.tiene(mision):
 		ver_cinematica(mision, "mision")
 		return
 	Compania.empezar_mision()
@@ -359,6 +364,7 @@ func empezar_mision(id := "", sin_cinematica := false) -> void:
 	start_minutes = Misiones.dato("hora")
 	get_tree().paused = false
 	get_tree().change_scene_to_file(Misiones.dato("escena"))
+	CampanaRed.ir_a("mision:" + mision)
 
 
 func clock_text() -> String:

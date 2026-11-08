@@ -546,4 +546,4 @@ func _morir(dir: Vector3) -> void:
 	Game.caidos += 1
 	Red.murio(self, dir, false)
 	if has_meta("compania"):
-		Compania.caido(nombre)
+		Compania.caido(nombre.replace("SGT. ", ""))    # (si lo ascendieron al caer su sargento)

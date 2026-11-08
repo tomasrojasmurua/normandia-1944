@@ -32,6 +32,7 @@ static func mostrar(arbol: SceneTree, res: int, b: int, c: int, s: int) -> void:
 		arbol.paused = true
 	Compania.cerrar_mision(res, Escuadras.reemplazos_vivos())
 	Campana.cerrar_mision(res)
+	CampanaRed.cambio()     # campaña cooperativa: el informe de la compañía, a los invitados
 
 
 func _ready() -> void:
@@ -52,7 +53,7 @@ func _ancho() -> float:
 func _botones() -> Array:
 	var c := size / 2.0
 	var l := [["menu", Rect2(c.x - 105, c.y + 92, 100, 26), "MENÚ", true, ""]]
-	if not Game.modo_red:
+	if not Game.modo_red or CampanaRed.anfitrion():   # campaña cooperativa: sigue el anfitrión
 		l.append(["otra", Rect2(c.x + 5, c.y + 92, 100, 26), "CONTINUAR" if resultado > 0 else "OTRA VEZ", true, ""])
 	else:
 		l[0][1] = Rect2(c.x - 50, c.y + 92, 100, 26)
@@ -110,4 +111,6 @@ func _draw() -> void:
 		for linea in Compania.informe.slice(0, 9):
 			Estilo.texto(self, linea[0], Vector2(xi, yi), colores.get(linea[1], Estilo.CREMA), Estilo.TAM, panel.end.x - xi - 10)
 			yi += 13
+	if CampanaRed.espejo:
+		Estilo.texto_c(self, "EL ANFITRIÓN DECIDE CÓMO SEGUIR...", c.x, c.y + 84, Estilo.AMBAR_CLARO)
 	_dibujar_botones()

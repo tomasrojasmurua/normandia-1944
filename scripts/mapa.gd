@@ -96,8 +96,9 @@ func _ready() -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	Campana.cargar()
-	# Campaña nueva: primero el prólogo (y luego vuelve aquí, al primer diario)
-	if not Campana.prologo and Campana.turnos == 0:
+	# Campaña nueva: primero el prólogo (y luego vuelve aquí, al primer diario).
+	# En la campaña cooperativa lo decide el anfitrión (los invitados lo siguen).
+	if not Campana.prologo and Campana.turnos == 0 and not CampanaRed.espejo:
 		Campana.prologo = true
 		Campana.guardar()
 		Game.ver_cinematica.call_deferred("prologo", "mapa")
@@ -121,7 +122,24 @@ func _process(delta: float) -> void:
 		return
 	_t += delta
 	_confirmar_nueva = maxf(_confirmar_nueva - delta, 0.0)
+	_espejo()
 	_capa.queue_redraw()
+
+
+## Campaña cooperativa (v0.41): el anfitrión cuenta qué está mirando; el
+## invitado ve exactamente eso (la carta elegida, el diario, el tutorial...).
+func _espejo() -> void:
+	if CampanaRed.anfitrion():
+		CampanaRed.ui = {"pantalla": pantalla, "sel": _sel, "releer": _releer, "tuto": _paso_tuto,
+			"info": _info, "nueva": _confirmar_nueva > 0.0}
+	elif CampanaRed.espejo:
+		var u := CampanaRed.ui
+		pantalla = str(u.get("pantalla", pantalla))
+		_sel = str(u.get("sel", _sel))
+		_releer = bool(u.get("releer", false))
+		_paso_tuto = int(u.get("tuto", 0))
+		_info = str(u.get("info", ""))
+		_confirmar_nueva = 1.0 if u.get("nueva", false) else 0.0
 
 
 func _ids_ofrecidas() -> Array:
@@ -236,6 +254,9 @@ func _rect_carta(i: int) -> Rect2:
 
 
 func _pulsado(id: String) -> void:
+	if CampanaRed.espejo and id != "menu":
+		return      # invitado: decide el anfitrión (solo puede irse al menú)
+	CampanaRed.cambio()
 	_info = ""
 	if id.begins_with("z:"):
 		var mid := id.substr(2)
@@ -387,7 +408,21 @@ func _dibujar_capa() -> void:
 			_presion(ci)
 		"tutorial":
 			_tutorial(ci)
+	if CampanaRed.coop:
+		_cartel_coop(ci)
 
+
+## Campaña cooperativa: quién decide y quiénes están.
+func _cartel_coop(ci: CanvasItem) -> void:
+	var r := _rect_mapa()
+	var nombres := []
+	for pu in CampanaRed.puestos():
+		nombres.append(CampanaRed.nombre_de(pu))
+	var t := "CAMPAÑA COOPERATIVA: " + ", ".join(nombres)
+	t += " - DECIDE %s" % CampanaRed.nombre_de(CampanaRed.puesto_anfitrion()) if CampanaRed.espejo else " - TÚ DECIDES"
+	var caja := Rect2(r.position.x + 4, r.end.y - 20, minf(Estilo.ancho_texto(t) + 12, r.size.x - 8), 16)
+	ci.draw_rect(caja, Color(Estilo.NEGRO, 0.7))
+	Estilo.texto(ci, t, caja.position + Vector2(6, 12), Estilo.AMBAR_CLARO, Estilo.TAM, caja.size.x - 10)
 
 func _barra(ci: CanvasItem) -> void:
 	var r := Rect2(4, 4, size.x - 8, 24)

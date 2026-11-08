@@ -11,9 +11,12 @@ class_name Campana
 ## - Las misiones que todavía no están construidas aparecen "EN PREPARACIÓN"
 ##   y no se pueden jugar todavía: todas las misiones las hace el jugador.
 ## - Entre misiones sale el diario THE NORMANDY DISPATCH (en español).
-## Se guarda junto a la compañía en user://campana.cfg. Solo jugando solo.
+## Se guarda junto a la compañía en user://campana.cfg. En la campaña
+## cooperativa (v0.41, CampanaRed) el anfitrión la guarda aparte, en
+## user://campana_coop.cfg, y los invitados ven un reflejo que no se guarda.
 
 const ARCHIVO := "user://campana.cfg"
+static var archivo := ARCHIVO           # el que se usa ahora (Campana.usar)
 ## v0.32: recursos más escasos. Antes sobraban (una campaña simulada terminaba
 ## con ~4.400 suministros sin haber bajado nunca de 400): solo servían para
 ## reclutar. Ahora la compañía cuesta mantenerla cada turno y antes de cada
@@ -117,13 +120,29 @@ static func activa() -> bool:
 	return Compania.activa()
 
 
+## Cambia de archivo (la campaña de un jugador o la cooperativa): la próxima
+## vez que se necesite se carga del nuevo.
+static func usar(arch: String) -> void:
+	if archivo == arch:
+		return
+	archivo = arch
+	Compania.archivo = arch
+	_cargada = false
+	Compania._cargada = false
+	en_mision = false
+	compras = []
+	Compania.en_mision = false
+
+
 static func cargar() -> void:
 	if _cargada:
 		return
 	_cargada = true
+	if CampanaRed.espejo:      # invitado: llega del anfitrión (aplicar_red)
+		return
 	Compania.cargar()
 	var cfg := ConfigFile.new()
-	if cfg.load(ARCHIVO) != OK or not cfg.has_section_key("campana", "dia"):
+	if cfg.load(archivo) != OK or not cfg.has_section_key("campana", "dia"):
 		_estado_inicial()
 		guardar()
 		return
@@ -141,13 +160,49 @@ static func cargar() -> void:
 	tutorial = cfg.get_value("campana", "tutorial", false)
 
 
+const CLAVES := ["suministros", "apoyo", "dia", "hechas", "refuerzo", "turnos", "estado", "diario",
+	"ultimo_diario", "presion", "prologo", "tutorial"]
+
+
 static func guardar() -> void:
+	if CampanaRed.espejo:      # el invitado no guarda: la campaña es del anfitrión
+		return
 	var cfg := ConfigFile.new()
-	cfg.load(ARCHIVO)
-	for k in ["suministros", "apoyo", "dia", "hechas", "refuerzo", "turnos", "estado", "diario",
-			"ultimo_diario", "presion", "prologo", "tutorial"]:
+	cfg.load(archivo)
+	for k in CLAVES:
 		cfg.set_value("campana", k, _valor(k))
-	cfg.save(ARCHIVO)
+	cfg.save(archivo)
+
+
+## Cooperativo: todo el estado, para mandarlo a los invitados.
+static func estado_red() -> Dictionary:
+	var d := {}
+	for k in CLAVES:
+		d[k] = _valor(k)
+	d["compras"] = compras
+	d["ultimo_gasto"] = ultimo_gasto
+	d["falto"] = falto
+	return d
+
+
+## Invitado: el estado que mandó el anfitrión.
+static func aplicar_red(d: Dictionary) -> void:
+	suministros = int(d.get("suministros", suministros))
+	apoyo = int(d.get("apoyo", apoyo))
+	dia = int(d.get("dia", dia))
+	hechas = d.get("hechas", hechas)
+	refuerzo = d.get("refuerzo", refuerzo)
+	turnos = int(d.get("turnos", turnos))
+	estado = str(d.get("estado", estado))
+	diario = d.get("diario", diario)
+	ultimo_diario = d.get("ultimo_diario", ultimo_diario)
+	presion = str(d.get("presion", presion))
+	prologo = bool(d.get("prologo", prologo))
+	tutorial = bool(d.get("tutorial", tutorial))
+	compras = d.get("compras", compras)
+	ultimo_gasto = int(d.get("ultimo_gasto", ultimo_gasto))
+	falto = int(d.get("falto", falto))
+	_cargada = true
 
 
 static func _valor(k: String) -> Variant:
@@ -322,7 +377,7 @@ static func elegir(id: String) -> void:
 
 ## Al empezar la misión (Game.empezar_mision).
 static func empezar_mision() -> void:
-	en_mision = activa() and estado == "en_curso" and mision(Game.mision).size() > 0 and not hecha(Game.mision)
+	en_mision = activa() and not CampanaRed.espejo and estado == "en_curso" and mision(Game.mision).size() > 0 and not hecha(Game.mision)
 	if en_mision:
 		for id in compras:          # el apoyo comprado se paga al salir
 			suministros -= int(COMPRAS[id]["costo"])
@@ -334,7 +389,7 @@ static func empezar_mision() -> void:
 
 ## Fin de la misión. Se llama después de Compania.cerrar_mision (usa sus caídos).
 static func cerrar_mision(resultado: int) -> void:
-	if not en_mision:
+	if not en_mision or CampanaRed.espejo:
 		return
 	en_mision = false
 	var m := mision(Game.mision)

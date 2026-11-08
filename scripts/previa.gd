@@ -49,34 +49,49 @@ func _botones() -> Array:
 	for i in lista.size():
 		var h: Dictionary = lista[i]
 		var r := Rect2(x0 + (i % COLS) * (CARTA.x + 4), 40 + (i / COLS) * (CARTA.y + 3), CARTA.x, CARTA.y)
-		# Los heridos y caídos no se pueden llevar, pero se puede leer su ficha
-		l.append(["h:" + h["n"] if h["estado"] == "ok" else "f:" + h["n"], r, h["n"], true, ""])
+		# Los heridos y caídos no se pueden llevar, pero se puede leer su ficha.
+		# (Campaña cooperativa: tampoco los que ya eligió otro jugador.)
+		var libre: bool = h["estado"] == "ok" and (not CampanaRed.coop
+			or CampanaRed.dueno(h["n"]) in [-1, CampanaRed.mi_puesto()])
+		l.append(["h:" + h["n"] if libre else "f:" + h["n"], r, h["n"], true, ""])
 	# Tu escuadra: Murphy y los 3 elegidos (tocar el arma la cambia)
 	var eq := Compania.equipo()
 	for k in eq.size():
 		var r := Rect2(x0 + 96 + k * 98, 250, 94, 46)
 		l.append(["a:" + eq[k][0], r, eq[k][0], Compania.ESPECIALIDADES[eq[k][2]]["armas"].size() > 1, ""])
-	l.append(["f:MURPHY", Rect2(x0, 250, 92, 46), "MURPHY", true, ""])
+	l.append(["f:" + _sargento(), Rect2(x0, 250, 92, 46), _sargento(), true, ""])
 	var by := size.y - 34
 	# Apoyo para la misión (v0.32): se compra con suministros, solo en la campaña
 	if _visto == "" and _con_compras():
 		var k := 0
 		for id in Campana.COMPRAS:
 			var c: Dictionary = Campana.COMPRAS[id]
-			var puede: bool = id in Campana.compras or Campana.disponibles() >= int(c["costo"])
+			var puede: bool = (id in Campana.compras or Campana.disponibles() >= int(c["costo"])) and not CampanaRed.espejo
 			l.append(["c:" + id, Rect2(136 + k * 166, by, 160, 26), c["n"], puede, str(c["costo"])])
 			k += 1
 	if _visto != "":
 		l.append(["mision", Rect2(maxf(_x0() - 112, 136), by, 100, 26), "LA MISIÓN", true, ""])
-	l.append(["volver", Rect2(8, by, 120, 26), "AL MAPA", true, ""])
-	l.append(["atacar", Rect2(size.x - 168, by, 160, 26), "¡AL ATAQUE!", Compania.equipo().size() > 0, ""])
+	# Campaña cooperativa: al mapa y al ataque, solo el anfitrión
+	l.append(["volver", Rect2(8, by, 120, 26), "AL MAPA", not CampanaRed.espejo, ""])
+	l.append(["atacar", Rect2(size.x - 168, by, 160, 26), "¡AL ATAQUE!" if not CampanaRed.espejo else "ESPERANDO",
+		Compania.equipo().size() > 0 and not CampanaRed.espejo, "" if not CampanaRed.espejo else "AL ANFITRIÓN"])
 	return l
+
+
+## Tu sargento: MURPHY jugando solo; en el cooperativo, el de tu puesto.
+func _sargento() -> String:
+	return CampanaRed.nombre_de(CampanaRed.mi_puesto()) if CampanaRed.coop else "MURPHY"
 
 
 func _pulsado(id: String) -> void:
 	if id.begins_with("h:"):
 		var n := id.substr(2)
-		Compania.alternar(n)
+		if CampanaRed.espejo:            # invitado: se lo pide al anfitrión
+			CampanaRed.pedir("cpe", n)
+		elif CampanaRed.coop:
+			CampanaRed.alternar(CampanaRed.mi_puesto(), n)
+		else:
+			Compania.alternar(n)
 		_info = Compania.ESPECIALIDADES[Compania.hombre(n)["esp"]]["info"]
 		_visto = n
 		return
@@ -84,21 +99,33 @@ func _pulsado(id: String) -> void:
 		_visto = id.substr(2)
 		return
 	if id.begins_with("a:"):
-		Compania.otra_arma(id.substr(2))
+		if CampanaRed.espejo:
+			CampanaRed.pedir("cpa", id.substr(2))
+		elif CampanaRed.coop:
+			CampanaRed.otra_arma(CampanaRed.mi_puesto(), id.substr(2))
+		else:
+			Compania.otra_arma(id.substr(2))
 		return
 	if id.begins_with("c:"):
+		if CampanaRed.espejo:
+			return
 		var c := id.substr(2)
 		if Campana.alternar_compra(c):
 			_info = Campana.COMPRAS[c]["info"] if c in Campana.compras else ""
+			CampanaRed.cambio()
 		return
 	match id:
 		"mision":
 			_visto = ""
 		"volver":
-			Game.ir_al_mapa()
+			if not CampanaRed.espejo:
+				Game.ir_al_mapa()
 		"atacar":
+			if CampanaRed.espejo:
+				return
 			Game.prueba_carga = false
-			Game.modo_red = false
+			if not CampanaRed.coop:
+				Game.modo_red = false
 			Game.empezar_mision(Game.mision)
 
 
@@ -133,7 +160,7 @@ func _draw() -> void:
 ## La ficha del hombre tocado: retrato, de dónde es, qué hacía, por qué está
 ## aquí, su frase y lo que dice de él un compañero.
 func _ficha(izq: Rect2) -> void:
-	var h: Dictionary = Compania.hombre(_visto) if _visto != "MURPHY" else {}
+	var h: Dictionary = Compania.hombre(_visto) if _visto != _sargento() else {}
 	var f := Fichas.de(_visto)
 	var ancho := izq.end.x - 16 - 8
 	var cara := Rect2(14, 14, 78, 70)
@@ -229,15 +256,18 @@ func _derecha() -> void:
 	# --- Derecha: la compañía
 	var x0 := _x0()
 	var listos := Compania.listos().size()
-	Estilo.texto(self, "LA COMPAÑÍA - ELIGE 3 HOMBRES (%d DISPONIBLES)" % listos, Vector2(x0, 32), Estilo.AMBAR)
+	var titulo := "LA COMPAÑÍA - ELIGE 3 HOMBRES (%d DISPONIBLES)" % listos
+	if CampanaRed.coop:
+		titulo = "LA COMPAÑÍA (DE TODOS) - ELIGE TUS 3"
+	Estilo.texto(self, titulo, Vector2(x0, 32), Estilo.AMBAR)
 	for b in _botones():
 		var id: String = b[0]
-		if id.begins_with("h:") or (id.begins_with("f:") and id != "f:MURPHY"):
+		if id.begins_with("h:") or (id.begins_with("f:") and id != "f:" + _sargento()):
 			_carta(Compania.hombre(id.substr(2)), b[1], id == _encima)
 	# Tu escuadra
 	Estilo.texto(self, "TU ESCUADRA", Vector2(x0, 244), Estilo.AMBAR)
 	var murphy := Rect2(x0, 250, 92, 46)
-	_ranura(murphy, "MURPHY", "SGT - TÚ", "")
+	_ranura(murphy, _sargento(), "SGT - TÚ", "")
 	for b in _botones():
 		var id: String = b[0]
 		if id.begins_with("a:"):
@@ -264,6 +294,12 @@ func _derecha() -> void:
 
 func _carta(h: Dictionary, r: Rect2, encima: bool) -> void:
 	var elegido: bool = h["n"] in Compania.elegidos
+	var otro := -1           # campaña cooperativa: lo eligió otro jugador
+	if CampanaRed.coop:
+		elegido = _en_mi_equipo(h["n"])
+		var d := CampanaRed.dueno(h["n"])
+		if d >= 0 and d != CampanaRed.mi_puesto():
+			otro = d
 	Estilo.marco(self, r, "hundido" if elegido else "chapa")
 	if elegido:
 		draw_rect(r.grow(-2), Estilo.AMBAR, false, 1.0)
@@ -287,8 +323,19 @@ func _carta(h: Dictionary, r: Rect2, encima: bool) -> void:
 		var c := r.position + Vector2(21, 18)
 		draw_line(c + Vector2(-8, -8), c + Vector2(8, 8), Estilo.ROJO, 2.0)
 		draw_line(c + Vector2(8, -8), c + Vector2(-8, 8), Estilo.ROJO, 2.0)
+	if otro >= 0 and h["estado"] == "ok":
+		tinte = Color(0.6, 0.6, 0.6)
+		col = Color(Estilo.CREMA, 0.5)
+		estado = "CON " + CampanaRed.nombre_de(otro)
 	Estilo.texto(self, h["n"], Vector2(r.position.x + 44, r.position.y + 15), Estilo.AMBAR_CLARO if elegido else col)
 	Estilo.texto(self, estado, Vector2(r.position.x + 44, r.position.y + 28), col)
+
+
+func _en_mi_equipo(nombre: String) -> bool:
+	for e in Compania.equipo():
+		if e[0] == nombre:
+			return true
+	return false
 
 
 func _ranura(r: Rect2, nombre: String, linea: String, arma: String, encima := false) -> void:

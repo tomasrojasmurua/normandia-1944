@@ -339,8 +339,16 @@ func _fire() -> void:
 	if hit.is_empty():
 		return
 	var target: Object = hit["collider"]
-	if target is Enemy or target is AlemanRemoto:
+	if target is Enemy or target is AlemanRemoto or target is Aliado:    # (Aliado: versus, uno del otro bando)
 		target.hit(w["damage"], int(hit["shape"]) == 1, hit["position"], dir)
+		hit_marker = 1.0
+		Game.play("hit", -4.0)
+	elif target is Node and (target as Node).has_meta("remoto"):
+		# Versus: un jugador del otro bando (el daño va a su celular)
+		var rem = (target as Node).get_meta("remoto")
+		if is_instance_valid(rem):
+			rem.hit(w["damage"], int(hit["shape"]) == 1, hit["position"], dir)
+			Game.blood(hit["position"], dir)
 		hit_marker = 1.0
 		Game.play("hit", -4.0)
 	else:
@@ -369,7 +377,7 @@ func player_looked(delta_y: float) -> void:
 func enemy_under_crosshair() -> bool:
 	var from := _camera.global_position
 	var fwd := -_camera.global_basis.z
-	for e in get_tree().get_nodes_in_group("enemies"):
+	for e in get_tree().get_nodes_in_group(Versus.grupo_rival()):
 		var to: Vector3 = e.global_position + Vector3(0, 1.1, 0) - from
 		var dist := to.length()
 		if dist > 80.0 or dist < 0.5:

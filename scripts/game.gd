@@ -170,10 +170,10 @@ func _anotar_fluidez(delta: float) -> void:
 	if _inf_ignorar > 0.0:
 		_inf_ignorar -= minf(delta, 0.1)
 		return
-	if warming or get_tree().paused or Objetivos.actual == null or Objetivos.terminado != 0:
+	if warming or get_tree().paused or (Objetivos.actual == null and not Versus.activo) or Objetivos.terminado != 0:
 		return
 	var en_aire := Salto.activo and Salto.actual != null and not Salto.actual._aterrizado
-	var clave := "SALTO" if en_aire else "F%d" % (Objetivos.fase() + 1)
+	var clave := "SALTO" if en_aire else ("VS" if Versus.activo else "F%d" % (Objetivos.fase() + 1))
 	if clave != _inf_clave:
 		_inf_clave = clave
 		informe.append([clave, 0, 0.0, 0, 0, 0.0])
@@ -919,6 +919,9 @@ func explode(pos: Vector3, radius: float, damage: float, desde_red := false) -> 
 	_explosion_fx(pos)
 	if not desde_red and Red.activo():
 		Red.explosion(pos, radius, damage)
+	if Versus.activo:
+		_explosion_versus(pos, radius, damage, desde_red)
+		return
 	for e in get_tree().get_nodes_in_group("enemies") if not desde_red else []:
 		var chest: Vector3 = e.global_position + Vector3(0, 1.0, 0)
 		var d := pos.distance_to(chest)
@@ -932,6 +935,31 @@ func explode(pos: Vector3, radius: float, damage: float, desde_red := false) -> 
 		var da := pos.distance_to(c)
 		if da < radius and _clear_path(pos, c):
 			a.take_damage(damage * 0.8 * (1.0 - da / radius), pos)
+	var player := get_tree().get_first_node_in_group("player")
+	if player:
+		var center: Vector3 = player.global_position + Vector3(0, 1.0, 0)
+		var d := pos.distance_to(center)
+		if d < radius and _clear_path(pos, center):
+			player.take_damage(damage * 0.8 * (1.0 - d / radius), pos, false)
+		if d < 30.0:
+			player.shake(1.2 * (1.0 - d / 30.0))
+
+
+## Versus: la explosión les hace daño a todos (de los dos bandos). Los
+## soldados de IA (o sus títeres, que mandan el golpe al anfitrión) solo si la
+## explosión pasó en este celular; los jugadores, cada uno el suyo.
+func _explosion_versus(pos: Vector3, radius: float, damage: float, desde_red: bool) -> void:
+	if not desde_red:
+		var vistos := {}
+		for g in ["americanos", "enemies"]:
+			for n in get_tree().get_nodes_in_group(g):
+				if vistos.has(n) or n is Player or n is JugadorRemoto:
+					continue
+				vistos[n] = true
+				var c: Vector3 = n.global_position + Vector3(0, 1.0, 0)
+				var d := pos.distance_to(c)
+				if d < radius and _clear_path(pos, c):
+					n.hit(damage * (1.0 - d / radius), false, c, (c - pos).normalized(), false)
 	var player := get_tree().get_first_node_in_group("player")
 	if player:
 		var center: Vector3 = player.global_position + Vector3(0, 1.0, 0)

@@ -15,6 +15,9 @@ var _sala_vieja := ""         # sala de una partida cooperativa que se cortó (r
 
 
 const MISIONES_COOP := ["campana", "omaha", "planeador"]    # "campana": la campaña cooperativa (v0.41)
+static var _url_revisada := false    # el enlace de invitación (?sala=1234) se usa una sola vez
+var _reconectar_t := 0.0
+var _invitado_t := 0.0               # >0: se acaba de tocar INVITAR (aviso en pantalla)
 const LOGO := preload("res://assets/ui/logo.png")
 
 func _ready() -> void:
@@ -27,6 +30,42 @@ func _ready() -> void:
 	Game.modo_red = false
 	Game.mision_suelta = false
 	set_anchors_preset(Control.PRESET_FULL_RECT)
+	_revisar_enlace()
+
+
+## v0.42: si el juego se abrió con un enlace de invitación (WhatsApp), entra
+## directo a esa sala. Se borra de la dirección para no volver a entrar.
+const JS_ENLACE := "(function(){try{var s=new URLSearchParams(location.search).get('sala')||'';" \
+	+ "if(s){history.replaceState(null,'',location.pathname);} return s;}catch(e){return '';}})()"
+
+func _revisar_enlace() -> void:
+	if _url_revisada or not OS.has_feature("web"):
+		return
+	_url_revisada = true
+	var c = JavaScriptBridge.eval(JS_ENLACE, true)
+	if c is String and (c as String).length() == 4 and (c as String).is_valid_int():
+		Game.aviso_menu = ""
+		_entrar_sala.call_deferred(c)
+
+
+## v0.42: invitar por WhatsApp con un enlace que abre el juego y entra a la
+## sala. En el navegador, abrir otra página solo se permite durante un toque
+## de verdad: el botón reacciona al apoyar el dedo, así que WhatsApp se abre al
+## LEVANTARLO (escuchando "touchend"/"mouseup" desde JavaScript).
+const JS_INVITAR := "(function(c){var url=location.origin+location.pathname+'?sala='+c;" \
+	+ "var txt='¡Únete a mi sala de NORMANDY 1944! Código '+c+': '+url;" \
+	+ "var wa='https://wa.me/?text='+encodeURIComponent(txt);var hecho=false;" \
+	+ "var quitar=function(){window.removeEventListener('touchend',abrir,true);window.removeEventListener('mouseup',abrir,true);};" \
+	+ "var abrir=function(){if(hecho){return;}hecho=true;quitar();window.open(wa,'_blank');};" \
+	+ "window.addEventListener('touchend',abrir,true);window.addEventListener('mouseup',abrir,true);" \
+	+ "setTimeout(quitar,2500);})('%s')"
+
+func _invitar() -> void:
+	_invitado_t = 4.0
+	if OS.has_feature("web"):
+		JavaScriptBridge.eval(JS_INVITAR % Game.sala, true)
+	else:
+		OS.shell_open("https://wa.me/?text=" + ("¡Únete a mi sala de NORMANDY 1944! Código %s" % Game.sala).uri_encode())
 
 
 func _process(delta: float) -> void:
@@ -37,6 +76,15 @@ func _process(delta: float) -> void:
 	# en cuanto empieza (o directo, si la misión ya estaba en curso).
 	if pantalla == "conectando" and Red.actual and Red.actual.mi_id != "":
 		pantalla = "espera"
+	_invitado_t = maxf(_invitado_t - delta, 0.0)
+	# En la sala de espera, si se cortó (p. ej. al ir a WhatsApp a invitar), se
+	# vuelve a entrar solo a la misma sala, con la misma misión elegida
+	if pantalla == "espera" and Red.actual and Red.actual.estado == "sin conexión" and not Red.actual.en_curso:
+		_reconectar_t += delta
+		if _reconectar_t > 1.5:
+			_reconectar_t = 0.0
+			_entrar_sala(Game.sala, Red.actual.mision_sala if Red.actual.anfitrion else "")
+			return
 	if pantalla == "espera":
 		if Red.actual == null:
 			pantalla = "coop"
@@ -60,11 +108,12 @@ func _botones() -> Array:
 				["nueva", Rect2(X, y0 + paso, ANCHO, ALTO),
 					"¿BORRAR LA ACTUAL?" if _confirmar > 0.0 else "NUEVA CAMPAÑA", true, ""],
 				["coop", Rect2(X, y0 + paso * 2, ANCHO, ALTO), "COOPERATIVO", true, "PRUEBA"],
+				["versus", Rect2(X + ANCHO + 16, y0 + paso * 2, ANCHO, ALTO), "VERSUS", true, "EE.UU. CONTRA ALEMANIA"],
 				["controles", Rect2(X, y0 + paso * 3, ANCHO, ALTO), "CONTROLES", true, ""],
 				["creditos", Rect2(X, y0 + paso * 4, ANCHO, ALTO), "CRÉDITOS", true, ""],
 				["carga", Rect2(X, y0 + paso * 5, ANCHO, ALTO), "PRUEBA DE CARGA", true, ""],
 				["salto", Rect2(X + ANCHO + 16, y0 + paso * 5, ANCHO, ALTO), "PROBAR EL SALTO", true, "SIN CAMPAÑA"],
-			] + ([["volver_sala", Rect2(X + ANCHO + 16, y0 + paso * 2, ANCHO + 20, ALTO),
+			] + ([["volver_sala", Rect2(X + ANCHO + 16, y0 + paso * 3, ANCHO + 20, ALTO),
 				"VOLVER A LA SALA %s" % _sala_vieja, true, "LA PARTIDA SIGUE"]]
 				if _sala_vieja != "" else [])
 		"controles":
@@ -80,10 +129,19 @@ func _botones() -> Array:
 				["unirse", Rect2(X, y0 + paso, ANCHO, ALTO), "UNIRSE A UNA SALA", true, ""],
 				["volver", Rect2(X, size.y - 44, 120, ALTO), "VOLVER", true, ""],
 			]
+		"versus":
+			return [
+				["crear_vs", Rect2(X, y0, ANCHO, ALTO), "CREAR SALA", true, ""],
+				["unirse", Rect2(X, y0 + paso, ANCHO, ALTO), "UNIRSE A UNA SALA", true, ""],
+				["volver", Rect2(X, size.y - 44, 120, ALTO), "VOLVER", true, ""],
+			]
 		"conectando":
 			return [["salir_sala", Rect2(X, size.y - 44, 120, ALTO), "VOLVER", true, ""]]
 		"espera":
 			var lista := [["salir_sala", Rect2(X, size.y - 44, 120, ALTO), "SALIR", true, ""]]
+			if Red.actual and Versus.es_versus(Red.actual.mision_sala):
+				return lista + _botones_versus()
+			lista.append(["invitar", Rect2(X + 320, 140, ANCHO, ALTO), "INVITAR", true, "POR WHATSAPP"])
 			if Red.actual and Red.actual.anfitrion:
 				lista.append(["mision_coop", Rect2(X + 320, 118 - 14, ANCHO, ALTO), "MISIÓN", true,
 					_nombre_coop(Red.actual.mision_sala)])
@@ -106,11 +164,43 @@ func _botones() -> Array:
 			return [["volver", Rect2(X, size.y - 44, 120, ALTO), "VOLVER", true, ""]]
 
 
+## Sala de espera del versus: invitar, cambiar de bando y (el anfitrión)
+## elegir el mapa y empezar.
+func _botones_versus() -> Array:
+	var r := Red.actual
+	var n := r.por_bando()
+	var otro := 1 - maxi(r.bando, 0)
+	var l := [
+		["bando", Rect2(X, 186, ANCHO, ALTO), "CAMBIAR DE BANDO", n[otro] < 2,
+			"A " + Versus.NOMBRES_BANDO[otro] if n[otro] < 2 else Versus.NOMBRES_BANDO[otro] + " ESTÁ LLENO"],
+		["invitar", Rect2(X + ANCHO + 12, 186, ANCHO, ALTO), "INVITAR", true, "POR WHATSAPP"],
+	]
+	if r.anfitrion:
+		l.append(["mision_vs", Rect2(X + 340, 104, ANCHO, ALTO), "MAPA", true, _nombre_coop(r.mision_sala).replace("VERSUS: ", "")])
+		l.append(["empezar", Rect2(X, 236, ANCHO, ALTO), "¡EMPEZAR!", true,
+			"%d JUGADOR%s" % [_jugadores(), "ES" if _jugadores() > 1 else ""]])
+	return l
+
+
 func _pulsado(id: String) -> void:
 	if id.begins_with("n") and id.length() == 2:
 		_codigo += id.substr(1)
 		return
 	match id:
+		"versus":
+			pantalla = "versus"
+			Game.aviso_menu = ""
+		"crear_vs":
+			_entrar_sala("%04d" % (randi() % 10000), "vs_playa")
+		"bando":
+			if Red.actual:
+				Red.actual.cambiar_bando()
+		"invitar":
+			_invitar()
+		"mision_vs":
+			if Red.actual:
+				var l: Array = Red.MISIONES_VS
+				Red.actual.mision_sala = l[(l.find(Red.actual.mision_sala) + 1) % l.size()]
 		"coop":
 			pantalla = "coop"
 			Game.aviso_menu = ""
@@ -168,9 +258,10 @@ func _pulsado(id: String) -> void:
 		"salir_sala":
 			Game.olvidar_sala()
 			_sala_vieja = ""
+			var era_vs := Red.actual != null and Versus.es_versus(Red.actual.mision_sala)
 			if Red.actual:
 				Red.actual.queue_free()
-			pantalla = "coop"
+			pantalla = "versus" if era_vs else "coop"
 		"garra":
 			Game.cambiar_esquema()
 		"disparo":
@@ -204,21 +295,27 @@ func _draw() -> void:
 			_creditos()
 		"coop":
 			_coop()
+		"versus":
+			_pantalla_versus()
 		"unirse":
 			_unirse()
 		"conectando":
 			_conectando()
 		"espera":
 			_espera()
-	if Game.aviso_menu != "" and pantalla in ["inicio", "coop"]:
+	if Game.aviso_menu != "" and pantalla in ["inicio", "coop", "versus"]:
 		Estilo.texto(self, Game.aviso_menu, Vector2(X, s.y - 52), Estilo.ROJO)
 	_dibujar_botones()
 
 
-func _entrar_sala(codigo: String) -> void:
+## `mision`: la que quedará elegida si este jugador resulta ser el anfitrión
+## (si la sala ya existía, manda la del anfitrión de siempre).
+func _entrar_sala(codigo: String, mision := "") -> void:
 	Game.prueba_carga = false
 	Game.modo_red = true
 	Red.conectar(get_tree(), codigo)
+	if mision != "" and Red.actual:
+		Red.actual.mision_sala = mision
 	pantalla = "conectando"
 
 
@@ -241,6 +338,11 @@ func _jugadores() -> int:
 func _espera() -> void:
 	var r := Red.actual
 	if r == null:
+		return
+	if _invitado_t > 0.0:
+		Estilo.texto(self, "ABRIENDO WHATSAPP... (SI NO SE ABRE, TOCA INVITAR DE NUEVO)", Vector2(X, size.y - 58), Estilo.VERDE_LED)
+	if Versus.es_versus(r.mision_sala):
+		_espera_versus()
 		return
 	Estilo.texto(self, "SALA %s" % Game.sala, Vector2(X, 66), Estilo.CREMA, 33)
 	Estilo.texto(self, "DILES EL CÓDIGO: COOPERATIVO > UNIRSE A UNA SALA", Vector2(X, 92), Estilo.AMBAR_CLARO)
@@ -283,6 +385,54 @@ func _espera() -> void:
 		Estilo.texto(self, "ESPERANDO A QUE EL ANFITRIÓN EMPIECE LA MISIÓN...", Vector2(X, 226), Estilo.AMBAR_CLARO)
 	if r.estado == "sin conexión":
 		Estilo.texto(self, "SE CORTÓ LA CONEXIÓN. SAL Y VUELVE A ENTRAR.", Vector2(X, 280), Estilo.ROJO)
+
+
+## Sala de espera del versus: los dos bandos, con quién está en cada uno.
+func _espera_versus() -> void:
+	var r := Red.actual
+	Estilo.texto(self, "SALA %s" % Game.sala, Vector2(X, 66), Estilo.CREMA, 33)
+	Estilo.texto(self, "VERSUS - DILES EL CÓDIGO O INVÍTALOS POR WHATSAPP", Vector2(X, 92), Estilo.AMBAR_CLARO)
+	if not r.anfitrion:
+		Estilo.texto(self, "MAPA: %s" % _nombre_coop(r.mision_sala).replace("VERSUS: ", ""), Vector2(X + 340, 118), Estilo.AMBAR)
+	# Quién está en cada bando: yo y los demás (con su puesto, para el nombre)
+	var filas := [[], []]
+	filas[maxi(r.bando, 0)].append([r.puesto, "TÚ", r.anfitrion])
+	for id in r.sala:
+		var e: Array = r.sala[id]
+		var pu := int(e[0])
+		var b := int(e[2]) if e.size() > 2 and int(e[2]) >= 0 else (pu % 2 if pu >= 0 else -1)
+		if b < 0:
+			continue
+		filas[b].append([pu, "LISTO" if pu >= 0 else "ENTRANDO...", bool(e[1])])
+	for b in 2:
+		var x := X + b * 166.0
+		Estilo.texto(self, Versus.NOMBRES_BANDO[b], Vector2(x, 118), [Color(0.55, 0.68, 1.0), Color(1.0, 0.45, 0.38)][b])
+		for k in 2:
+			var y := 138.0 + k * 22.0
+			var fila := Rect2(x, y - 14, 158, 20)
+			var hay: bool = k < filas[b].size()
+			Estilo.marco(self, fila, "hundido" if hay else "chapa")
+			if not hay:
+				Estilo.texto(self, "LIBRE (IA)", Vector2(x + 8, y), Color(Estilo.CREMA, 0.4))
+				continue
+			var f: Array = filas[b][k]
+			var nombre: String = Versus.NOMBRES_JUGADOR[b][clampi(int(f[0]), 0, 3)] if int(f[0]) >= 0 else "?"
+			var col := Estilo.AMBAR if f[1] == "TÚ" else Estilo.CREMA
+			Estilo.texto(self, nombre, Vector2(x + 8, y), col)
+			Estilo.texto(self, str(f[1]) + (" - ANF." if f[2] else ""), Vector2(x + 76, y), col)
+	if r.anfitrion:
+		Estilo.texto(self, "CADA UNO MANDA SU ESCUADRA. LOS PUESTOS LIBRES LOS LLEVA LA IA.", Vector2(X, 228),
+			Color(Estilo.CREMA, 0.75))
+	else:
+		Estilo.texto(self, "ESPERANDO A QUE EL ANFITRIÓN EMPIECE LA PARTIDA...", Vector2(X, 228), Estilo.AMBAR_CLARO)
+	if r.estado == "sin conexión":
+		Estilo.texto(self, "SE CORTÓ LA CONEXIÓN: VOLVIENDO A ENTRAR...", Vector2(X, 280), Estilo.ROJO)
+
+
+func _pantalla_versus() -> void:
+	Estilo.texto(self, "VERSUS", Vector2(X, 66), Estilo.CREMA, 33)
+	Estilo.texto(self, "EE.UU. CONTRA ALEMANIA: HASTA 2 JUGADORES POR BANDO, CADA UNO CON SU ESCUADRA.", Vector2(X, 96), Estilo.AMBAR_CLARO)
+	Estilo.texto(self, "TOMA EL PUNTO DEL MEDIO Y DEJA AL OTRO BANDO SIN REFUERZOS. MAPAS: LA PLAYA Y EL BOSQUE.", Vector2(X, 110), Estilo.CREMA)
 
 
 func _coop() -> void:

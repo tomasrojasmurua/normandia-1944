@@ -81,6 +81,8 @@ static func preparar(escena: Node) -> Noche:
 
 func _ready() -> void:
 	actual = self
+	if not activa:
+		return       # de día (el versus en el mapa del salto): el cielo y la luz de la escena, sin tocar
 	var we := get_parent().get_node_or_null("WorldEnvironment") as WorldEnvironment
 	if we and we.environment:
 		_env = we.environment

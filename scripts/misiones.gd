@@ -305,6 +305,50 @@ const DATOS := {
 			},
 		],
 	},
+	# ============================================================ VERSUS (v0.42)
+	# Americanos contra alemanes (versus.gd). Se juegan sobre los mapas de las
+	# misiones, en un tramo cerrado: cada bando aparece en su base ("bases": 0 =
+	# EE.UU., 1 = Alemania) y se pelea por el PUNTO del medio. Las escuadras de
+	# cada bando avanzan por los "carriles" (X) en orden: la primera escuadra
+	# del bando por el primero, la segunda por el segundo.
+	"vs_playa": {
+		"nombre": "VERSUS: LA PLAYA",
+		"lugar": "PLAYA OMAHA",
+		"fecha": "6 DE JUNIO DE 1944",
+		"escena": "res://scenes/main.tscn",
+		"hora": 7 * 60 + 10,
+		"clima": "nublado",
+		"entrada": "a_pie",
+		"versus": true,
+		"bases": [Vector3(0, 0, 5), Vector3(0, 0, -46.2)],
+		"ancho_base": 30.0,
+		"punto": Vector3(0, 0, -22),
+		"radio_punto": 9.0,
+		"carriles": [Vector2(-32, 4), Vector2(-4, 32)],
+		"sectores": [Vector2(-32, 4), Vector2(-32, 4), Vector2(-4, 32), Vector2(-4, 32)],
+		"fases": [{"nombre": "VERSUS", "hora": 7 * 60 + 10, "radio": "", "ancla": Vector3(0, 0, -22), "objetivos": []}],
+	},
+	"vs_bosque": {
+		"nombre": "VERSUS: EL BOSQUE",
+		"lugar": "BOCAGE DE NORMANDÍA",
+		"fecha": "JUNIO DE 1944",
+		"escena": "res://scenes/planeador.tscn",
+		"hora": 15 * 60 + 20,
+		"clima": "nublado",
+		"entrada": "a_pie",
+		"versus": true,
+		"suelo": 0.0,
+		"norte": Vector3(0, 0, -1),
+		"bases": [Vector3(0, 0, -39), Vector3(0, 0, -96)],
+		"ancho_base": 34.0,
+		"punto": Vector3(4, 0, -70),
+		"radio_punto": 8.0,
+		# Zona de juego (mapa_planeador.gd la cierra con paredes): z de -35 a -101
+		"zona_z": Vector2(-35.0, -101.0),
+		"carriles": [Vector2(-40, 8), Vector2(0, 42)],
+		"sectores": [Vector2(-40, 8), Vector2(-40, 8), Vector2(0, 42), Vector2(0, 42)],
+		"fases": [{"nombre": "VERSUS", "hora": 15 * 60 + 20, "radio": "", "ancla": Vector3(4, 0, -70), "objetivos": []}],
+	},
 }
 
 const PRIMERA := "omaha"

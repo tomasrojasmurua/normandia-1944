@@ -253,7 +253,9 @@ func tiro_ia(blanco: Node3D, prob: float, sonido_db: float) -> bool:
 		target += side * randf_range(-1.6, 1.6) + Vector3(0, randf_range(-0.9, 0.6), 0)
 	var dir := (target - from).normalized()
 	var end := from + dir * (dist + (0.0 if acierta else 30.0))
-	if not acierta and self is Enemy:
+	var aleman: bool = self is Enemy or get("bando") == "aleman"
+	var rival_mio: bool = self is Enemy if not Versus.activo else Versus.bando_de_sprite("aleman" if aleman else "aliado") != Versus.mi_bando()
+	if not acierta and rival_mio:
 		# ¿pasó cerca del jugador? (supresión)
 		var p := get_tree().get_first_node_in_group("player") as Player
 		if p:
@@ -270,14 +272,14 @@ func tiro_ia(blanco: Node3D, prob: float, sonido_db: float) -> bool:
 			Game.dust(end, w["normal"])
 	var sonido := "pistol" if arma in ["mp40", "luger", "thompson", "colt"] else "rifle_far"
 	Game.play_at(sonido, from, sonido_db if not d["auto"] else sonido_db - 2.0)
-	if self is Aliado:
+	if not aleman:
 		Game.tracer(from, end, Color(1.0, 0.8, 0.45))
 	else:
 		Game.tracer(from, end)
 	Red.tiro_ia(self, from, end)   # en el cooperativo: que lo vean los invitados
 	cuerpo.disparo()
 	set_meta("disparo_t", Game.elapsed)    # de noche, el fogonazo te delata (noche.gd)
-	Game.fogonazo(from, self is Enemy)
+	Game.fogonazo(from, aleman)
 	return acierta
 
 

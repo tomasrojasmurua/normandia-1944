@@ -251,6 +251,8 @@ func soltar_granada() -> void:
 	g.global_position = salida[0]
 	g.linear_velocity = salida[1]
 	g.angular_velocity = Vector3(randf_range(-8, 8), randf_range(-8, 8), randf_range(-8, 8))
+	if Versus.activo and Versus.mi_bando() == Versus.DE:
+		g.modelo_aleman()          # versus: el alemán tira la de palo
 	Game.say("[GRANADA!]")
 	g.del_jugador = true
 
@@ -294,6 +296,11 @@ func factor_blanco() -> float:
 	return f
 
 
+## Versus: una bala de la IA rival (Aliado._disparar) o del jugador rival.
+func hit(amount: float, headshot: bool, pos: Vector3, dir: Vector3, _por_jugador := true) -> void:
+	take_damage(amount * (2.0 if headshot else 1.0), pos - dir * 10.0)
+
+
 func take_damage(amount: float, from_pos: Vector3, es_bala := true) -> void:
 	if dead or amount <= 0.0:
 		return
@@ -308,6 +315,8 @@ func take_damage(amount: float, from_pos: Vector3, es_bala := true) -> void:
 	Game.play("hurt")
 	if health <= 0.0:
 		_die()
+		if Versus.activo:
+			Versus.baja(Versus.mi_bando())     # versus: el anfitrión cuenta su propia caída
 
 
 ## Una bala pasó cerca (a `dist` metros de la cabeza): asusta.
@@ -408,7 +417,7 @@ func _tomar_lugar(a: Aliado) -> void:
 
 func tomar_lugar_en(pos: Vector3, arma: String, nuevo_nombre: String) -> void:
 	global_position = pos
-	rotation.y = 0.0     # mirando hacia el búnker
+	rotation.y = Versus.frente(Versus.mi_bando()) if Versus.activo else 0.0     # mirando hacia el búnker (o al enemigo)
 	head.rotation = Vector3.ZERO
 	head.position.y = STAND_HEAD
 	camera.h_offset = 0
@@ -436,7 +445,7 @@ func _reaparecer(aqui := Vector3.INF, vida := 1.0) -> void:
 		global_position = inicio + Vector3(randf_range(-6.0, 6.0), 0.5, 0)
 	else:
 		global_position = aqui + Vector3(0, 0.2, 0)
-	rotation.y = 0.0
+	rotation.y = Versus.frente(Versus.mi_bando()) if Versus.activo else 0.0
 	head.rotation = Vector3.ZERO
 	head.position.y = STAND_HEAD
 	_set_crouch(false)
@@ -458,7 +467,7 @@ func _reaparecer(aqui := Vector3.INF, vida := 1.0) -> void:
 ## Tu cuerpo queda en la arena (un soldado de sprites, ya caído).
 func _dejar_cuerpo(donde: Transform3D) -> void:
 	var c := SoldadoSprite.new()
-	c.bando = "aliado"
+	c.bando = Versus.sprite(Versus.mi_bando()) if Versus.activo else "aliado"
 	c.arma = weapons.id()
 	get_parent().add_child(c)
 	c.global_transform = Transform3D(Basis(Vector3.UP, rotation.y), Vector3(donde.origin.x, global_position.y, donde.origin.z))

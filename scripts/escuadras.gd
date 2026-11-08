@@ -64,6 +64,9 @@ func _ready() -> void:
 		_dispersadas = [0, 1, 2, 3]    # traspaso de anfitrión: nadie se dispersa de nuevo
 		_adoptar()
 		return
+	if Versus.de_mision():
+		_armar_versus()
+		return
 	# Escuadra del jugador: los 3 que eligió de su compañía (jugando solo) o los de siempre
 	var mia: Array = Misiones.dato("escuadra_jugador")
 	if Compania.activa():
@@ -124,12 +127,40 @@ func _adoptar() -> void:
 	adoptar = []
 
 
+## VERSUS (v0.42): cada escuadra es del bando de su puesto (Versus.bandos) y
+## aparece en la base de su bando. Las escuadras con jugador traen 3 hombres
+## (el jugador las manda); las otras, un sargento con IA y 3 hombres. Cada
+## bando reparte sus carriles: su primera escuadra por el primero, la segunda
+## por el segundo. Los refuerzos salen de los del bando (Versus.tickets).
+func _armar_versus() -> void:
+	SECTORES = [Versus.carril(0), Versus.carril(1), Versus.carril(2), Versus.carril(3)]
+	for i in 4:
+		var b := Versus.bando_de_escuadra(i)
+		datos[i]["refuerzos"] = 1000000      # el límite lo ponen los refuerzos del bando
+		var con_jugador := i == mi_escuadra or i in Versus.con_jugador
+		if not con_jugador:
+			datos[i]["lider"] = _soldado(i, Versus.lugar_base(b, i, _rng), ARMAS_VS_SGT[b], Versus.SARGENTOS[b][usados_sgt(b)], true)
+		for k in 3:
+			datos[i]["ranuras"][k] = _soldado(i, Versus.lugar_base(b, i, _rng), Versus.ARMAS[b][k], Versus.nombre_soldado(b), false)
+
+
+const ARMAS_VS_SGT := ["thompson", "mp40"]
+var _sgt_i := [0, 0]
+
+func usados_sgt(b: int) -> int:
+	_sgt_i[b] += 1
+	return (_sgt_i[b] - 1) % 2
+
+
 func _soldado(esc: int, pos: Vector3, arma: String, nombre: String, lider: bool) -> Aliado:
 	var a := Aliado.new()
 	a.arma = arma
 	a.nombre = nombre
 	a.escuadra = esc
 	a.es_lider = lider
+	if Versus.de_mision():
+		a.bando = Versus.sprite(Versus.bando_de_escuadra(esc))
+		a.rotation.y = Versus.frente(Versus.bando_de_escuadra(esc))
 	get_parent().add_child(a)
 	a.global_position = Navegacion.cerca_de(pos) if Navegacion.listo else pos
 	return a
@@ -355,7 +386,8 @@ static func relevo_de(esc: int, cerca: Vector3) -> Aliado:
 	if mejor == null:
 		var todos: Array = []
 		for i in 4:
-			if i != esc:
+			# (versus: solo los de tu bando)
+			if i != esc and (not Versus.activo or Versus.bando_de_escuadra(i) == Versus.bando_de_escuadra(esc)):
 				todos += actual.datos[i]["ranuras"] + [actual.datos[i]["lider"]]
 		mejor = _mas_cercano(todos, cerca)
 	return mejor
@@ -489,6 +521,7 @@ static func quitar_de_escuadra(a: Aliado) -> void:
 		actual.datos[a.escuadra]["lider"] = null
 	a.dead = true
 	a.remove_from_group("americanos")
+	a.remove_from_group("enemies")      # (versus: los alemanes con IA)
 	a.remove_from_group("aliados")
 	Coberturas.liberar(a)
 
@@ -557,6 +590,13 @@ func _desembarcar(i: int) -> bool:
 	for k in 3:
 		var a: Aliado = d["ranuras"][k]
 		if a == null or not is_instance_valid(a) or a.dead:
+			if Versus.activo:      # versus: en la base de su bando, si al bando le quedan refuerzos
+				var b := Versus.bando_de_escuadra(i)
+				if not Versus.puede_reforzar(b):
+					return false
+				d["ranuras"][k] = _soldado(i, Navegacion.cerca_de(Versus.lugar_base(b, i, _rng)),
+					Versus.ARMAS[b][_rng.randi() % Versus.ARMAS[b].size()], Versus.nombre_soldado(b), false)
+				return true
 			var s: Vector2 = SECTORES[i]
 			var rz: Vector2 = Misiones.dato("refuerzos_z")
 			var p := Vector3(_rng.randf_range(s.x, s.y), 0, _rng.randf_range(rz.x, rz.y))

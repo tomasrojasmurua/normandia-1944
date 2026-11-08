@@ -165,6 +165,8 @@ func _firma_de_textos() -> Array:
 		f.append(Game.carga_texto)
 	if Game.modo_red:
 		f.append(Red.texto())
+	if Versus.activo:
+		f.append_array([Versus.texto_marcador(), Versus.texto_punto(), Versus.dueno, roundi(Versus.toma * 60.0)])
 	if Objetivos.actual and Objetivos.terminado == 0:
 		var foco := Objetivos.foco_mio()
 		var pr: float = Objetivos.progreso[foco] if foco >= 0 else 0.0
@@ -304,6 +306,32 @@ func _draw() -> void:
 		Estilo.texto_c(_ci, "%s RECOGER %s" % [tecla, suelta.nombre()], s.x / 2, s.y - BAR_H - 40, Estilo.AMBAR_CLARO)
 
 
+## Versus: el marcador (refuerzos de cada bando y tiempo) y el punto, con la
+## barra de la toma (azul EE.UU., roja Alemania).
+func _textos_versus(oy: float) -> void:
+	var mio := Versus.mi_bando()
+	var txt := Versus.texto_marcador()
+	_ci.draw_rect(Rect2(2, oy - 9, Estilo.ancho_texto(txt) + 9.0, 12), Color(Estilo.NEGRO, 0.62))
+	_ci.draw_rect(Rect2(2, oy - 9, 2, 12), [Color(0.35, 0.5, 0.95), Color(0.85, 0.2, 0.15)][mio])
+	Estilo.texto(_ci, txt, Vector2(7, oy), Estilo.CREMA)
+	var pt := Versus.texto_punto()
+	var col := Estilo.AMBAR_CLARO
+	if Versus.dueno >= 0:
+		col = Estilo.VERDE_LED if Versus.dueno == mio else Estilo.ROJO
+	_ci.draw_rect(Rect2(2, oy + 4, Estilo.ancho_texto(pt) + 9.0, 12), Color(Estilo.NEGRO, 0.62))
+	Estilo.texto(_ci, pt, Vector2(7, oy + 13), col)
+	# Barra de la toma: del centro hacia la izquierda (EE.UU.) o la derecha (Alemania)
+	var bx := 7.0
+	var by := oy + 18.0
+	_ci.draw_rect(Rect2(bx, by, 120, 4), Color(Estilo.NEGRO, 0.7))
+	var t := clampf(Versus.toma, -1.0, 1.0)
+	if t > 0.0:
+		_ci.draw_rect(Rect2(bx + 60 - 60 * t, by + 1, 60 * t, 2), Color(0.35, 0.5, 0.95))
+	elif t < 0.0:
+		_ci.draw_rect(Rect2(bx + 60, by + 1, 60 * -t, 2), Color(0.85, 0.2, 0.15))
+	_ci.draw_rect(Rect2(bx + 59, by, 1, 4), Estilo.CREMA)
+
+
 ## Capa de textos: versión, medidor, objetivo y su barra, mensajes.
 func _dibujar_textos() -> void:
 	var s := size
@@ -321,6 +349,9 @@ func _dibujar_textos() -> void:
 	if Game.modo_red:
 		Estilo.texto(_ci, Red.texto(), Vector2(4, oy), Color(Estilo.AMBAR_CLARO, 0.85))
 		oy += 14.0
+	if Versus.activo:
+		_textos_versus(oy)
+		oy += 30.0
 	# Objetivo de mi escuadra (y la barra de la carga / la toma, si va avanzando)
 	if Objetivos.actual and Objetivos.terminado == 0:
 		var foco := Objetivos.foco_mio()
@@ -582,7 +613,8 @@ func _apunta_a_aleman() -> bool:
 	var cam := _player.camera.global_transform
 	var q := PhysicsRayQueryParameters3D.create(cam.origin, cam.origin - cam.basis.z * 150.0, 1 | 4 | 512)
 	var hit := _player.get_world_3d().direct_space_state.intersect_ray(q)
-	return not hit.is_empty() and hit["collider"] is Node and (hit["collider"] as Node).is_in_group("enemies")
+	# (capa 3: alemanes, sus títeres y, en el versus, todo lo del otro bando)
+	return not hit.is_empty() and hit["collider"] is CollisionObject3D and (hit["collider"] as CollisionObject3D).collision_layer & 4 != 0
 
 
 func _draw_crosshair(c: Vector2, spread_deg: float, enemigo := false) -> void:

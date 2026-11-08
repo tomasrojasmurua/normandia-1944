@@ -65,6 +65,10 @@ var _ultimo_dr := 9            # refuerzos alemanes que quedaban (por si hay tra
 var sala := {}                 # id → [puesto (-1 = aún no se sabe), anfitrión]
 var en_curso := false          # el anfitrión ya empezó la misión
 var mision_sala := "omaha"     # la misión que eligió el anfitrión (Misiones), la que juegan todos
+# Versus (v0.42): el bando que eligió este jugador en la sala (0 EE.UU., 1 Alemania)
+var bando := -1
+static var bando_preferido := -1   # se conserva si se corta y se vuelve a entrar
+const MISIONES_VS := ["vs_playa", "vs_bosque"]
 var _t_lob := 0.0
 var _avisos_bengala := 0
 
@@ -73,7 +77,64 @@ var _avisos_bengala := 0
 static func empezar_partida() -> void:
 	if actual:
 		actual.en_curso = true
-		actual._ws.send_text(JSON.stringify({"t": "ir", "m": actual.mision_sala}))
+		if Versus.es_versus(actual.mision_sala):
+			actual._armar_bandos()
+		actual._ws.send_text(JSON.stringify(actual._msg_ir()))
+
+
+## El mensaje "ir" (empieza la misión): la misión y, en el versus, los bandos.
+func _msg_ir(revancha := false) -> Dictionary:
+	var d := {"t": "ir", "m": mision_sala}
+	if Versus.es_versus(mision_sala):
+		d["vb"] = Versus.bandos
+	if revancha:
+		d["re"] = 1
+	return d
+
+
+## Anfitrión, versus: el bando de cada escuadra con lo que eligió cada uno.
+func _armar_bandos() -> void:
+	var elegidos := {puesto: maxi(bando, 0)}
+	var con := [puesto]
+	for id in sala:
+		var e: Array = sala[id]
+		if int(e[0]) >= 0 and int(e[0]) < 4:
+			elegidos[int(e[0])] = int(e[2]) if e.size() > 2 and int(e[2]) >= 0 else int(e[0]) % 2
+			con.append(int(e[0]))
+	Versus.bandos = Versus.armar_bandos(elegidos)
+	Versus.con_jugador = con
+
+
+## Anfitrión, versus: otra partida (la misma u otro mapa) con los mismos bandos.
+static func revancha(mision: String) -> void:
+	if actual == null:
+		return
+	actual.mision_sala = mision
+	actual._cuerpos.clear()
+	actual._ws.send_text(JSON.stringify(actual._msg_ir(true)))
+	Game.empezar_mision(mision)
+
+
+## ¿Cuántos jugadores tiene cada bando en la sala? (para no pasar de 2 por lado)
+func por_bando() -> Array:
+	var n := [0, 0]
+	n[clampi(bando, 0, 1)] += 1
+	for id in sala:
+		var e: Array = sala[id]
+		if e.size() > 2 and int(e[2]) >= 0:
+			n[clampi(int(e[2]), 0, 1)] += 1
+		elif int(e[0]) >= 0:
+			n[int(e[0]) % 2] += 1
+	return n
+
+
+func cambiar_bando() -> void:
+	var otro := 1 - maxi(bando, 0)
+	if por_bando()[otro] >= 2:
+		return
+	bando = otro
+	bando_preferido = otro
+	_t_lob = 0.0          # que los demás lo vean ya
 
 
 ## Se conecta a la sala (desde el menú). Queda en la raíz del árbol.
@@ -125,7 +186,7 @@ func _process(delta: float) -> void:
 			_t_lob -= delta
 			if _t_lob <= 0.0 and mi_id != "" and _jugador() == null:
 				_t_lob = 1.0
-				var lob := {"t": "lob", "id": mi_id, "pu": puesto, "a": anfitrion}
+				var lob := {"t": "lob", "id": mi_id, "pu": puesto, "a": anfitrion, "b": bando}
 				if anfitrion:
 					lob["m"] = mision_sala
 				_ws.send_text(JSON.stringify(lob))
@@ -180,7 +241,8 @@ func _enviar_paquete() -> void:
 		var v := Vector2(p.velocity.x, p.velocity.z).length()
 		paq["p"] = [p.nombre, p.weapons.id(), snappedf(p.global_position.x, 0.01),
 			snappedf(p.global_position.y, 0.01), snappedf(p.global_position.z, 0.01),
-			snappedf(p.rotation.y, 0.01), 1 if p.crouching else 0, snappedf(v, 0.1), 1 if p.dead else 0, puesto]
+			snappedf(p.rotation.y, 0.01), 1 if p.crouching else 0, snappedf(v, 0.1), 1 if p.dead else 0, puesto,
+			Versus.mi_bando() if Versus.activo else 0]
 	if not _eventos.is_empty():
 		paq["l"] = _eventos
 		_eventos = []
@@ -190,6 +252,9 @@ func _enviar_paquete() -> void:
 		paq["o"] = Objetivos.estado()
 		paq["dr"] = Defensa.restantes
 		paq["m"] = mision_sala
+		if Versus.activo:
+			paq["vs"] = Versus.estado()
+			paq["vb"] = Versus.bandos
 		var tq := Tanque.actual
 		if tq and is_instance_valid(tq):
 			paq["tk"] = [snappedf(tq.global_position.x, 0.01), snappedf(tq.global_position.y, 0.01),
@@ -228,7 +293,8 @@ func _lista_aliados() -> Array:
 		lista.append([rid_de(a), snappedf(q.x, 0.01), snappedf(q.y, 0.01), snappedf(q.z, 0.01),
 			snappedf(a.rotation.y, 0.01), maxi(POSES.find(a.cuerpo.pose), 0),
 			maxi(ANDARES.find(a.cuerpo.andar), 0), a.arma, a.escuadra, Escuadras.puesto_de(a),
-			a.nombre, int(a.health), (1 if a.has_meta("perdido") else 0) + (2 if a.has_meta("fue_perdido") else 0)])
+			a.nombre, int(a.health), (1 if a.has_meta("perdido") else 0) + (2 if a.has_meta("fue_perdido") else 0),
+			1 if a.bando == "aleman" else 0])
 	return lista
 
 
@@ -345,22 +411,28 @@ func _recibir(texto: String) -> void:
 			anfitrion = d["anfitrion"]
 			puesto = clampi(int(d.get("puesto", 0)), 0, 3)
 			mi_nombre = NOMBRES[puesto]
+			bando = bando_preferido if bando_preferido >= 0 else puesto % 2
 			for o in d.get("otros", []):
 				sala[str(o)] = [-1, false]
 		"lob":
-			sala[str(d["id"])] = [int(d.get("pu", -1)), bool(d.get("a", false))]
+			sala[str(d["id"])] = [int(d.get("pu", -1)), bool(d.get("a", false)), int(d.get("b", -1))]
 			if d.has("m") and not anfitrion:
 				_tomar_mision(d["m"])
 		"ir":
 			if d.has("m"):
 				_tomar_mision(d["m"])
+			if d.has("vb"):
+				Versus.bandos = (d["vb"] as Array).map(func(x) -> int: return int(x))
 			en_curso = true
+			if d.has("re") and _jugador() != null:      # versus: revancha, todos a la nueva partida
+				_cuerpos.clear()
+				Game.empezar_mision.call_deferred(mision_sala)
 		"llena":
 			estado = "sala llena"
 		"entra":
 			sala[str(d["id"])] = [-1, false]
 			if anfitrion and en_curso:   # la misión ya empezó: que entre directo
-				_ws.send_text(JSON.stringify({"t": "ir", "m": mision_sala}))
+				_ws.send_text(JSON.stringify(_msg_ir()))
 			Game.say("[ENTRÓ UN JUGADOR]", Game.COLOR_GOOD)
 			if anfitrion and not _cuerpos.is_empty():
 				evento(["c", str(d["id"]), _cuerpos])
@@ -371,6 +443,11 @@ func _recibir(texto: String) -> void:
 		"sale":
 			sala.erase(str(d["id"]))
 			_quitar(str(d["id"]))
+			if d.get("anfitrion", false) and (Versus.activo or en_curso and Versus.es_versus(mision_sala)):
+				# Versus: la partida (la IA y el marcador) vive en el celular del anfitrión
+				Game.aviso_menu = "SE FUE EL ANFITRIÓN: TERMINÓ LA PARTIDA."
+				Game.ir_al_menu.call_deferred()
+				return
 			if d.get("anfitrion", false) and CampanaRed.coop:
 				# La campaña vive en el celular del anfitrión: sin él no se puede seguir
 				Game.aviso_menu = "SE FUE EL ANFITRIÓN: LA CAMPAÑA QUEDÓ GUARDADA EN SU CELULAR."
@@ -381,7 +458,7 @@ func _recibir(texto: String) -> void:
 			else:
 				Game.say("[UN JUGADOR SE FUE]", Game.COLOR_BAD)
 		"anfitrion":
-			if CampanaRed.coop:
+			if CampanaRed.coop or Versus.activo:
 				return       # (ya se vuelve al menú: ver "sale")
 			if str(d["id"]) == mi_id and not anfitrion:
 				if _jugador() == null:   # aún en la sala de espera: solo cambia el papel
@@ -399,7 +476,9 @@ func _recibir(texto: String) -> void:
 					_tomar_mision(d["m"])
 				en_curso = true
 			if d.has("p"):
-				sala[id] = [int(d["p"][9]) if d["p"].size() > 9 else -1, d.has("a")]
+				var b_sala: int = sala[id][2] if sala.has(id) and sala[id].size() > 2 else -1
+				sala[id] = [int(d["p"][9]) if d["p"].size() > 9 else -1, d.has("a"),
+					int(d["p"][10]) if d["p"].size() > 10 else b_sala]
 				_recibir_jugador(id, d["p"])
 			if not anfitrion:
 				if d.has("a"):
@@ -412,6 +491,10 @@ func _recibir(texto: String) -> void:
 					_recibir_tanque(d["tk"])
 				if d.has("dr"):
 					_ultimo_dr = int(d["dr"])
+				if d.has("vb"):
+					Versus.bandos = (d["vb"] as Array).map(func(x) -> int: return int(x))
+				if d.has("vs"):
+					Versus.recibir(d["vs"])
 			if d.has("l"):
 				for ev in d["l"]:
 					_suceso(ev, id)
@@ -425,6 +508,8 @@ func _recibir_jugador(id: String, p: Array) -> void:
 		var r := JugadorRemoto.new()
 		r.id = id
 		r.arma = str(p[1])
+		if Versus.activo:
+			r.bando = int(p[10]) if p.size() > 10 else Versus.bando_de_escuadra(int(p[9]) if p.size() > 9 else 1)
 		escena.add_child(r)
 		remotos[id] = r
 	var r: JugadorRemoto = remotos[id]
@@ -448,9 +533,16 @@ func _recibir_titeres(lista: Array, bando: String) -> void:
 			t.rid = rid
 			t.bando = bando
 			t.arma = str(a[7])
+			if bando == "aliado":
+				t.companero = true
+				t.rival = false
+				if Versus.activo and a.size() > 13:     # versus: los de las escuadras de los dos bandos
+					var b := int(a[13])
+					t.bando = Versus.sprite(b)
+					t.rival = b != Versus.mi_bando()
 			escena.add_child(t)
 			titeres[rid] = t
-		if bando == "aliado":
+		if t.companero:
 			t.escuadra = int(a[8])
 			t.puesto = int(a[9])
 			t.nombre = str(a[10])
@@ -507,7 +599,7 @@ func ranuras_mias() -> Array:
 	var r := [null, null, null]
 	for rid in titeres:
 		var t = titeres[rid]
-		if is_instance_valid(t) and t.bando == "aliado" and not t.dead \
+		if is_instance_valid(t) and t.companero and not t.dead \
 				and t.escuadra == puesto and t.puesto >= 0 and t.puesto < 3:
 			r[t.puesto] = t
 	return r
@@ -534,9 +626,11 @@ func _suceso(ev: Array, de: String) -> void:
 			var hasta := _vec(ev, 5)
 			var arma := "kar98k"
 			var aliado := false
+			var rival := not Versus.activo     # (sin títere: como un alemán)
 			if t and is_instance_valid(t):
 				arma = t.arma
 				aliado = t.bando == "aliado"
+				rival = t.rival if Versus.activo else not aliado
 				if t.cuerpo and t.cuerpo.boca:
 					desde = t.cuerpo.boca.global_position
 				t.disparo()
@@ -549,7 +643,7 @@ func _suceso(ev: Array, de: String) -> void:
 			Game.play_at(sonido, desde, -6.0 if aliado else 2.0)
 			# ¿un tiro alemán pasó cerca de mi cabeza? (supresión)
 			var p := _jugador()
-			if p and not p.dead and not aliado:
+			if p and not p.dead and rival:
 				var dir := (hasta - desde).normalized()
 				var cab := p.pos_cabeza()
 				var u := clampf((cab - desde).dot(dir), 0.0, desde.distance_to(hasta))
@@ -610,7 +704,7 @@ func _suceso(ev: Array, de: String) -> void:
 		"g":   # un invitado le pegó a un títere: al soldado de verdad
 			if anfitrion:
 				var e = soldados.get(int(ev[1]))
-				if e and is_instance_valid(e) and e is Enemy and not e.dead:
+				if e and is_instance_valid(e) and (e is Enemy or e is Aliado) and not e.dead:   # (versus: también los de las escuadras)
 					e.hit(float(ev[2]), int(ev[3]) == 1, _vec(ev, 4), _vec(ev, 7), false)
 		"o":   # un invitado le dio una orden a su escuadra
 			if anfitrion:
@@ -634,6 +728,8 @@ func _suceso(ev: Array, de: String) -> void:
 		"c":   # cuerpos que ya había (para el que recién entra)
 			if str(ev[1]) == mi_id:
 				_poner_cuerpos(ev[2])
+		"vfin":   # versus: el anfitrión terminó la partida
+			Versus.fin_recibido(ev)
 		"fin":
 			Objetivos.terminado = int(ev[1])
 			FinMision.mostrar(get_tree(), int(ev[1]), int(ev[2]), int(ev[3]), int(ev[4]))

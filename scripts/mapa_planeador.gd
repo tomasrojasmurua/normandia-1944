@@ -78,6 +78,8 @@ func _ready() -> void:
 	_barricada()
 	_alrededores()
 	_paredes()
+	if Versus.de_mision():
+		_bosque_versus()
 	for t in _plantas:
 		Ambiente._plantas(self, t, _plantas[t])
 	OmahaInterior._armar_kit(self, 75.0)    # de noche, con la niebla, a 75 m del centro del pueblo ya no se ve
@@ -85,12 +87,18 @@ func _ready() -> void:
 	_dibujar_postes()
 	if not Game.prueba_carga:
 		var f := Fragor.new()
-		f.noche = true
+		f.noche = Noche.activa      # (el versus en este mapa es de día)
 		add_child(f)
 
 	# Cooperativo: como en Omaha (beach_decor.gd)
 	Escuadras.mi_escuadra = Red.actual.puesto if Game.modo_red and Red.actual else 0
 	var con_ia := not Game.modo_red or _soy_anfitrion()
+	if Versus.de_mision():      # versus (v0.42): el marcador en todos, las escuadras en el anfitrión
+		get_parent().add_child.call_deferred(Versus.new())
+		if con_ia:
+			get_parent().add_child.call_deferred(Escuadras.new())
+		_hornear_navegacion.call_deferred()
+		return
 	if con_ia:
 		get_parent().add_child.call_deferred(Escuadras.new())
 		get_parent().add_child.call_deferred(Defensa.new())
@@ -470,6 +478,89 @@ func _alrededores() -> void:
 			var t: String = ["arbol_1", "arbol_2", "arbol_3", "arbol_1"][_rng_m.randi() % 4]
 			_plantas[t].append([Vector3(lado * _rng_m.randf_range(52.0, 95.0), 0, _rng_m.randf_range(-220.0, 10.0)),
 				_rng_m.randf_range(0.9, 1.3)])
+
+
+## VERSUS EN EL BOSQUE (v0.42): de día, entre el seto de la MG42 (z -32) y el
+## camino hundido (z -100). Se cierra con dos paredes y los potreros se llenan
+## de árboles (con tronco: paran las balas y la IA se cubre detrás) y de
+## troncos caídos. Cerca del punto, de los setos y de la carretera, no.
+func _bosque_versus() -> void:
+	var zona: Vector2 = Misiones.dato("zona_z")
+	for z in [zona.x, zona.y]:
+		var b := StaticBody3D.new()
+		b.collision_layer = 64
+		b.collision_mask = 0
+		b.position = Vector3(0, 10, z)
+		var col := CollisionShape3D.new()
+		var forma := BoxShape3D.new()
+		forma.size = Vector3(ANCHO * 2 + 4, 40, 1)
+		col.shape = forma
+		b.add_child(col)
+		add_child(b)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 1944070
+	var punto: Vector3 = Misiones.dato("punto")
+	var bases: Array = Misiones.dato("bases")
+	var troncos := StaticBody3D.new()      # capa 1: paran balas, tapan la vista y entran en el mapa de caminos
+	troncos.collision_layer = 1
+	troncos.collision_mask = 0
+	add_child(troncos)
+	var puestos: Array = []
+	var intentos := 0
+	while puestos.size() < 85 and intentos < 2000:
+		intentos += 1
+		var p := Vector3(rng.randf_range(-ANCHO + 2.0, ANCHO - 2.0), 0, rng.randf_range(zona.y + 6.0, zona.x - 4.0))
+		if absf(p.x - 4.0) < 4.5 or p.distance_to(punto) < 9.0:
+			continue          # la carretera y el punto, despejados
+		if absf(p.z + 64.0) < 3.0 or absf(p.z + 92.0) < 3.0 or absf(p.z + 32.0) < 3.0:
+			continue          # los setos a lo ancho
+		if (absf(p.x + 12.0) < 3.0 and p.z > -64.0) or (absf(p.x - 22.0) < 3.0 and p.z < -64.0 and p.z > -92.0):
+			continue          # los setos a lo largo
+		if absf(p.z - (bases[0] as Vector3).z) < 4.0 or absf(p.z - (bases[1] as Vector3).z) < 5.0:
+			continue          # las bases, despejadas
+		var cerca := false
+		for q in puestos:
+			if p.distance_to(q) < 4.2:
+				cerca = true
+				break
+		if cerca:
+			continue
+		puestos.append(p)
+		var tipo: String = ["arbol_1", "arbol_2", "arbol_3", "arbol_1"][rng.randi() % 4]
+		var e := rng.randf_range(0.95, 1.35)
+		_plantas[tipo].append([p, e])
+		var col := CollisionShape3D.new()
+		var caja := BoxShape3D.new()
+		caja.size = Vector3(0.55 * e, 3.0, 0.55 * e)
+		col.shape = caja
+		col.position = p + Vector3(0, 1.5, 0)
+		troncos.add_child(col)
+		Coberturas.agregar_erizo(p)
+	# Troncos caídos: cobertura baja (de rodillas te asomas)
+	var n := 0
+	for p in puestos:
+		if n >= 14 or rng.randf() > 0.25:
+			continue
+		var lado := Vector3(rng.randf_range(-1, 1), 0, rng.randf_range(-1, 1)).normalized() * 2.2
+		var c: Vector3 = p + lado
+		if absf(c.x - 4.0) < 5.0 or c.distance_to(punto) < 4.0:
+			continue
+		var giro := rng.randf_range(0.0, 180.0)
+		_add_box(c + Vector3(0, 0.4, 0), Vector3(3.2, 0.8, 0.8), _wood, Vector3(0, giro, 0))
+		Coberturas.agregar_muro(c, 3.2, giro, 0.8, 0.8)
+		n += 1
+	# Alrededor del punto: dos parapetos de troncos para pelearlo
+	for d in [Vector3(-5.5, 0, 0), Vector3(5.5, 0, 0)]:
+		_add_box(punto + d + Vector3(0, 0.4, 0), Vector3(0.8, 0.8, 3.4), _wood)
+		Coberturas.agregar_muro(punto + d, 3.4, 90.0, 0.8, 0.8)
+	# Cajas de armas junto a cada base (además de los dos contenedores lanzados)
+	for c in [[Vector3(-22, 0, -37), "thompson"], [Vector3(26, 0, -37), "carbine"],
+			[Vector3(-14, 0, -97.5), "mp40"], [Vector3(16, 0, -97.5), "stg44"]]:
+		_add_crate(c[0], c[1], rng)
+	# Más pasto entre los árboles
+	for i in 60:
+		_plantas["pasto"].append([Vector3(rng.randf_range(-ANCHO, ANCHO), -0.05, rng.randf_range(zona.y, zona.x)),
+			rng.randf_range(0.6, 1.1)])
 
 
 ## Paredes invisibles alrededor de la zona de juego (capa 7: paran a la gente,

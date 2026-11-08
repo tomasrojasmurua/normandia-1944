@@ -15,6 +15,7 @@ class_name Aliado
 @export var nombre := "HAYES"
 @export var escuadra := 0          # 0 = la del jugador
 @export var es_lider := false      # sargento con IA de una escuadra 1–3
+var bando := "aliado"              # el dibujo: "aliado" o, en el versus, "aleman" (alemanes con IA en escuadras)
 var esp := ""                      # especialidad (hombres de tu compañía): "medico", "radio", "bazuca"...
 var rango := 0                     # 0 PVT … 3 SGT: los veteranos tiran un poco mejor
 var _t_bazuca := 12.0
@@ -62,10 +63,23 @@ static func dar_orden(o: String) -> void:
 		i += 1
 
 
+## El grupo de sus enemigos: los alemanes ("enemies"); en el versus, si es
+## alemán, los americanos.
+func _rival() -> String:
+	return "americanos" if bando == "aleman" else "enemies"
+
+
 func _ready() -> void:
-	add_to_group("americanos")
+	add_to_group("enemies" if bando == "aleman" else "americanos")
 	add_to_group("aliados")
 	collision_layer = 16         # capa 5: compañeros (las balas del jugador no los tocan)
+	if Versus.activo:
+		# Versus: los del otro bando van en la capa 3 (ahí pegan las balas del
+		# jugador de este celular) y caen de un tiro de fusil, como los alemanes
+		if Versus.bando_de_sprite(bando) != Versus.mi_bando():
+			collision_layer = 4
+		max_health = 60.0
+		health = 60.0
 	collision_mask = 1 | 64 | 256   # 64 = alambre de púas, 256 = caja de los modelos
 	if arma == "":
 		arma = "garand"
@@ -73,8 +87,8 @@ func _ready() -> void:
 	_vista_t = randf() * 0.35
 	_pensar_t = randf_range(0.5, 1.5)
 	_fuego_t = randf_range(1.0, 3.0)
-	amenaza = Objetivos.rumbo(escuadra) if Objetivos.actual else BUNKER
-	_crear_cuerpo("aliado")
+	amenaza = Versus.rumbo(Versus.bando_de_sprite(bando)) if Versus.activo else (Objetivos.rumbo(escuadra) if Objetivos.actual else BUNKER)
+	_crear_cuerpo(bando)
 	tomar_cobertura_inicial.call_deferred()
 
 
@@ -94,7 +108,7 @@ func _physics_process(delta: float) -> void:
 		var antes := objetivo
 		var marcado: Node = _marcado if is_instance_valid(_marcado) and Game.elapsed < _marcado_hasta else null
 		# Disperso tras el choque: escondido, solo tira si se le acercan
-		objetivo = elegir_objetivo("enemies", 14.0 if has_meta("perdido") else ALCANCE, marcado)
+		objetivo = elegir_objetivo(_rival(), 14.0 if has_meta("perdido") else ALCANCE, marcado)
 		amenaza = objetivo.global_position if objetivo else _enemigo_conocido()
 		if objetivo and objetivo != antes and escuadra == Escuadras.mi_escuadra:
 			_cantar(objetivo)
@@ -178,7 +192,7 @@ func _cantar(e: Node3D) -> void:
 		donde += ", ARRIBA"
 	_ultimo_canto = Game.elapsed
 	_cantados[id] = Game.elapsed
-	var quien := "MG42" if e.arma == "mg42" else "ALEMÁN"
+	var quien := "MG42" if e.arma == "mg42" else ("AMERICANO" if bando == "aleman" else "ALEMÁN")
 	Game.say("[%s: ¡%s %s, %d M!]" % [nombre, quien, donde, int(roundf(dist / 5.0) * 5.0)], Game.COLOR_INFO)
 
 
@@ -206,7 +220,7 @@ func _bazuca(delta: float) -> void:
 		_t_bazuca = 1.0
 		return
 	var juntos := 0
-	for e in get_tree().get_nodes_in_group("enemies"):
+	for e in get_tree().get_nodes_in_group(_rival()):
 		if e.global_position.distance_to(objetivo.global_position) < 5.0:
 			juntos += 1
 	if objetivo.arma != "mg42" and juntos < 2:
@@ -227,9 +241,11 @@ func _bazuca(delta: float) -> void:
 ## un rezagado atrás no la hace volver. Sin ninguno, va hacia su objetivo.
 func _enemigo_conocido() -> Vector3:
 	var rumbo := Objetivos.rumbo(escuadra) if Objetivos.actual else BUNKER
+	if Versus.activo:
+		rumbo = Versus.rumbo(Versus.bando_de_sprite(bando))
 	var mejor := rumbo
 	var mejor_d := INF
-	for e in get_tree().get_nodes_in_group("enemies"):
+	for e in get_tree().get_nodes_in_group(_rival()):
 		if e.global_position.distance_to(rumbo) > 45.0:
 			continue
 		var d := global_position.distance_to(e.global_position)
@@ -252,7 +268,7 @@ func _pensar() -> void:
 	if Game.elapsed < float(get_meta("huye_hasta", 0.0)):
 		return          # se está alejando de una carga a punto de explotar
 	_alemanes.clear()
-	for e in get_tree().get_nodes_in_group("enemies"):
+	for e in get_tree().get_nodes_in_group(_rival()):
 		_alemanes.append(e.global_position)
 	var flanqueado := not cobertura.is_empty() and Coberturas.protege(cobertura, amenaza) < 0.2
 	var jefe: Node3D = Escuadras.lider_de(self)
@@ -430,7 +446,7 @@ func orden_personal() -> void:
 			var mejor: Node3D = null
 			var mejor_d := 14.0
 			if punto != Vector3.INF:
-				for e in get_tree().get_nodes_in_group("enemies"):
+				for e in get_tree().get_nodes_in_group(_rival()):
 					var d: float = (e as Node3D).global_position.distance_to(punto)
 					if d < mejor_d and not e.dead:
 						mejor_d = d
@@ -507,10 +523,21 @@ func _disparar() -> void:
 		chance *= 0.45
 	chance *= 1.0 + 0.1 * rango
 	chance *= objetivo.factor_blanco()
+	if Versus.activo and (objetivo is Player or objetivo is JugadorRemoto):
+		chance *= 1.6      # versus: los jugadores rivales atraen (y reciben) más fuego
 	if tiro_ia(objetivo, chance, -6.0):
 		var pecho: Vector3 = objetivo.global_position + Vector3(0, 1.1, 0)
 		var dir: Vector3 = (pecho - cuerpo.boca.global_position).normalized()
 		objetivo.hit(Armas.datos(arma)["damage"], randf() < 0.1, pecho, dir, false)
+
+
+## Versus: una bala del jugador rival (o de la IA rival), como a los alemanes.
+func hit(amount: float, headshot: bool, pos: Vector3, dir: Vector3, por_jugador := true) -> void:
+	if dead:
+		return
+	take_damage(amount * (2.0 if headshot else 1.0), pos - dir * 10.0)
+	if dead and por_jugador:
+		Game.say("[ENEMIGO ABATIDO]" if not headshot else "[ABATIDO - TIRO A LA CABEZA]")
 
 
 func take_damage(amount: float, from_pos: Vector3) -> void:
@@ -533,6 +560,7 @@ func _morir(dir: Vector3) -> void:
 	_rafaga = 0
 	Coberturas.liberar(self)
 	remove_from_group("americanos")
+	remove_from_group("enemies")
 	remove_from_group("aliados")
 	collision_layer = 0
 	collision_mask = 0
@@ -544,6 +572,7 @@ func _morir(dir: Vector3) -> void:
 	Fragor.muerte(global_position, true)
 	_soltar_arma(dir)
 	Game.caidos += 1
+	Versus.baja(Versus.bando_de_sprite(bando))    # versus: un refuerzo menos para su bando
 	Red.murio(self, dir, false)
 	if has_meta("compania"):
 		Compania.caido(nombre.replace("SGT. ", ""))    # (si lo ascendieron al caer su sargento)

@@ -9,6 +9,7 @@ class_name JugadorRemoto
 var id := ""
 var escuadra := 1             # su puesto (la escuadra que manda)
 var arma := "garand"
+var bando := 0                # versus: 0 = EE.UU., 1 = Alemania (fuera del versus, siempre 0)
 var dead := false             # (para la IA alemana del anfitrión)
 var cuerpo: SoldadoSprite
 var _cartel: Label3D
@@ -21,11 +22,17 @@ var _en_el_aire := false
 var _para: Sprite3D
 
 
+var _choque: StaticBody3D     # versus: el cuerpo donde pegan las balas (si es rival)
+var _capsula: CapsuleShape3D
+var _col_cabeza: CollisionShape3D
+
+
 func _ready() -> void:
 	# En el anfitrión, los alemanes también le disparan a los demás jugadores
-	add_to_group("americanos")
+	# (versus: va en el grupo de su bando)
+	add_to_group(Versus.grupo(bando) if Versus.activo else "americanos")
 	cuerpo = SoldadoSprite.new()
-	cuerpo.bando = "aliado"
+	cuerpo.bando = Versus.sprite(bando) if Versus.activo else "aliado"
 	cuerpo.arma = arma
 	add_child(cuerpo)
 	_cartel = Label3D.new()
@@ -40,6 +47,38 @@ func _ready() -> void:
 	_cartel.position = Vector3(0, 2.15, 0)
 	add_child(_cartel)
 	_salto = not Misiones.actual().get("salto", {}).is_empty()
+	if Versus.activo and bando != Versus.mi_bando():
+		_armar_choque()
+		_cartel.visible = false     # al rival no se le ve el nombre (se vería a través de las paredes)
+
+
+## Versus: un jugador del otro bando tiene cuerpo y cabeza donde pegan mis
+## balas (capa 3, como los alemanes). El golpe va a su celular (Red.dano).
+func _armar_choque() -> void:
+	_choque = StaticBody3D.new()
+	_choque.collision_layer = 4
+	_choque.collision_mask = 0
+	_choque.set_meta("remoto", self)
+	var col := CollisionShape3D.new()
+	_capsula = CapsuleShape3D.new()
+	_capsula.radius = 0.32
+	_capsula.height = 1.5
+	col.shape = _capsula
+	col.position.y = 0.75
+	_choque.add_child(col)
+	_col_cabeza = CollisionShape3D.new()
+	var esfera := SphereShape3D.new()
+	esfera.radius = 0.18
+	_col_cabeza.shape = esfera
+	_col_cabeza.position.y = 1.62
+	_choque.add_child(_col_cabeza)
+	add_child(_choque)
+
+
+## Versus: la IA (del anfitrión) o mi bala le pegó: el daño va a su celular.
+func hit(amount: float, headshot: bool, pos: Vector3, dir: Vector3, _por_jugador := true) -> void:
+	if not dead:
+		Red.dano(id, amount * (2.0 if headshot else 1.0), pos - dir * 10.0)
 
 
 func recibir(d: Dictionary) -> void:
@@ -141,17 +180,29 @@ func _process(_delta: float) -> void:
 	var muerto: bool = b[5]
 	if muerto and not _muerto:
 		cuerpo.morir(-global_basis.z, false)
+		Versus.baja(bando)       # versus: el anfitrión cuenta la caída de los demás jugadores
+		if _choque:
+			_choque.collision_layer = 0
 	elif not muerto and _muerto:
 		# volvió como refuerzo: su cuerpo queda en la arena y aparece uno nuevo
 		cuerpo.reparent(get_parent())
 		_fotos = [_fotos[-1]]
 		cuerpo = SoldadoSprite.new()
-		cuerpo.bando = "aliado"
+		cuerpo.bando = Versus.sprite(bando) if Versus.activo else "aliado"
 		cuerpo.arma = arma
 		add_child(cuerpo)
+		if _choque:
+			_choque.collision_layer = 4
 	_muerto = muerto
 	dead = muerto
 	if not _muerto:
 		var v: float = b[4]
 		cuerpo.pose = "agachado" if b[3] else "pie"
 		cuerpo.andar = "corre" if v > 0.6 else ""
+		if _capsula:      # agachado se le pega menos
+			var alto := 1.0 if b[3] else 1.5
+			if absf(_capsula.height - alto) > 0.05:
+				_capsula.height = alto
+				_choque.get_child(0).position.y = alto / 2.0
+				_col_cabeza.position.y = alto + 0.12
+

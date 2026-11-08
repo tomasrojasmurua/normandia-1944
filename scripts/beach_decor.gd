@@ -143,6 +143,10 @@ func _ready() -> void:
 	# escuadra de su puesto y empieza en su sector de la playa.
 	Escuadras.mi_escuadra = Red.actual.puesto if Game.modo_red and Red.actual else 0
 	var con_ia := not Game.modo_red or _soy_anfitrion()
+	if Versus.de_mision():
+		_armar_versus(con_ia)
+		_hornear_navegacion.call_deferred()
+		return
 	if not con_ia:
 		var enemigos := get_parent().get_node_or_null("Enemies")
 		if enemigos:
@@ -173,6 +177,40 @@ func _ready() -> void:
 		get_parent().add_child.call_deferred(pc)
 
 
+## VERSUS (v0.42): sin alemanes de la defensa, sin objetivos de misión. El
+## marcador y el punto (Versus) en todos; las escuadras de los dos bandos,
+## solo en el anfitrión. Al jugador lo ubica Versus en la base de su bando.
+func _armar_versus(con_ia: bool) -> void:
+	var enemigos := get_parent().get_node_or_null("Enemies")
+	if enemigos:
+		enemigos.queue_free()
+	get_parent().add_child.call_deferred(Versus.new())
+	if con_ia:
+		get_parent().add_child.call_deferred(Escuadras.new())
+	_paredes_versus()
+	# Cajas con armas alemanas junto a la base alemana (las americanas ya están en la arena)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed_value + 42
+	for c in [[Vector3(-10, 0, -45.5), "mp40"], [Vector3(12, 0, -45.5), "stg44"], [Vector3(-30, 0, -45.0), "mg42"]]:
+		_add_crate(c[0], c[1], rng)
+
+
+## Versus en la playa: no se pasa del alambre del pie del acantilado (la base
+## alemana) ni se entra al mar más allá de las lanchas.
+func _paredes_versus() -> void:
+	for m in [[Vector3(0, 10, -51.5), Vector3(LIMITE_X * 2 + 4, 40, 1)], [Vector3(0, 10, 15.0), Vector3(LIMITE_X * 2 + 4, 40, 1)]]:
+		var b := StaticBody3D.new()
+		b.collision_layer = 64
+		b.collision_mask = 0
+		b.position = m[0]
+		var col := CollisionShape3D.new()
+		var forma := BoxShape3D.new()
+		forma.size = m[1]
+		col.shape = forma
+		b.add_child(col)
+		add_child(b)
+
+
 func _soy_anfitrion() -> bool:
 	return Red.actual != null and Red.actual.anfitrion
 
@@ -184,7 +222,7 @@ func _exit_tree() -> void:
 
 func _hornear_navegacion() -> void:
 	Navegacion.hornear(get_parent(), AABB(Vector3(-LIMITE_X, -2, -208), Vector3(LIMITE_X * 2.0, 34, 221)))
-	if not Game.prueba_carga and (not Game.modo_red or _soy_anfitrion()):
+	if not Game.prueba_carga and (not Game.modo_red or _soy_anfitrion()) and not Versus.de_mision():
 		# Defensa alemana: los 7 de la escena + 13 en las trincheras (20 en total)
 		var rng := RandomNumberGenerator.new()
 		rng.seed = seed_value + 99

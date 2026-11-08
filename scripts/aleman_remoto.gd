@@ -19,6 +19,8 @@ var escuadra := -1
 var puesto := -1
 var health := 100.0
 var max_health := 100.0
+var companero := false            # de una escuadra (lista "b" del anfitrión), no un alemán de la defensa
+var rival := true                 # versus: es del otro bando que mi jugador (le pegan mis balas)
 var moviendo := false
 var cuerpo: SoldadoSprite
 var ultimo := 0.0                 # cuándo llegó la última posición (tiempo local)
@@ -34,11 +36,21 @@ func _ready() -> void:
 	cuerpo.arma = arma
 	add_child(cuerpo)
 	collision_mask = 0
-	if bando == "aliado":   # las balas del jugador atraviesan a los compañeros
+	if Versus.activo:
+		# Versus: en el grupo de su bando (para las granadas); los de mi bando
+		# no tienen choque (mis balas los atraviesan), los rivales sí
+		add_to_group(Versus.grupo(Versus.bando_de_sprite(bando)))
+		if companero and not rival:
+			add_to_group("aliados_remotos")
+		if not rival:
+			collision_layer = 0
+			return
+	elif bando == "aliado":   # las balas del jugador atraviesan a los compañeros
 		collision_layer = 0
 		add_to_group("aliados_remotos")
 		return
-	add_to_group("enemies")
+	else:
+		add_to_group("enemies")
 	collision_layer = 4
 	# Forma 0 = cuerpo, forma 1 = cabeza (como en combatiente.gd)
 	_col_cuerpo = CollisionShape3D.new()
@@ -99,6 +111,7 @@ func morir(dir: Vector3, cabeza: bool) -> void:
 	dead = true
 	health = 0.0
 	remove_from_group("enemies")
+	remove_from_group("americanos")
 	collision_layer = 0
 	cuerpo.andar = ""
 	cuerpo.morir(dir, cabeza)
@@ -133,7 +146,7 @@ func _process(_delta: float) -> void:
 		f = clampf((t - a[0]) / (b[0] - a[0]), 0.0, 1.0)
 	global_position = (a[1] as Vector3).lerp(b[1], f)
 	rotation.y = lerp_angle(a[2], b[2], f)
-	if bando == "aliado":
+	if _capsula == null:
 		return
 	# La cabeza sigue a la pose (agachado no se le puede pegar igual)
 	var alto: float = {"reposo": 1.48, "pie": 1.48, "rodilla": 1.12, "agachado": 0.8}.get(cuerpo.pose, 1.48)
